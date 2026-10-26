@@ -56,7 +56,8 @@ public enum Snapshot {
             ("readme", AnyView(ReadmeScene()), CGSize(width: 400, height: 860)),
             ("mascot", AnyView(Mascot(mood: .idle, size: 240)), CGSize(width: 240, height: 280)),
             ("library", AnyView(demoLibrary(.projects)), CGSize(width: 1240, height: 820)),
-            ("library-settings", AnyView(demoLibrary(.settings)), CGSize(width: 1240, height: 820))
+            ("library-settings", AnyView(demoLibrary(.settings)), CGSize(width: 1240, height: 820)),
+            ("library-graph", AnyView(demoLibrary(.graph)), CGSize(width: 1240, height: 820))
         ]
     }
 }

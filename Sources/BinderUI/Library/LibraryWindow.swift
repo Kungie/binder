@@ -44,6 +44,10 @@ public struct LibraryView: View {
                     InboxView(app: app).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 case .settings:
                     SettingsView(model: model, actions: actions).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                case .graph:
+                    GraphView(vault: model.vault) { node in openFromGraph(node) }
+                        .id(model.vault.root)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 default:
                     if let ref = model.selected {
                         let detail = model.note(ref)
@@ -81,6 +85,7 @@ public struct LibraryView: View {
                                         .padding(.leading, 20)
                                         .background(model.selected == item ? Phosphor.line : .clear)
                                         .foregroundColor(model.selected == item ? Phosphor.amber : Phosphor.dim)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityAddTraits(model.selected == item ? .isSelected : [])
@@ -106,6 +111,7 @@ public struct LibraryView: View {
                     .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
                     .padding(.horizontal, 8)
                     .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -119,7 +125,7 @@ public struct LibraryView: View {
     func sidebarRow(_ section: LibrarySection) -> some View {
         Button {
             model.selectedKind = section.kind
-            if section.kind != .inbox { model.selected = section.items.first }
+            if section.kind != .inbox, section.kind != .graph { model.selected = section.items.first }
         } label: {
             HStack {
                 Text(section.kind.label).foregroundColor(model.selectedKind == section.kind ? Phosphor.cream : Phosphor.cream2)
@@ -137,6 +143,25 @@ public struct LibraryView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// A click in the graph opens that note, or the first note of that folder, in the library.
+    func openFromGraph(_ node: GraphLayout.Node) {
+        switch node.kind {
+        case .me, .note:
+            let path = node.kind == .me ? "me.md" : node.path
+            guard let path, let section = model.sections.first(where: { $0.items.contains { $0.path == path } }),
+                  let ref = section.items.first(where: { $0.path == path }) else { return }
+            model.selectedKind = section.kind
+            model.selected = ref
+        case .folder:
+            guard let kind = SectionKind(rawValue: node.id.replacingOccurrences(of: "folder:", with: "")),
+                  let section = model.sections.first(where: { $0.kind == kind }) else { return }
+            model.selectedKind = kind
+            model.selected = section.items.first
+        case .facet, .missing:
+            break
+        }
     }
 
     func filtered(_ items: [NoteRef]) -> [NoteRef] {

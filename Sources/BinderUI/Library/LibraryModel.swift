@@ -3,7 +3,7 @@ import BinderCore
 import Foundation
 
 public enum SectionKind: String, CaseIterable, Sendable {
-    case inbox, me, machines, access, servers, projects, handoffs, settings
+    case inbox, graph, me, machines, access, servers, projects, handoffs, settings
 
     public var label: String { rawValue.uppercased() }
 }
@@ -78,7 +78,7 @@ public final class LibraryModel: ObservableObject {
 
     func items(for kind: SectionKind) -> [NoteRef] {
         switch kind {
-        case .inbox, .settings:
+        case .inbox, .graph, .settings:
             return []
         case .me:
             return FileManager.default.fileExists(atPath: vault.url("me.md").path) ? [NoteRef(title: "Me", path: "me.md")] : []
@@ -92,9 +92,11 @@ public final class LibraryModel: ObservableObject {
             }
         default:
             let names = (try? FileManager.default.contentsOfDirectory(atPath: vault.url(kind.rawValue).path)) ?? []
-            return names.filter { $0.hasSuffix(".md") }.sorted().map { name in
+            // By the title the sidebar shows, A to Z, whatever the case or the file name.
+            return names.filter { $0.hasSuffix(".md") }.map { name in
                 NoteRef(title: title(of: "\(kind.rawValue)/\(name)") ?? String(name.dropLast(3)), path: "\(kind.rawValue)/\(name)")
             }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         }
     }
 

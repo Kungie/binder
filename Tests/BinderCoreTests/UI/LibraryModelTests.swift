@@ -21,6 +21,16 @@ import Testing
         #expect(m.sections.first { $0.kind == .projects }?.items.first?.title == "dawn")
     }
 
+    @Test func projectsSortAlphabeticallyByTitleIgnoringCase() throws {
+        let (_, vault) = try model()
+        for (file, title) in [("Zeta.md", "Zeta"), ("b-site.md", "avenox"), ("api.md", "Beacon"), ("x.md", "cockpit")] {
+            try NoteIO.write(Note(body: "# \(title)\n"), to: vault.url("projects/\(file)"))
+        }
+        let m = LibraryModel(vault: vault, home: makeTempDir("home"))
+        let titles = m.sections.first { $0.kind == .projects }?.items.map(\.title)
+        #expect(titles == ["avenox", "Beacon", "cockpit", "dawn", "Zeta"])
+    }
+
     @Test func noteDetailParsesObservedAndDecisions() throws {
         let (m, _) = try model()
         let d = m.note(NoteRef(title: "dawn", path: "projects/dawn.md"))
