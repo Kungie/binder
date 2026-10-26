@@ -73,10 +73,10 @@ import Testing
         return host.view.fittingSize.height
     }
 
-    @Test func moreThanTenCatchesScrollInsteadOfGrowing() throws {
-        let ten = try panelHeight(10), fifteen = try panelHeight(15), five = try panelHeight(5)
-        #expect(five < ten)
-        #expect(fifteen < ten * 1.15, "15 catches: \(fifteen) pt, 10 catches: \(ten) pt")
+    @Test func moreThanFourCatchesScrollInsteadOfGrowing() throws {
+        let three = try panelHeight(3), four = try panelHeight(4), fifteen = try panelHeight(15)
+        #expect(three < four)
+        #expect(fifteen < four * 1.1, "15 catches: \(fifteen) pt, 4 catches: \(four) pt")
     }
 
     @Test func panelSnapshotsRender() throws {

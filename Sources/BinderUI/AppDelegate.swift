@@ -58,6 +58,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             openSession: { [weak self] in
                 guard let cwd = self?.app?.session?.cwd else { return }
                 SessionLauncher.launch(in: URL(fileURLWithPath: cwd))
+                self?.app?.handoff = nil
             },
             openBinder: { [weak self] in self?.showLibrary() },
             addMemory: { [weak self] in self?.showLibrary() }
@@ -72,11 +73,26 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Writes the handoff card, then puts it on the clipboard as a prompt, for sessions Binder can't open itself
+    /// (Claude Code in the desktop app). The next session in that folder also gets the card from the hook.
     func handOff() {
         guard let app, let session = app.session else { return }
         let vault = app.vault, consent = app.state.summarizerConsent
+        app.handoff = .writing(session: session.session)
         Task.detached {
-            _ = HandoffAction.run(session: session, vault: vault, consent: consent, runner: SystemRunner(extraEnvironment: ["BINDER_NESTED": "1"]))
+            let url = HandoffAction.run(session: session, vault: vault, consent: consent, runner: SystemRunner(extraEnvironment: ["BINDER_NESTED": "1"]))
+            let project = HandoffAction.project(for: session)
+            let prompt = url == nil ? nil : Handoff.latest(project: project, vault: vault).map { Handoff.prompt($0.card, project: project) }
+            await MainActor.run {
+                guard app.handoff == .writing(session: session.session) else { return }
+                if let prompt {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(prompt, forType: .string)
+                    app.handoff = .copied(session: session.session)
+                } else {
+                    app.handoff = .failed(session: session.session)
+                }
+            }
         }
     }
 

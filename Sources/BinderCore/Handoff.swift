@@ -75,6 +75,18 @@ public enum Handoff {
         return url
     }
 
+    /// The card as a message to paste into a new session, for agents Binder can't start itself
+    /// (Claude Code in the desktop app, say). Empty sections are left out.
+    public static func prompt(_ card: HandoffCard, project: String) -> String {
+        var parts = ["We're picking up work on \(project) from a previous session. Here's where it stopped."]
+        for (title, items) in [("Done", card.done), ("Left", card.left), ("Don't touch", card.dontTouch)] where !items.isEmpty {
+            parts.append("\(title):\n" + items.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        if !card.next.isEmpty { parts.append("Next: \(card.next)") }
+        parts.append("Start with the next step. Ask me if something here doesn't match what you find.")
+        return parts.joined(separator: "\n\n")
+    }
+
     /// The newest card for `project` that no session has picked up yet.
     public static func pending(project: String, vault: Vault) -> HandoffCard? {
         pendingFiles(project: project, vault: vault).last.flatMap { NoteIO.read($0) }.map(parse)

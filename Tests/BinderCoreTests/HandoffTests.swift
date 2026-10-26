@@ -32,4 +32,33 @@ import Testing
         #expect(Handoff.pending(project: "dawn", vault: vault) == nil)
         #expect(Handoff.pending(project: "site", vault: vault) == nil)
     }
+
+    @Test func promptToPasteIntoANewSession() {
+        let card = HandoffCard(done: ["Panel redesign merged"], left: ["Notarization", "Release notes"], dontTouch: ["Resources/Fonts"], next: "Write the release notes for 0.3.")
+        #expect(Handoff.prompt(card, project: "dawn") == """
+        We're picking up work on dawn from a previous session. Here's where it stopped.
+
+        Done:
+        - Panel redesign merged
+
+        Left:
+        - Notarization
+        - Release notes
+
+        Don't touch:
+        - Resources/Fonts
+
+        Next: Write the release notes for 0.3.
+
+        Start with the next step. Ask me if something here doesn't match what you find.
+        """)
+    }
+
+    @Test func promptLeavesOutEmptySections() {
+        let prompt = Handoff.prompt(HandoffCard(done: [], left: ["Tests"], dontTouch: [], next: ""), project: "site")
+        #expect(!prompt.contains("Done:"))
+        #expect(!prompt.contains("Don't touch:"))
+        #expect(!prompt.contains("Next:"))
+        #expect(prompt.contains("Left:\n- Tests"))
+    }
 }

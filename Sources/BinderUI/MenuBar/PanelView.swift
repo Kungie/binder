@@ -42,7 +42,7 @@ struct CardFramesKey: PreferenceKey {
 public struct PanelView: View {
     public static let width: CGFloat = 350
     /// More catches than this and the list scrolls, showing about this many at once.
-    public static let visibleCards = 10
+    public static let visibleCards = 4
 
     @ObservedObject var model: AppModel
     var actions: PanelActions
@@ -50,7 +50,6 @@ public struct PanelView: View {
     @StateObject private var cardFrames = Local([String: CGRect]())
     @StateObject private var gulp = Local(false)
     @StateObject private var snoozed = Local<String?>(nil)
-    @StateObject private var handedOff = Local(false)
     @StateObject private var panelHeight = Local(CGFloat(0))
     @StateObject private var scrollHeight = Local(CGFloat(0))
     @Environment(\.isSnapshot) private var isSnapshot
@@ -106,14 +105,14 @@ public struct PanelView: View {
         }
     }
 
-    /// The scrolling list's height: the first ten cards, or less if the screen under the menu bar can't fit them
+    /// The scrolling list's height: the first four cards, or less if the screen under the menu bar can't fit them
     /// along with the rest of the panel.
     private var listHeight: CGFloat {
         let heights = model.proposals.prefix(Self.visibleCards).compactMap { cardFrames.value[$0.id]?.height }
-        let ten = heights.isEmpty ? CGFloat(Self.visibleCards) * 96 : heights.reduce(0, +) + 8 * CGFloat(heights.count - 1)
-        guard !isSnapshot, let screen = NSScreen.main?.visibleFrame.height else { return ten }
+        let shown = heights.isEmpty ? CGFloat(Self.visibleCards) * 96 : heights.reduce(0, +) + 8 * CGFloat(heights.count - 1)
+        guard !isSnapshot, let screen = NSScreen.main?.visibleFrame.height else { return shown }
         let rest = scrollHeight.value > 0 ? panelHeight.value - scrollHeight.value : 0
-        return max(180, min(ten, screen - 12 - rest))
+        return max(180, min(shown, screen - 12 - rest))
     }
 
     private var header: some View {
@@ -148,21 +147,39 @@ public struct PanelView: View {
                     SteppedBar(fraction: fraction)
                     Text("ESTIMATE").font(Fonts.mono(9.5)).tracking(1).foregroundColor(Phosphor.dim)
                 }
-                if handedOff.value {
-                    HStack(spacing: 8) {
-                        Text("Handoff written.").font(Fonts.grotesk(13)).foregroundColor(Phosphor.cream2)
-                        Button("Open a new session") { actions.openSession() }.buttonStyle(PrimaryButtonStyle(size: 12, height: 30))
-                    }
+                if let handoff = model.handoff, handoff.session == session.session {
+                    handoffRow(handoff)
                 } else if model.handoffSuggested, snoozed.value != session.session {
                     HStack(spacing: 8) {
-                        Button("Hand off now") {
-                            actions.handOff()
-                            handedOff.value = true
-                        }
+                        Button("Hand off now") { actions.handOff() }
                         .buttonStyle(PrimaryButtonStyle(size: 12, height: 30))
                         Button("Not yet") { snoozed.value = session.session }.buttonStyle(GhostButtonStyle(height: 30))
                     }
                 }
+            }
+        }
+    }
+
+    /// After "Hand off now": writing, then copied to the clipboard, until Done or a new session takes over.
+    @ViewBuilder
+    private func handoffRow(_ handoff: HandoffState) -> some View {
+        switch handoff {
+        case .writing:
+            Text("WRITING THE HANDOFF…").font(Fonts.vt(19)).foregroundColor(Phosphor.amber)
+        case .copied:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Handoff copied. Paste it into a new Claude Code session.")
+                    .font(Fonts.grotesk(13)).foregroundColor(Phosphor.cream2).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button("Open in Terminal") { actions.openSession() }.buttonStyle(PrimaryButtonStyle(size: 12, height: 30))
+                    Button("Done") { model.handoff = nil }.buttonStyle(GhostButtonStyle(height: 30))
+                }
+            }
+        case .failed:
+            HStack(spacing: 8) {
+                Text("Couldn't read this session to write a handoff.")
+                    .font(Fonts.grotesk(13)).foregroundColor(Phosphor.cream2).fixedSize(horizontal: false, vertical: true)
+                Button("Done") { model.handoff = nil }.buttonStyle(GhostButtonStyle(height: 30))
             }
         }
     }
@@ -200,14 +217,10 @@ public struct PanelView: View {
     private var footer: some View {
         HStack {
             Button("Open Binder") { actions.openBinder() }
-                .buttonStyle(.plain)
-                .font(Fonts.grotesk(13, weight: 600))
-                .foregroundColor(Phosphor.cream)
+                .buttonStyle(LinkButtonStyle(color: Phosphor.cream))
             Spacer()
             Button("Add a memory") { actions.addMemory() }
-                .buttonStyle(.plain)
-                .font(Fonts.grotesk(13, weight: 600))
-                .foregroundColor(Phosphor.dim)
+                .buttonStyle(LinkButtonStyle(color: Phosphor.cream2))
         }
     }
 }

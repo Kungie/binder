@@ -11,7 +11,10 @@ public enum HandoffAction {
         guard let chunk = try? Transcript.read(URL(fileURLWithPath: path), from: size > tail ? size - tail : 0) else { return nil }
         var card: HandoffCard?
         if consent { card = ClaudeCLISummarizer(runner: runner, session: session.session).handoff(from: chunk.entries) }
-        let project = session.project ?? URL(fileURLWithPath: session.cwd).lastPathComponent
-        return try? Handoff.write(card ?? Handoff.fallback(from: chunk.entries), project: project, vault: vault, now: Date())
+        return try? Handoff.write(card ?? Handoff.fallback(from: chunk.entries), project: project(for: session), vault: vault, now: Date())
+    }
+
+    public static func project(for session: SessionStatus) -> String {
+        session.project ?? URL(fileURLWithPath: session.cwd).lastPathComponent
     }
 }

@@ -13,6 +13,20 @@ public enum CardPhase: Equatable, Sendable {
     public static let keepAllGap = 0.22
 }
 
+/// Where "Hand off now" is for the session it was pressed in.
+public enum HandoffState: Equatable, Sendable {
+    case writing(session: String)
+    /// Written, and the prompt for a new session is on the clipboard.
+    case copied(session: String)
+    case failed(session: String)
+
+    public var session: String {
+        switch self {
+        case let .writing(s), let .copied(s), let .failed(s): s
+        }
+    }
+}
+
 /// The running app's view of the vault: what's waiting for review, the session being watched, and how much Binder remembers.
 @MainActor
 public final class AppModel: ObservableObject {
@@ -26,6 +40,8 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var memories = 0
     @Published public private(set) var state: BinderState
     @Published public var phases: [String: CardPhase] = [:]
+    /// Cleared by Done, or by itself once a new session takes over as "this session".
+    @Published public var handoff: HandoffState?
 
     @Published public private(set) var vault: Vault
     public let home: URL
@@ -46,6 +62,7 @@ public final class AppModel: ObservableObject {
         proposals = ProposalStore(vault: vault).pending()
         phases = phases.filter { id, _ in proposals.contains { $0.id == id } }
         session = Self.latestSession(vault: vault, now: now())
+        if let handoff, session?.session != handoff.session { self.handoff = nil }
         memories = Self.countMemories(vault: vault)
     }
 

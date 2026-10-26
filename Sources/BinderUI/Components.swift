@@ -1,6 +1,18 @@
 import AppKit
 import SwiftUI
 
+/// Every button gives a little under the finger: it shrinks a touch while pressed and springs back.
+struct Push: ViewModifier {
+    var pressed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(pressed && !reduceMotion ? 0.94 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.55), value: pressed)
+    }
+}
+
 /// Amber fill, ink text, a hard amber-deep shadow that the button sinks into when pressed.
 public struct PrimaryButtonStyle: ButtonStyle {
     var size: CGFloat
@@ -24,6 +36,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
             .background(Phosphor.amberDeep.offset(x: pressed ? 0 : 3, y: pressed ? 0 : 3))
             .offset(x: pressed ? 2 : 0, y: pressed ? 2 : 0)
             .contentShape(Rectangle())
+            .modifier(Push(pressed: pressed))
     }
 }
 
@@ -42,6 +55,7 @@ public struct GhostButtonStyle: ButtonStyle {
             .overlay(Rectangle().strokeBorder(Phosphor.dim, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .contentShape(Rectangle())
+            .modifier(Push(pressed: configuration.isPressed))
     }
 }
 
@@ -57,6 +71,7 @@ public struct CreamButtonStyle: ButtonStyle {
             .frame(minHeight: 26)
             .background(Phosphor.cream.opacity(configuration.isPressed ? 0.8 : 1))
             .contentShape(Rectangle())
+            .modifier(Push(pressed: configuration.isPressed))
     }
 }
 
@@ -71,6 +86,42 @@ public struct QuietButtonStyle: ButtonStyle {
             .padding(.horizontal, 8)
             .frame(minHeight: 26)
             .contentShape(Rectangle())
+            .modifier(Push(pressed: configuration.isPressed))
+    }
+}
+
+/// An underlined text link: brighter, with a faint amber glow and a pointing hand, under the pointer.
+public struct LinkButtonStyle: ButtonStyle {
+    var color: Color
+
+    public init(color: Color = Phosphor.cream) { self.color = color }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        LinkLabel(label: configuration.label, color: color, pressed: configuration.isPressed)
+    }
+
+    struct LinkLabel<Label: View>: View {
+        var label: Label
+        var color: Color
+        var pressed: Bool
+        @StateObject private var hovering = Local(false)
+
+        var body: some View {
+            label
+                .font(Fonts.grotesk(13, weight: 600))
+                .foregroundColor(color)
+                .underline(true, color: color.opacity(hovering.value ? 0.9 : 0.5))
+                .brightness(hovering.value ? 0.3 : 0)
+                .shadow(color: Phosphor.amber.opacity(hovering.value ? 0.55 : 0), radius: 6)
+                .contentShape(Rectangle())
+                .modifier(Push(pressed: pressed))
+                .animation(.easeOut(duration: 0.15), value: hovering.value)
+                .onHover { inside in
+                    hovering.value = inside
+                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
+                .onDisappear { if hovering.value { NSCursor.pop() } }
+        }
     }
 }
 

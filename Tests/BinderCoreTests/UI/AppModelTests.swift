@@ -150,4 +150,17 @@ func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
         #expect(model.vault.root == moved.root)
         #expect(model.proposals.map(\.text) == ["Seen in the new place."])
     }
+
+    @Test func handoffRowStaysUntilANewSessionTakesOver() throws {
+        try SessionStatus(session: "old", project: "dawn", cwd: "/x/dawn", reading: ContextReading(used: 150_000, window: 200_000), updatedAt: Date()).save(vault)
+        let model = AppModel(vault: vault, home: home)
+        model.refresh()
+        model.handoff = .copied(session: "old")
+        model.refresh()
+        #expect(model.handoff == .copied(session: "old"))
+        try SessionStatus(session: "new", project: "dawn", cwd: "/x/dawn", reading: nil, updatedAt: Date().addingTimeInterval(5)).save(vault)
+        model.refresh()
+        #expect(model.session?.session == "new")
+        #expect(model.handoff == nil)
+    }
 }
