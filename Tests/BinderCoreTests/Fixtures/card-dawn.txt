@@ -1,0 +1,23 @@
+BINDER CARD · VERIFIED, USE IT. If something you need is missing, ask once and say what you'd write down.
+
+ME:
+- name: Eren
+- language: Turkish in chat, English in files
+- style: short answers, ask before pushing
+One-person studio. Small instruments and Mac apps.
+
+PROJECT dawn:
+- repo: github.com/kungie/dawn
+- deploy: GitHub Actions
+- site: Cloudflare Pages, see [[site]]
+- server: [[hetzner-1]]
+Decisions, newest first:
+- 2026-10-26 · The dawn site deploys to Cloudflare Pages. · kept from a command
+- 2026-10-17 · Licence is AGPL-3.0 · kept from the chat
+
+SERVERS AND ACCESS:
+- hetzner-1: address 116.203.10.20, user eren, port 2222, key id_ed25519_hetzner
+- ssh hosts already set up: hetzner-1, proxmox. Use them, don't create new keys.
+- git: Eren <eren@example.com>
+- github: Kungie
+- cloudflare: signed in
