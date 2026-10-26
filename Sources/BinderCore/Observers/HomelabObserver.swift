@@ -88,7 +88,7 @@ public struct SystemLANProbe: LANProbe {
     }
 
     /// The first private IPv4 address on a non-loopback interface, as `("192.168.1", 23)`.
-    static func localSubnet() -> (String, Int)? {
+    public static func localSubnet() -> (String, Int)? {
         var list: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&list) == 0, let first = list else { return nil }
         defer { freeifaddrs(list) }
@@ -106,7 +106,7 @@ public struct SystemLANProbe: LANProbe {
         return nil
     }
 
-    static func isOpen(_ ip: String, _ port: Int, timeoutMs: Int32 = 200) -> Bool {
+    public static func isOpen(_ ip: String, _ port: Int, timeoutMs: Int32 = 200) -> Bool {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }
         defer { close(fd) }

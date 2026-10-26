@@ -250,3 +250,129 @@ public final class Local<Value>: ObservableObject {
 
     public init(_ value: Value) { self.value = value }
 }
+
+// MARK: Snapshot mode
+
+private struct SnapshotModeKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+public extension EnvironmentValues {
+    /// True while rendering PNGs: AppKit-backed controls (text fields) can't be drawn by ImageRenderer,
+    /// so views show a styled `Text` in their place.
+    var isSnapshot: Bool {
+        get { self[SnapshotModeKey.self] }
+        set { self[SnapshotModeKey.self] = newValue }
+    }
+}
+
+/// A labelled single-line field in Phosphor style.
+public struct BinderField: View {
+    var label: String
+    @Binding var text: String
+    var detected: Bool
+    var placeholder: String
+    @Environment(\.isSnapshot) private var isSnapshot
+
+    public init(_ label: String, text: Binding<String>, detected: Bool = false, placeholder: String = "") {
+        self.label = label
+        self._text = text
+        self.detected = detected
+        self.placeholder = placeholder
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Text(label).font(Fonts.grotesk(12)).foregroundColor(Phosphor.cream2)
+                if detected { Text("DETECTED").font(Fonts.mono(10.5)).foregroundColor(Phosphor.amber) }
+            }
+            Group {
+                if isSnapshot {
+                    Text(text.isEmpty ? placeholder : text)
+                        .foregroundColor(text.isEmpty ? Phosphor.dim : Phosphor.cream)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    TextField(placeholder, text: $text)
+                        .textFieldStyle(.plain)
+                        .foregroundColor(Phosphor.cream)
+                }
+            }
+            .font(Fonts.grotesk(14))
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(Phosphor.black)
+            .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
+            .accessibilityLabel(label)
+        }
+    }
+}
+
+/// The setup window's frame: title strip, the rail on the left (mascot, caption, steps), the step on the right.
+public struct SetupShell<Content: View>: View {
+    var step: Int
+    var mood: Mascot.Mood
+    var caption: String
+    var content: Content
+
+    public init(step: Int, mood: Mascot.Mood, caption: String, @ViewBuilder content: () -> Content) {
+        self.step = step
+        self.mood = mood
+        self.caption = caption
+        self.content = content()
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            TitleStrip("BINDER · SETUP")
+            HStack(spacing: 0) {
+                VStack {
+                    VStack(spacing: 14) {
+                        Mascot(mood: mood, size: 170)
+                        Text(caption)
+                            .font(Fonts.vt(20))
+                            .foregroundColor(Phosphor.amber)
+                            .multilineTextAlignment(.center)
+                    }
+                    Spacer()
+                    StepRail(steps: OnboardingStep.allCases.map(\.railLabel), current: step)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 28)
+                .padding(.horizontal, 24)
+                .frame(width: 260)
+                .background(
+                    ZStack {
+                        Phosphor.black
+                        RadialGradient(colors: [Phosphor.amber.opacity(0.2), .clear], center: UnitPoint(x: 0.5, y: 0.3), startRadius: 0, endRadius: 240)
+                        Scanlines()
+                    }
+                )
+                .overlay(alignment: .trailing) { Rectangle().fill(Phosphor.line).frame(width: 1) }
+                content
+                    .padding(.horizontal, 36)
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .background(Phosphor.black2)
+    }
+}
+
+/// Archivo heading plus a paragraph: the top of every setup step.
+public struct StepHeading: View {
+    var title: String
+    var text: String
+
+    public init(_ title: String, _ text: String) {
+        self.title = title
+        self.text = text
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(Fonts.archivo(28, weight: 800)).foregroundColor(Phosphor.cream)
+            Text(text).font(Fonts.grotesk(14)).foregroundColor(Phosphor.cream2).fixedSize(horizontal: false, vertical: true).lineSpacing(3)
+        }
+    }
+}

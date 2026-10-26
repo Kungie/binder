@@ -5,6 +5,7 @@ import SwiftUI
 public struct ProposalCard: View {
     let proposal: Proposal
     @ObservedObject var model: AppModel
+    @Environment(\.isSnapshot) private var isSnapshot
 
     public static func tag(for p: Proposal) -> String {
         var tag: String
@@ -32,7 +33,15 @@ public struct ProposalCard: View {
                 .foregroundColor(Phosphor.amber)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if let editing {
+            if let editing, isSnapshot {
+                Text(editing.wrappedValue)
+                    .font(Fonts.grotesk(13.5))
+                    .foregroundColor(Phosphor.cream)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .background(Phosphor.black)
+                    .overlay(Rectangle().strokeBorder(Phosphor.amber.opacity(0.6), lineWidth: 1))
+            } else if let editing {
                 TextField("", text: editing, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(Fonts.grotesk(13.5))

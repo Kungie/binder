@@ -6,7 +6,7 @@ import SwiftUI
 public enum Snapshot {
     public static func image<V: View>(_ view: V, size: CGSize, scale: CGFloat = 2) -> NSImage? {
         Fonts.register()
-        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height))
+        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height).environment(\.isSnapshot, true))
         renderer.scale = scale
         return renderer.nsImage
     }
