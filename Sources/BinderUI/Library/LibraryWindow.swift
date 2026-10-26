@@ -131,8 +131,8 @@ public struct LibraryView: View {
                 Text(section.kind.label).foregroundColor(model.selectedKind == section.kind ? Phosphor.cream : Phosphor.cream2)
                 Spacer()
                 if section.kind == .inbox {
-                    if model.inboxCount > 0 {
-                        Text("\(model.inboxCount)").font(Fonts.vt(18)).foregroundColor(Phosphor.ink).padding(.horizontal, 6).background(Phosphor.amber)
+                    if let count = Self.inboxBadge(app) {
+                        Text("\(count)").font(Fonts.vt(18)).foregroundColor(Phosphor.ink).padding(.horizontal, 6).background(Phosphor.amber)
                     }
                 } else if section.kind != .me, !section.items.isEmpty {
                     Text("\(section.items.count)").font(Fonts.vt(18)).foregroundColor(Phosphor.dim)
@@ -143,6 +143,11 @@ public struct LibraryView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// The number on INBOX: what's still waiting, live from the app, so Keep and Drop clear it at once.
+    static func inboxBadge(_ app: AppModel) -> Int? {
+        app.pendingCount > 0 ? app.pendingCount : nil
     }
 
     /// A click in the graph opens that note, or the first note of that folder, in the library.

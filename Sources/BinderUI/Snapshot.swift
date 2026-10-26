@@ -119,9 +119,10 @@ struct ReadmeScene: View {
             .padding(.horizontal, 14)
             .frame(height: 30)
             .background(Color(white: 0.12))
-            PanelContainer(model: model)
+            // The notch points at the icon, which sits about 324 pt into the panel; its tip 3 pt under the bar.
+            PanelContainer(model: model, geometry: PanelGeometry(arrowX: 324))
                 .padding(.trailing, 14)
-                .padding(.top, 6)
+                .padding(.top, 3)
                 .shadow(color: .black.opacity(0.6), radius: 24, y: 12)
             Spacer(minLength: 0)
         }

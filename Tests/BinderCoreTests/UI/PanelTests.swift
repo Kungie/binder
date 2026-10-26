@@ -79,6 +79,21 @@ import Testing
         #expect(fifteen < four * 1.1, "15 catches: \(fifteen) pt, 4 catches: \(four) pt")
     }
 
+    @Test func bleedIsDenseUnderTheNotchAndGoneFarAway() {
+        let center: CGFloat = 300, column = Int(center / PixelNotch.pixel)
+        #expect(PixelBleed.pixel(row: 0, column: column, centerX: center) == (on: true, bright: true))
+        #expect(!PixelBleed.pixel(row: 0, column: column + 60, centerX: center).on)
+        #expect(!PixelBleed.pixel(row: 2, column: column + 20, centerX: center).on)
+        let near = (column - 10...column + 10).filter { PixelBleed.pixel(row: 1, column: $0, centerX: center).on }.count
+        let far = (column - 30...column - 10).filter { PixelBleed.pixel(row: 1, column: $0, centerX: center).on }.count
+        #expect(near > far)
+    }
+
+    @Test func notchSitsOnTopOfThePanel() {
+        #expect(PixelNotch.width == 18)
+        #expect(PanelContainer.notchHeight == 10)
+    }
+
     @Test func panelSnapshotsRender() throws {
         for kind in [DemoVault.Kind.review, .empty, .handoff, .edit] {
             let model = DemoVault.model(kind)

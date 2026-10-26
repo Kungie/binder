@@ -59,13 +59,6 @@ import Testing
         #expect(!m.addMemory("  ", to: NoteRef(title: "dawn", path: "projects/dawn.md")))
     }
 
-    @Test func inboxCountMatchesPending() throws {
-        let (m, vault) = try model()
-        try ProposalStore(vault: vault).add(Proposal.make(kind: .fact, source: .command, text: "One.", evidence: "x", target: "projects/dawn.md", project: "dawn", session: nil))
-        m.reload()
-        #expect(m.inboxCount == 1)
-    }
-
     @Test func settingsChangesAreSaved() throws {
         let (m, vault) = try model()
         m.update { $0.handoffThreshold = 0.8; $0.observeIntervalHours = 24 }

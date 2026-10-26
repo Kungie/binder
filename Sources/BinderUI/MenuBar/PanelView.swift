@@ -225,21 +225,98 @@ public struct PanelView: View {
     }
 }
 
-/// The panel with its frame: raised black, a hairline, as tall as its content.
+/// Where the notch points, in panel coordinates. The status item sets it so the notch sits under the icon.
+public final class PanelGeometry: ObservableObject {
+    @Published public var arrowX: CGFloat
+
+    public init(arrowX: CGFloat = PanelView.width / 2) { self.arrowX = arrowX }
+}
+
+/// The panel with its frame (raised black, a hairline, as tall as its content) and, on top, an amber pixel
+/// notch pointing at the menu bar icon, with amber pixels bleeding into the top edge under it. As in Dawn.
 public struct PanelContainer: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var geometry: PanelGeometry
     var actions: PanelActions
 
-    public init(model: AppModel, actions: PanelActions = PanelActions()) {
+    public static let notchHeight: CGFloat = PixelNotch.rows * PixelNotch.pixel
+
+    public init(model: AppModel, geometry: PanelGeometry = PanelGeometry(), actions: PanelActions = PanelActions()) {
         self.model = model
+        self.geometry = geometry
         self.actions = actions
     }
 
     public var body: some View {
-        PanelView(model: model, actions: actions)
-            .background(Phosphor.black2)
-            .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
-            .fixedSize(horizontal: false, vertical: true)
-            .environment(\.colorScheme, .dark)
+        VStack(spacing: 0) {
+            PixelNotch()
+                .frame(width: PixelNotch.width, height: Self.notchHeight)
+                .padding(.leading, max(0, geometry.arrowX - PixelNotch.width / 2))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PanelView(model: model, actions: actions)
+                .background(Phosphor.black2)
+                .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
+                .overlay(alignment: .top) { PixelBleed(centerX: geometry.arrowX).frame(height: PixelNotch.pixel * 3) }
+        }
+        .frame(width: PanelView.width)
+        .fixedSize(horizontal: false, vertical: true)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// A stepped triangle of 2 pt pixels, 1-3-5-7-9 wide.
+struct PixelNotch: View {
+    static let pixel: CGFloat = 2
+    static let rows: CGFloat = 5
+    static var width: CGFloat { (rows * 2 - 1) * pixel }
+
+    var body: some View {
+        Canvas { ctx, size in
+            let p = Self.pixel
+            let cx = size.width / 2
+            for r in 0..<Int(Self.rows) {
+                let count = 2 * r + 1
+                for k in 0..<count {
+                    let x = cx - CGFloat(count) * p / 2 + CGFloat(k) * p
+                    // The tip is bright; the base row alternates with amber-deep where it meets the panel.
+                    let color = (r == Int(Self.rows) - 1 && k % 2 == 1) ? Phosphor.amberDeep : Phosphor.amber
+                    ctx.fill(Path(CGRect(x: x, y: CGFloat(r) * p, width: p, height: p)), with: .color(color))
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Amber pixels along the panel's top edge, densest under the notch, fading out with a 4 × 4 Bayer dither.
+struct PixelBleed: View {
+    let centerX: CGFloat
+    static let bayer: [[Double]] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+    /// How far each row reaches from the notch.
+    static let reach: [CGFloat] = [90, 56, 28]
+
+    /// Whether the pixel at `column` in `row` is lit, and if so whether it's the bright amber.
+    static func pixel(row: Int, column: Int, centerX: CGFloat) -> (on: Bool, bright: Bool) {
+        let p = PixelNotch.pixel
+        let d = abs(CGFloat(column) * p + p / 2 - centerX)
+        let density = max(0, 1 - d / reach[row])
+        let threshold = (bayer[row % 4][column % 4] + 0.5) / 16
+        return (density > threshold, density > 0.6)
+    }
+
+    var body: some View {
+        Canvas { ctx, size in
+            let p = PixelNotch.pixel
+            for row in 0..<Self.reach.count {
+                for column in 0..<Int(size.width / p) {
+                    let px = Self.pixel(row: row, column: column, centerX: centerX)
+                    guard px.on else { continue }
+                    ctx.fill(Path(CGRect(x: CGFloat(column) * p, y: CGFloat(row) * p, width: p, height: p)),
+                             with: .color(px.bright ? Phosphor.amber : Phosphor.amberDeep))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

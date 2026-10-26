@@ -9,6 +9,7 @@ public final class StatusItemController: NSObject {
     private let model: AppModel
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let hosting: NSHostingController<PanelContainer>
+    private let geometry: PanelGeometry
     private let panel: BinderPanel
     private var sizeObservation: NSKeyValueObservation?
     private var changes: AnyCancellable?
@@ -20,10 +21,12 @@ public final class StatusItemController: NSObject {
 
     public init(model: AppModel, actions: PanelActions) {
         self.model = model
-        hosting = NSHostingController(rootView: PanelContainer(model: model, actions: actions))
+        let geometry = PanelGeometry()
+        hosting = NSHostingController(rootView: PanelContainer(model: model, geometry: geometry, actions: actions))
         hosting.sizingOptions = [.preferredContentSize]
         panel = BinderPanel(contentRect: NSRect(x: 0, y: 0, width: PanelView.width, height: 400),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        self.geometry = geometry
         super.init()
         hosting.view.autoresizingMask = [.width, .height]
         panel.contentView = hosting.view
@@ -107,7 +110,8 @@ public final class StatusItemController: NSObject {
         escapeKey = nil
     }
 
-    /// Centred under the item, kept inside the screen, top edge just under the menu bar.
+    /// Notch tip a hair under the menu bar, panel centred under the icon and kept inside the screen;
+    /// if the panel has to shift to stay on screen, the notch moves so it still points at the icon.
     private func place() {
         guard let button = statusItem.button, let window = button.window else { return }
         let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
@@ -116,7 +120,9 @@ public final class StatusItemController: NSObject {
         size.width = PanelView.width
         let screen = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
         let x = min(max(anchor.midX - size.width / 2, screen.minX + 6), screen.maxX - size.width - 6)
-        let top = window.frame.minY - 4
+        // The status item's window spans the full menu bar height, so its bottom is the menu bar's edge.
+        let top = window.frame.minY - 3
+        geometry.arrowX = min(max(anchor.midX - x, 16), size.width - 16)
         panel.setFrame(NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: true)
     }
 }

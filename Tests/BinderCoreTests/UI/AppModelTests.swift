@@ -163,4 +163,19 @@ func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
         #expect(model.session?.session == "new")
         #expect(model.handoff == nil)
     }
+
+    @Test func sidebarInboxBadgeFollowsKeepAndDrop() async throws {
+        let a = proposal("Kept from the main window."), b = proposal("Dropped from the main window.")
+        try ProposalStore(vault: vault).add(a)
+        try ProposalStore(vault: vault).add(b)
+        let model = AppModel(vault: vault, home: home)
+        model.refresh()
+        #expect(LibraryView.inboxBadge(model) == 2)
+        model.keep(a.id)
+        #expect(LibraryView.inboxBadge(model) == 1)
+        model.drop(b.id)
+        #expect(LibraryView.inboxBadge(model) == nil)
+        #expect(await eventually { model.proposals.isEmpty })
+        #expect(LibraryView.inboxBadge(model) == nil)
+    }
 }

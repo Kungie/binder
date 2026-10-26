@@ -54,7 +54,6 @@ public struct NoteDetail: Sendable {
 @MainActor
 public final class LibraryModel: ObservableObject {
     @Published public private(set) var sections: [LibrarySection] = []
-    @Published public private(set) var inboxCount = 0
     @Published public var selectedKind: SectionKind = .projects
     @Published public var selected: NoteRef?
     @Published public private(set) var state: BinderState
@@ -72,7 +71,6 @@ public final class LibraryModel: ObservableObject {
 
     public func reload() {
         state = BinderState.load(vault)
-        inboxCount = ProposalStore(vault: vault).pending().count
         sections = SectionKind.allCases.map { LibrarySection(kind: $0, items: items(for: $0)) }
     }
 
