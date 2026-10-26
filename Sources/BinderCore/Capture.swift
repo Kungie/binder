@@ -29,6 +29,16 @@ public struct SessionStatus: Codable, Equatable, Sendable {
     public var cwd: String
     public var reading: ContextReading?
     public var updatedAt: Date
+    public var transcriptPath: String?
+
+    public init(session: String, project: String?, cwd: String, reading: ContextReading?, updatedAt: Date, transcriptPath: String? = nil) {
+        self.session = session
+        self.project = project
+        self.cwd = cwd
+        self.reading = reading
+        self.updatedAt = updatedAt
+        self.transcriptPath = transcriptPath
+    }
 
     static func url(_ session: String, _ vault: Vault) -> URL {
         vault.sessions.appendingPathComponent("\(session).json")
@@ -41,7 +51,7 @@ public struct SessionStatus: Codable, Equatable, Sendable {
         return try? decoder.decode(SessionStatus.self, from: data)
     }
 
-    func save(_ vault: Vault) throws {
+    public func save(_ vault: Vault) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
@@ -85,7 +95,8 @@ public enum Capture {
 
         result.reading = ContextMeter.reading(from: chunk.entries)
             ?? SessionStatus.load(session: input.sessionID, vault: vault)?.reading
-        try SessionStatus(session: input.sessionID, project: project, cwd: input.cwd, reading: result.reading, updatedAt: Date()).save(vault)
+        try SessionStatus(session: input.sessionID, project: project, cwd: input.cwd, reading: result.reading,
+                          updatedAt: Date(), transcriptPath: input.transcriptPath).save(vault)
         return result
     }
 }

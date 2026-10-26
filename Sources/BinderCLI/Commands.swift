@@ -11,7 +11,7 @@ struct Paths {
     static func current() -> Paths {
         let env = ProcessInfo.processInfo.environment
         let home = env["BINDER_HOME"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser
-        let vault = Vault(root: env["BINDER_VAULT"].map { URL(fileURLWithPath: $0) } ?? Vault.defaultRoot)
+        let vault = Vault(root: VaultLocation.resolve(env: env, home: home))
         let binder = Bundle.main.executableURL?.resolvingSymlinksInPath().path ?? CommandLine.arguments[0]
         return Paths(home: home, vault: vault, settings: home.appendingPathComponent(".claude/settings.json"), binder: binder)
     }
