@@ -22,7 +22,12 @@ public protocol CommandRunner: Sendable {
 /// Runs real processes. Looks tools up on PATH plus the usual Homebrew and user folders,
 /// because apps and hooks often start with a bare PATH.
 public struct SystemRunner: CommandRunner {
-    public init() {}
+    /// Added to the child's environment, e.g. `BINDER_NESTED=1` so a nested `claude -p` doesn't re-enter Binder's hooks.
+    let extraEnvironment: [String: String]
+
+    public init(extraEnvironment: [String: String] = [:]) {
+        self.extraEnvironment = extraEnvironment
+    }
 
     static let extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
                              NSHomeDirectory() + "/.local/bin", NSHomeDirectory() + "/.npm-global/bin", NSHomeDirectory() + "/.bun/bin"]
@@ -46,6 +51,7 @@ public struct SystemRunner: CommandRunner {
         process.arguments = args
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = Self.searchPath.joined(separator: ":")
+        env.merge(extraEnvironment) { _, new in new }
         process.environment = env
 
         let out = Pipe(), err = Pipe()
