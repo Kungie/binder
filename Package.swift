@@ -10,9 +10,16 @@ let package = Package(
     targets: [
         .target(name: "BinderCore", path: "Sources/BinderCore"),
         .executableTarget(name: "BinderCLI", dependencies: ["BinderCore"], path: "Sources/BinderCLI"),
+        .target(
+            name: "BinderUI",
+            dependencies: ["BinderCore"],
+            path: "Sources/BinderUI",
+            resources: [.copy("Resources/Fonts")]
+        ),
+        .executableTarget(name: "BinderApp", dependencies: ["BinderUI"], path: "Sources/BinderApp"),
         .testTarget(
             name: "BinderCoreTests",
-            dependencies: ["BinderCore", "BinderCLI"],
+            dependencies: ["BinderCore", "BinderCLI", "BinderUI"],
             path: "Tests/BinderCoreTests",
             resources: [.copy("Fixtures")]
         )
