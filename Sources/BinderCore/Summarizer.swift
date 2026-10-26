@@ -44,6 +44,39 @@ public struct ClaudeCLISummarizer: Summarizer {
         return parse(result.stdout, project: project)
     }
 
+    static let handoffPrompt = """
+    You read the end of a long coding session so a fresh session can take over. Reply with only one JSON object \
+    and no other text: {"done":["short items"],"left":["short items"],"dontTouch":["files or areas to leave alone"],\
+    "next":"the single next action"}. Use [] for empty lists. Never include secrets.
+
+    SESSION:
+
+    """
+
+    /// A handoff card written by the model, or nil when it can't run or replies with something unreadable.
+    public func handoff(from entries: [TranscriptEntry]) -> HandoffCard? {
+        let lines = entries.compactMap { entry -> String? in
+            switch entry {
+            case let .user(text): "USER: \(text)"
+            case let .assistant(text): "ASSISTANT: \(text)"
+            case let .fileEdit(path): "EDITED: \(path)"
+            case let .todos(todos): "OPEN TODOS: \(todos.joined(separator: "; "))"
+            default: nil
+            }
+        }
+        guard !lines.isEmpty else { return nil }
+        let condensed = String(SecretFilter.redact(lines.joined(separator: "\n")).suffix(Self.limit))
+        guard let result = runner.run("claude", ["-p", "--model", "haiku", "--output-format", "text"],
+                                      input: Self.handoffPrompt + condensed, timeout: 90),
+              result.status == 0, !result.timedOut,
+              let start = result.stdout.firstIndex(of: "{"), let end = result.stdout.lastIndex(of: "}"), start < end,
+              let json = try? JSONSerialization.jsonObject(with: Data(result.stdout[start...end].utf8)) as? [String: Any]
+        else { return nil }
+        let list = { (key: String) in (json[key] as? [String] ?? []).map { SecretFilter.redact($0) } }
+        return HandoffCard(done: list("done"), left: list("left"), dontTouch: list("dontTouch"),
+                           next: SecretFilter.redact(json["next"] as? String ?? ""))
+    }
+
     func parse(_ reply: String, project: String?) -> [Proposal] {
         guard let start = reply.firstIndex(of: "["), let end = reply.lastIndex(of: "]"), start < end,
               let items = try? JSONSerialization.jsonObject(with: Data(reply[start...end].utf8)) as? [[String: Any]]

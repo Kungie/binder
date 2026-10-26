@@ -12,7 +12,7 @@ let package = Package(
         .executableTarget(name: "BinderCLI", dependencies: ["BinderCore"], path: "Sources/BinderCLI"),
         .testTarget(
             name: "BinderCoreTests",
-            dependencies: ["BinderCore"],
+            dependencies: ["BinderCore", "BinderCLI"],
             path: "Tests/BinderCoreTests",
             resources: [.copy("Fixtures")]
         )

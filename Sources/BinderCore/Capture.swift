@@ -53,6 +53,9 @@ public struct SessionStatus: Codable, Equatable, Sendable {
 public struct CaptureResult: Equatable, Sendable {
     public var proposalsAdded = 0
     public var reading: ContextReading?
+    /// The byte range read this time, so slow follow-up work (the summarizer) can read the same part later.
+    public var startOffset: UInt64 = 0
+    public var endOffset: UInt64 = 0
 }
 
 /// The Stop hook's work: read what's new in the transcript, turn it into proposals, remember where it stopped.
@@ -76,7 +79,7 @@ public enum Capture {
         }
 
         let store = ProposalStore(vault: vault)
-        var result = CaptureResult()
+        var result = CaptureResult(startOffset: offset, endOffset: chunk.endOffset)
         for p in proposals where try store.add(p) { result.proposalsAdded += 1 }
         try cursors.set(chunk.endOffset, for: input.sessionID)
 
