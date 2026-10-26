@@ -17,7 +17,7 @@ build: scratch
 	swift build
 
 test: scratch
-	swift test $(TEST_FLAGS) $(if $(FILTER),--filter $(FILTER),)
+	swift test $(TEST_FLAGS) $(if $(FILTER),--filter '$(FILTER)',)
 
 cli: scratch
 	swift build -c release --product binder
