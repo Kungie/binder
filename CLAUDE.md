@@ -51,7 +51,8 @@ Individual developers and hobbyists first, on macOS.
 
 - Binder notices when a session is getting long, using the share of context used from the transcript, and offers "Hand off now".
 - The user can also hand off at any time from the menu bar or the CLI.
-- A handoff card holds what's done, what's left, what not to touch and the next action. The new session starts with it.
+- A handoff card holds what's done, what's left, what not to touch and the next action.
+- The card waits in Binder. The next session opened in that folder picks it up automatically, and so does `/clear` in Claude Code, which fires SessionStart again. There is also an "Open a new session" button that starts `claude` or `codex` in the same folder in the user's terminal (Terminal, iTerm or Ghostty).
 
 ## Surfaces
 
@@ -74,7 +75,7 @@ The author's Dawn app (github.com/Kungie/dawn) is a Swift menu bar app that alre
 
 ## Storage
 
-A plain Markdown folder that Obsidian can open. The proposed default is `~/Binder`, and the user can point it inside an existing Obsidian vault.
+A plain Markdown folder. The default is `~/Binder`, and first launch also offers "put it inside my Obsidian vault". Binder never needs Obsidian, but its notes are written to feel native there: Properties in the frontmatter, and `[[wikilinks]]` between notes so the graph shows how they connect (project → server → SSH key). An Obsidian plugin can come later as an extra surface.
 
 ```
 ~/Binder/
@@ -141,12 +142,17 @@ The source is in `design/`, and the canvas is at https://claude.ai/artifact/TA4e
 
 **Our angle:** Binder observes the machine instead of only remembering what was said, it's a native Mac app with an approval inbox, and it builds the handoff in.
 
+## Decided (26 Oct 2026)
+
+- **License:** AGPL-3.0, the same as Dawn.
+- **Price:** free and open source.
+- **Vault:** `~/Binder` by default, with an option to put it inside an Obsidian vault.
+- **Handoff:** the card waits and is picked up automatically, plus an "Open a new session" button.
+- **Design:** direction C, Phosphor.
+
 ## Open questions
 
-- License (Dawn uses AGPL-3.0), and whether the repo goes public at launch. It is private for now.
+- When the repo goes public. It is private for now.
 - A brand check for the name "Binder" (mybinder.org and Android's Binder IPC also exist).
-- The default vault location, and the option to use an existing Obsidian vault.
-- How a handoff opens the new session: copy a command, open Terminal, or something else.
 - How to measure "context used" for Codex sessions.
 - Which observers ship in v1, and how often they run.
-- Pricing: free or paid.
