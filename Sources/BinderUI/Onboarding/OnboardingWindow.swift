@@ -26,6 +26,7 @@ public struct OnboardingView: View {
         }
         .frame(minWidth: 880, minHeight: 720)
         .background(Phosphor.black2)
+        .ignoresSafeArea(.container, edges: .top)
         .environment(\.colorScheme, .dark)
     }
 }
@@ -46,7 +47,7 @@ public final class OnboardingWindowController: NSWindowController {
         window.contentView = NSHostingView(rootView: OnboardingView(model: model, openSession: openSession, done: { [weak window] in
             window?.close()
             done()
-        }))
+        }).environment(\.titlebarHeight, window.titlebarHeight))
         window.center()
     }
 

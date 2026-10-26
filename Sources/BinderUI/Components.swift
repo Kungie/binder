@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Amber fill, ink text, a hard amber-deep shadow that the button sinks into when pressed.
@@ -230,17 +231,36 @@ public struct SteppedBar: View {
 /// The strip across the top of a window: room for the traffic lights, a centred Space Mono title.
 public struct TitleStrip: View {
     var title: String
+    @Environment(\.titlebarHeight) private var titlebarHeight
 
     public init(_ title: String) { self.title = title }
 
+    /// In a window the strip is the title bar itself, as tall as the traffic lights' row; on its own (snapshots) 40 pt.
     public var body: some View {
         ZStack {
             Phosphor.black
             SectionLabel(title)
         }
-        .frame(height: 40)
+        .frame(height: titlebarHeight > 0 ? titlebarHeight : 40)
         .overlay(alignment: .bottom) { Rectangle().fill(Phosphor.line).frame(height: 1) }
     }
+}
+
+private struct TitlebarHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+public extension EnvironmentValues {
+    /// The height of the window's transparent title bar, set by the window controllers so `TitleStrip` fills it.
+    var titlebarHeight: CGFloat {
+        get { self[TitlebarHeightKey.self] }
+        set { self[TitlebarHeightKey.self] = newValue }
+    }
+}
+
+public extension NSWindow {
+    /// How much of a full-size-content window the title bar covers.
+    var titlebarHeight: CGFloat { frame.height - contentLayoutRect.height }
 }
 
 /// View-local state without `@State`: with only the Command Line Tools, the macOS 27 SDK resolves `@State`

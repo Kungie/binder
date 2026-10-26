@@ -78,17 +78,21 @@ struct VaultView: View {
                 lines.append(("├ \(file)", true))
             }
         }
+        // A long tree scrolls inside its panel, so Continue never drops below the window.
         return ScreenPanel(glow: UnitPoint(x: 0.2, y: 0.2), padding: 12) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                    HStack(spacing: 4) {
-                        Text(index == 0 ? "~/" + model.vaultRoot.lastPathComponent : line.0).foregroundColor(index == 0 ? Phosphor.cream : Phosphor.cream2).lineLimit(1)
-                        if line.1 { Text("■").foregroundColor(Phosphor.amber) }
+            Scroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        HStack(spacing: 4) {
+                            Text(index == 0 ? "~/" + model.vaultRoot.lastPathComponent : line.0).foregroundColor(index == 0 ? Phosphor.cream : Phosphor.cream2).lineLimit(1)
+                            if line.1 { Text("■").foregroundColor(Phosphor.amber) }
+                        }
+                        .opacity(elapsed >= Double(index) * 0.2 ? 1 : 0)
                     }
-                    .opacity(elapsed >= Double(index) * 0.2 ? 1 : 0)
                 }
+                .font(Fonts.vt(19))
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .font(Fonts.vt(19))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .accessibilityLabel("Folder tree, \(model.writtenFiles.count) notes")
@@ -104,14 +108,17 @@ struct VaultView: View {
             .padding(.horizontal, 12)
             .frame(height: 30)
             .overlay(alignment: .bottom) { Rectangle().fill(Phosphor.line).frame(height: 1) }
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(model.previewText.components(separatedBy: "\n").prefix(18).enumerated()), id: \.offset) { _, line in
-                    Text(line.isEmpty ? " " : line).foregroundColor(color(line)).lineLimit(1)
+            Scroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(model.previewText.components(separatedBy: "\n").prefix(18).enumerated()), id: \.offset) { _, line in
+                        Text(line.isEmpty ? " " : line).foregroundColor(color(line)).lineLimit(1)
+                    }
                 }
+                .font(Fonts.vt(18))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .font(Fonts.vt(18))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(Phosphor.black)

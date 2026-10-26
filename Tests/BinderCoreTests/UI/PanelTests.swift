@@ -12,8 +12,31 @@ import Testing
             #expect(image.isTemplate, "\(state)")
             #expect(image.size == NSSize(width: 18, height: 18), "\(state)")
         }
-        #expect(MenuBarIcon.title(state: .review(3))?.string == " 3")
+        #expect(MenuBarIcon.title(state: .review(3))?.string == "3")
         #expect(MenuBarIcon.title(state: .idle) == nil)
+    }
+
+    @Test func iconWithoutBrainIsStillATemplate() {
+        let image = MenuBarIcon.image(state: .review(2), brain: false)
+        #expect(image.isTemplate)
+        #expect(image.size == MenuBarIcon.size)
+    }
+
+    @Test func brainLightsWhileThereIsSomethingToReview() {
+        #expect(BrainGlow.decide(previous: nil, current: 0) == (lit: false, sparkle: false))
+        #expect(BrainGlow.decide(previous: 2, current: 0) == (lit: false, sparkle: false))
+        #expect(BrainGlow.decide(previous: 3, current: 2) == (lit: true, sparkle: false))
+    }
+
+    @Test func brainSparklesOnlyWhenNewContextArrives() {
+        #expect(BrainGlow.decide(previous: nil, current: 4) == (lit: true, sparkle: false))
+        #expect(BrainGlow.decide(previous: 0, current: 1) == (lit: true, sparkle: true))
+        #expect(BrainGlow.decide(previous: 2, current: 3) == (lit: true, sparkle: true))
+        #expect(BrainGlow.decide(previous: 3, current: 3) == (lit: true, sparkle: false))
+    }
+
+    @Test func titlebarHeightDefaultsToZero() {
+        #expect(EnvironmentValues().titlebarHeight == 0)
     }
 
     @Test func tagTextForEachSource() {
@@ -32,6 +55,28 @@ import Testing
         let expected: [Double] = [0.12, 0.295, 0.19, 0.365, 0.26, 0.155, 0.33, 0.225]
         for (got, want) in zip(Shred.delays, expected) { #expect(abs(got - want) < 0.0001) }
         #expect(Shred.rotations == [-4, 7, -10, 4, -7, 10, -4, 7])
+    }
+
+    /// The panel's natural height with `count` catches waiting.
+    func panelHeight(_ count: Int) throws -> CGFloat {
+        let vault = Vault(root: makeTempDir("vault"))
+        try vault.ensureLayout()
+        for i in 0..<count {
+            try ProposalStore(vault: vault).add(Proposal.make(kind: .decision, source: .command, text: "Catch number \(i) from this session.",
+                                                              evidence: "wrangler pages deploy", target: "projects/dawn.md", project: "dawn", session: "s1"))
+        }
+        let model = AppModel(vault: vault, home: makeTempDir("home"))
+        model.refresh()
+        let host = NSHostingController(rootView: PanelContainer(model: model))
+        host.view.layoutSubtreeIfNeeded()
+        host.view.layoutSubtreeIfNeeded()
+        return host.view.fittingSize.height
+    }
+
+    @Test func moreThanTenCatchesScrollInsteadOfGrowing() throws {
+        let ten = try panelHeight(10), fifteen = try panelHeight(15), five = try panelHeight(5)
+        #expect(five < ten)
+        #expect(fifteen < ten * 1.15, "15 catches: \(fifteen) pt, 10 catches: \(ten) pt")
     }
 
     @Test func panelSnapshotsRender() throws {

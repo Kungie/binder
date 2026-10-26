@@ -58,6 +58,7 @@ public struct LibraryView: View {
         }
         .frame(minWidth: 1040, minHeight: 700)
         .background(Phosphor.black2)
+        .ignoresSafeArea(.container, edges: .top)
         .environment(\.colorScheme, .dark)
         .onAppear { model.reload() }
     }
@@ -202,7 +203,7 @@ struct InboxView: View {
     }
 }
 
-/// A dark main window with Binder's own title strip.
+/// A dark main window whose title bar is Binder's own title strip.
 @MainActor
 public final class LibraryWindowController: NSWindowController {
     public init(model: LibraryModel, app: AppModel, actions: LibraryActions) {
@@ -216,7 +217,8 @@ public final class LibraryWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("BinderLibrary")
         super.init(window: window)
-        window.contentView = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions))
+        window.contentView = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions)
+            .environment(\.titlebarHeight, window.titlebarHeight))
         window.center()
     }
 

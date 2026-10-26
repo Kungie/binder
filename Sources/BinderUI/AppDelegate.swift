@@ -9,6 +9,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     let home = FileManager.default.homeDirectoryForCurrentUser
     var onboarding: OnboardingWindowController?
     var library: LibraryWindowController?
+    var libraryModel: LibraryModel?
     var status: StatusItemController?
     var app: AppModel?
     var scheduler: ObserveScheduler?
@@ -24,7 +25,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         Fonts.register()
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
+        NSApp.mainMenu = MainMenu.make(delegate: self)
         if OnboardingModel.isOnboarded(home: home) { startApp() } else { showOnboarding() }
     }
 
@@ -83,7 +85,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         status?.hide()
         if library == nil {
             let installer = installer, vault = vault
-            library = LibraryWindowController(model: LibraryModel(vault: vault, home: home), app: app, actions: LibraryActions(
+            let model = LibraryModel(vault: vault, home: home)
+            libraryModel = model
+            library = LibraryWindowController(model: model, app: app, actions: LibraryActions(
                 openSession: { SessionLauncher.launch(in: URL(fileURLWithPath: $0)) },
                 runDoctor: { [weak self] in Doctor.report(vault: self?.vault ?? vault, installer: installer, runner: SystemRunner()) },
                 installHooks: { add in (try? add ? installer.install() : installer.uninstall()) != nil },
@@ -93,5 +97,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         library?.showWindow(nil)
+    }
+
+    /// Settings… in the app menu: the main window, on its Settings page.
+    @objc func showSettings() {
+        guard app != nil else { onboarding?.showWindow(nil); return }
+        showLibrary()
+        libraryModel?.selectedKind = .settings
+    }
+
+    @objc func openBinder() {
+        if app != nil { showLibrary() } else { onboarding?.showWindow(nil) }
     }
 }

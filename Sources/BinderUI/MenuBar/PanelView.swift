@@ -1,3 +1,4 @@
+import AppKit
 import BinderCore
 import SwiftUI
 
@@ -22,6 +23,16 @@ struct BrainFrameKey: PreferenceKey {
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() == .zero ? value : nextValue() }
 }
 
+struct HeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+struct ListHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 struct CardFramesKey: PreferenceKey {
     static let defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { $1 } }
@@ -30,6 +41,8 @@ struct CardFramesKey: PreferenceKey {
 /// The menu bar panel: its main job is approving what this session caught.
 public struct PanelView: View {
     public static let width: CGFloat = 350
+    /// More catches than this and the list scrolls, showing about this many at once.
+    public static let visibleCards = 10
 
     @ObservedObject var model: AppModel
     var actions: PanelActions
@@ -38,6 +51,9 @@ public struct PanelView: View {
     @StateObject private var gulp = Local(false)
     @StateObject private var snoozed = Local<String?>(nil)
     @StateObject private var handedOff = Local(false)
+    @StateObject private var panelHeight = Local(CGFloat(0))
+    @StateObject private var scrollHeight = Local(CGFloat(0))
+    @Environment(\.isSnapshot) private var isSnapshot
 
     public init(model: AppModel, actions: PanelActions = PanelActions()) {
         self.model = model
@@ -50,8 +66,12 @@ public struct PanelView: View {
             if let session = model.session { sessionCard(session) }
             if !model.proposals.isEmpty {
                 SectionLabel("Caught this session")
-                VStack(spacing: 8) {
-                    ForEach(model.proposals) { p in card(p) }
+                if model.proposals.count > Self.visibleCards {
+                    Scroll { cards }
+                        .frame(height: listHeight)
+                        .background(GeometryReader { g in Color.clear.preference(key: ListHeightKey.self, value: g.size.height) })
+                } else {
+                    cards
                 }
             } else {
                 empty
@@ -65,7 +85,10 @@ public struct PanelView: View {
         }
         .padding(16)
         .frame(width: Self.width, alignment: .leading)
+        .background(GeometryReader { g in Color.clear.preference(key: HeightKey.self, value: g.size.height) })
         .coordinateSpace(name: "panel")
+        .onPreferenceChange(HeightKey.self) { panelHeight.value = $0 }
+        .onPreferenceChange(ListHeightKey.self) { scrollHeight.value = $0 }
         .onPreferenceChange(BrainFrameKey.self) { brainFrame.value = $0 }
         .onPreferenceChange(CardFramesKey.self) { cardFrames.value = $0 }
         .onChange(of: model.memories) { old, new in
@@ -76,6 +99,22 @@ public struct PanelView: View {
     }
 
     // MARK: Parts
+
+    private var cards: some View {
+        VStack(spacing: 8) {
+            ForEach(model.proposals) { p in card(p) }
+        }
+    }
+
+    /// The scrolling list's height: the first ten cards, or less if the screen under the menu bar can't fit them
+    /// along with the rest of the panel.
+    private var listHeight: CGFloat {
+        let heights = model.proposals.prefix(Self.visibleCards).compactMap { cardFrames.value[$0.id]?.height }
+        let ten = heights.isEmpty ? CGFloat(Self.visibleCards) * 96 : heights.reduce(0, +) + 8 * CGFloat(heights.count - 1)
+        guard !isSnapshot, let screen = NSScreen.main?.visibleFrame.height else { return ten }
+        let rest = scrollHeight.value > 0 ? panelHeight.value - scrollHeight.value : 0
+        return max(180, min(ten, screen - 12 - rest))
+    }
 
     private var header: some View {
         HStack(spacing: 12) {

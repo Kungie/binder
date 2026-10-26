@@ -14,6 +14,8 @@ public final class StatusItemController: NSObject {
     private var changes: AnyCancellable?
     private var outsideClick: Any?
     private var escapeKey: Any?
+    private let glow = BrainGlow()
+    private var lastPending: Int?
     public var observing = false { didSet { updateItem() } }
 
     public init(model: AppModel, actions: PanelActions) {
@@ -38,6 +40,8 @@ public final class StatusItemController: NSObject {
             button.target = self
             button.action = #selector(toggle)
             button.imagePosition = .imageLeading
+            button.imageHugsTitle = true
+            glow.attach(to: button)
         }
         updateItem()
         sizeObservation = hosting.observe(\.preferredContentSize, options: [.new]) { [weak self] _, _ in
@@ -60,9 +64,17 @@ public final class StatusItemController: NSObject {
     private func updateItem() {
         guard let button = statusItem.button else { return }
         let state = menuState
-        button.image = MenuBarIcon.image(state: state)
+        let pending = model.pendingCount
+        let (lit, sparkle) = BrainGlow.decide(previous: lastPending, current: pending)
+        lastPending = pending
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        button.image = MenuBarIcon.image(state: state, brain: !lit)
         button.attributedTitle = MenuBarIcon.title(state: state) ?? NSAttributedString(string: "")
         button.setAccessibilityLabel(MenuBarIcon.accessibilityLabel(state: state))
+        button.layoutSubtreeIfNeeded()
+        glow.place(in: button)
+        glow.set(lit: lit, reduceMotion: reduceMotion)
+        if sparkle { glow.sparkle(reduceMotion: reduceMotion) }
         if panel.isVisible { place() }
     }
 

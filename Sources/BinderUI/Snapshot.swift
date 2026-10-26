@@ -54,6 +54,7 @@ public enum Snapshot {
              AnyView(OnboardingView(model: demoOnboarding(step))), CGSize(width: 880, height: 720))
         } + [
             ("readme", AnyView(ReadmeScene()), CGSize(width: 400, height: 860)),
+            ("mascot", AnyView(Mascot(mood: .idle, size: 240)), CGSize(width: 240, height: 280)),
             ("library", AnyView(demoLibrary(.projects)), CGSize(width: 1240, height: 820)),
             ("library-settings", AnyView(demoLibrary(.settings)), CGSize(width: 1240, height: 820))
         ]
@@ -88,14 +89,26 @@ func demoLibrary(_ kind: SectionKind) -> some View {
 
 /// The README's picture: a dark menu bar with Binder's item highlighted and its panel hanging under it.
 struct ReadmeScene: View {
+    /// The lit brain `BrainGlow` lays over the menu bar icon while something waits for review.
+    static var amberBrain: NSImage {
+        NSImage(size: MenuBarIcon.size, flipped: true) { _ in
+            NSColor(Phosphor.amber).setFill()
+            MenuBarIcon.brainPath.fill()
+            return true
+        }
+    }
+
     var body: some View {
         let model = DemoVault.model(.review)
         return VStack(alignment: .trailing, spacing: 0) {
             HStack(spacing: 16) {
                 Spacer()
                 Text("Mon 09:41").font(.system(size: 13, weight: .medium)).foregroundColor(.white.opacity(0.85))
-                HStack(spacing: 3) {
-                    Image(nsImage: MenuBarIcon.image(state: .review(4))).renderingMode(.template).foregroundColor(.white)
+                HStack(spacing: 1) {
+                    ZStack {
+                        Image(nsImage: MenuBarIcon.image(state: .review(4), brain: false)).renderingMode(.template).foregroundColor(.white)
+                        Image(nsImage: Self.amberBrain)
+                    }
                     Text("4").font(Fonts.vt(17)).foregroundColor(.white)
                 }
                 .padding(.horizontal, 7).frame(height: 22)
