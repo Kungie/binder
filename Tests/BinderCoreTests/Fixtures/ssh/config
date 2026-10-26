@@ -1,0 +1,24 @@
+# Personal SSH config
+Include config.d/*
+
+Host hetzner-1
+    HostName 116.203.10.20
+    User eren
+    Port 2222
+    IdentityFile ~/.ssh/id_ed25519_hetzner
+
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519_github
+
+Host gh-work github-alt
+  HostName=github.com
+  IdentityFile=~/.ssh/id_ed25519_github
+
+Host *
+  AddKeysToAgent yes
+  UseKeychain yes
+
+Host *.internal !bastion
+  User admin
