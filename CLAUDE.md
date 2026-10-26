@@ -39,12 +39,12 @@ Individual developers and hobbyists first, on macOS.
   - DNS records for the domains it finds
 - **Conversation** is captured in two layers:
   1. Commands the agent actually ran in a session (`ssh-keygen`, `wrangler deploy`, `fly launch`). These are parsed deterministically from the transcript, with no model call.
-  2. Decisions that were only said. These are optional, and get summarised with the user's own `claude -p` or `codex exec` on their own plan, with no API key.
+  2. Decisions that were only said. These get summarised with the user's own `claude -p` on their own plan, with no API key, and **only after the user agrees** (asked in Connect, changeable in Settings).
 - Anything captured from a conversation lands in a **proposal inbox**. Nothing from a conversation enters memory until the user approves it.
 
 ## How agents get it
 
-- **Claude Code and Codex** come first, through global, user-level hooks that `binder install` adds and can remove. It never touches the user's other hooks.
+- **Claude Code only in v1**, through global, user-level hooks that `binder install` adds and can remove. It never touches the user's other hooks. Codex is deferred to a later version.
 - **Session start:** a short **context card** for the current folder. It tells the agent: this is verified, use it without asking; if something is missing, ask and propose.
 - **Session end:** capture, which produces proposals in the inbox.
 - MCP is a later, extra channel.
@@ -94,6 +94,14 @@ A plain Markdown folder. The default is `~/Binder`, and first launch also offers
 Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - An **observed block** between `<!-- binder:observed start -->` and `<!-- binder:observed end -->`. The observers rewrite it from scratch every time, so it always shows the real state of the machine.
 - **`## Decisions`** and everything else. Only approved proposals and the user's own edits go here.
+
+## Build and test
+
+- This Mac has **only the Command Line Tools, not Xcode**. Build with `swift build` and test with `swift test`.
+- Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`). XCTest isn't available without Xcode.
+- There are no third-party dependencies, the same as Dawn. The CLI parses its own arguments.
+- The app's executable target is `BinderApp`, renamed to `Binder` inside `Binder.app`. The CLI product is `binder`. The two names would collide on the case-insensitive file system if both were `binder`.
+- Implementation plans live in `docs/plans/`.
 
 ## Privacy rules
 
@@ -152,10 +160,12 @@ The source is in `design/`, and the canvas is at https://claude.ai/artifact/TA4e
 - **Vault:** `~/Binder` by default, with an option to put it inside an Obsidian vault.
 - **Handoff:** the card waits and is picked up automatically, plus an "Open a new session" button.
 - **Design:** direction C, Phosphor.
+- **Distribution:** downloaded from GitHub Releases as a DMG, never the App Store. Ad-hoc signed and not notarized, with no Apple Developer account. First launch needs Privacy & Security › Open Anyway, as with Dawn.
+- **Codex:** deferred. v1 is Claude Code only.
+- **Session summarizer:** asks for permission before it reads any session.
+- **Repo:** public.
 
 ## Open questions
 
-- When the repo goes public. It is private for now.
 - A brand check for the name "Binder" (mybinder.org and Android's Binder IPC also exist).
-- How to measure "context used" for Codex sessions.
 - Which observers ship in v1, and how often they run.

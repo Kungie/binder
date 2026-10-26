@@ -1,6 +1,6 @@
 # Binder v1 · design spec
 
-26 October 2026. Status: **written, waiting for review.**
+26 October 2026. Status: **approved.** The user's review decisions are folded in: no App Store and no notarization, Codex deferred, and the session summarizer asks for permission first.
 
 The screens for this spec are on the canvas page "v1 flow" (https://claude.ai/artifact/TA4eWJEfD6Fi6EJ4oeaxjW), with a copy in `design/flow/`. The visual direction is C · Phosphor. Tokens and type are in `CLAUDE.md`.
 
@@ -29,7 +29,8 @@ The problem it solves is a dilemma. Long sessions lose sharpness, but fresh sess
 - an Obsidian plugin
 - Windows or Linux
 - teams
-- agents other than Claude Code and Codex
+- the App Store
+- any agent other than Claude Code. **Codex is deferred:** the vault and card stay agent-neutral, but v1 only reads Claude Code transcripts and only installs Claude Code hooks.
 
 ## 3. The journey
 
@@ -37,7 +38,7 @@ The problem it solves is a dilemma. Long sessions lose sharpness, but fresh sess
 
 The DMG opens a window with the same "drag to Applications" layout Dawn uses. It is built with `dmgbuild` from `scripts/dmg-settings.py`, and the background shows the Phosphor scanlines, the Binder icon, amber chevrons, the Applications folder and the mascot's dome peeking up from the bottom edge. The copy reads: "Drag Binder into Applications. Then open it from there. I'll take it from here."
 
-The app is ad-hoc signed like Dawn. Notarization is an open question (§12).
+Binder is downloaded from GitHub Releases. It is ad-hoc signed like Dawn and not notarized, because there is no Apple Developer account. As with Dawn, the first launch needs System Settings › Privacy & Security › **Open Anyway**, and the README says so.
 
 ### 3.2 First run: boot (artboard *Boot*)
 
@@ -90,7 +91,11 @@ Binder creates the folder. Each file appears in the tree as it is written. A pre
 
 ### 3.7 Connect (artboard *Connect*)
 
-Each supported agent gets a card. A found agent shows the exact hook lines Binder adds, then CONNECTED. A missing one shows WAITING: "The day ~/.codex shows up, I'll offer to connect it." A "Try it" box suggests opening a session in a real project and asking a question the agent used to ask back. "Open a session in <project>" does this. The footer reads: "Changed your mind later? `binder uninstall` takes both hooks out."
+The Claude Code card shows the exact hook lines Binder adds, then CONNECTED. The Codex card says LATER: "Codex support comes in a later version."
+
+Below the cards is the **summarizer consent** row: "Can I read your sessions with your Claude plan, to catch decisions you only said out loud? It costs a few thousand tokens when a session ends." The choices are **Yes** and **Not now**. The summarizer stays off until the user says yes, and the choice can be changed in Settings.
+
+A "Try it" box suggests opening a session in a real project and asking a question the agent used to ask back. "Open a session in <project>" does this. The footer reads: "Changed your mind later? `binder uninstall` takes both hooks out."
 
 ### 3.8 Every day: the menu bar (artboard *MenuBar*)
 
@@ -126,7 +131,7 @@ One Swift package, macOS 14+:
 
 | Target | Kind | Job |
 |---|---|---|
-| `BinderCore` | library | Vault model and I/O, note parser and writer, observers, proposal store, card builder, transcript parsers (Claude Code, Codex), context meter, secret filter, hook installer |
+| `BinderCore` | library | Vault model and I/O, note parser and writer, observers, proposal store, card builder, Claude Code transcript parser, context meter, secret filter, hook installer |
 | `Binder` | SwiftUI app (menu bar + windows) | Onboarding, menu bar panel, main window, scheduling, FSEvents, notifications |
 | `binder` | CLI (swift-argument-parser) | `card`, `capture`, `observe`, `handoff`, `install`, `uninstall`, `doctor` |
 
@@ -217,9 +222,9 @@ All observers are read-only, run with timeouts and only when the tool exists, an
 
 ## 7. Capture from sessions
 
-1. The Stop hook (Claude Code) and its Codex equivalent call `binder capture`. Binder reads the transcript from the stored cursor onward: `~/.claude/projects/*/<session>.jsonl` or `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
+1. Claude Code's Stop hook calls `binder capture`. Binder reads the transcript (`~/.claude/projects/*/<session>.jsonl`) from the stored cursor onward.
 2. **Layer 1, commands (deterministic, always on):** rules match the tool calls the agent ran and turn them into proposals. For example, `wrangler pages deploy` becomes "<project> deploys to Cloudflare Pages", `ssh-keygen -f X` becomes "key X was created", `gh repo create` becomes "repo created", and `fly launch` becomes "deploys to Fly".
-3. **Layer 2, conversation (on by default when a supported CLI exists, shown in Settings with its cost):** Binder sends the condensed new part of the transcript to the user's own `claude -p` or `codex exec` with a fixed prompt that returns proposal JSON. There is no API key, and it uses the user's plan.
+3. **Layer 2, conversation (off until the user agrees in Connect or Settings):** Binder sends the condensed new part of the transcript to the user's own `claude -p` with a fixed prompt that returns proposal JSON. There is no API key, and it uses the user's plan.
 4. **Every proposal passes the secret filter** before it is stored:
    - Binder looks for patterns like `-----BEGIN`, `AKIA…`, `ghp_…`, `sk-…`, `xox…`, `password=`, and long high-entropy strings.
    - A match drops the proposal and logs it with the match redacted.
@@ -227,7 +232,7 @@ All observers are read-only, run with timeouts and only when the tool exists, an
 
 ## 8. The context card
 
-Binder builds a card per project and delivers it on SessionStart. For Claude Code this is `additionalContext` in the hook output; Codex uses its SessionStart hook. The card is plain text, about 600 tokens at most, assembled in this order:
+Binder builds a card per project and delivers it on SessionStart. It goes in the `additionalContext` field of the hook output. The card is plain text, about 600 tokens at most, assembled in this order:
 
 1. The header: `BINDER CARD · VERIFIED, USE IT. If something you need is missing, ask once and say what you'd write down.`
 2. Me: name, language, working style.
@@ -241,19 +246,19 @@ When the budget is tight, older decisions go first. Main window → "What agents
 
 - **The context meter:**
   - **Claude Code:** the last assistant message's `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`, divided by the window. The window is 200k by default and 1M when the model id carries `[1m]` or the usage has already passed 200k.
-  - **Codex:** the latest `token_count` event, divided by `model_context_window` (from the event when it's present, otherwise from config or a known default). The totals are cumulative, so Binder uses the last turn's input.
-  - Both show "estimate" in small type.
+  - **Codex (deferred):** the latest `token_count` event, divided by `model_context_window`.
+  - The meter shows "estimate" in small type.
 - **The warning** comes at 70 % by default (adjustable from 50 to 90 %): a menu bar state, plus one notification per session.
 - **Hand off now** writes `handoffs/<project>/<ts>.md` with four headings: Done, Left, Don't touch, Next. The summarizer (Layer 2) fills them from the session. Without it, a deterministic fallback fills them: the last user request, the files edited by tool calls, and any open todos found in the transcript.
 - **Pickup:** the next SessionStart in that project gets the card. This includes Claude Code's `/clear`, which fires SessionStart with source `clear`. The handoff is marked consumed after it's delivered once, and it stays visible in the Handoffs section.
-- **Open a new session** opens the user's terminal in the project folder and runs `claude` or `codex`.
+- **Open a new session** opens the user's terminal in the project folder and runs `claude`.
 
 ## 10. Privacy and security
 
 - Everything stays local. There is no telemetry and no account.
 - The only network use is the hosting CLIs the user already signed in to (run read-only), `dig`, and the optional LAN probe.
 - Never stored: private keys, tokens, passwords, `.env` values. Pointers are fine ("in 1Password, item Hetzner API").
-- Binder never writes to `~/.ssh`. It writes to `~/.claude/settings.json` and the Codex config only through install and uninstall, which are idempotent and back up the original first.
+- Binder never writes to `~/.ssh`. It writes to `~/.claude/settings.json` only through install and uninstall, which are idempotent and back up the original first.
 - Personal details only ever come from the user.
 
 ## 11. Errors
@@ -267,7 +272,7 @@ When the budget is tight, older decisions go first. Main window → "What agents
 ## 12. Testing
 
 - **Unit tests in `BinderCore`:**
-  - parsers: the SSH config, the note format, and Claude Code and Codex transcript fixtures
+  - parsers: the SSH config, the note format, and Claude Code transcript fixtures
   - the context meter
   - the secret filter, with a corpus of real-looking secrets
   - dedup
@@ -281,7 +286,5 @@ When the budget is tight, older decisions go first. Main window → "What agents
 
 ## 13. Open questions
 
-1. **Notarization:** paying for an Apple Developer ID ($99 a year) removes Gatekeeper warnings and makes the local network permission more reliable. Dawn currently ships unnotarized.
-2. Check the Codex hook event names and the rollout token fields against the current Codex source before building the Codex parser.
-3. Whether the summarizer should ask once at first run ("Use your Claude plan to read sessions? About N tokens per session") or be silently on with a toggle.
-4. The App Store already has an unrelated "Binder - Journal & Notes" app. Binder ships outside the App Store, but a quick trademark search is still worth doing before launch.
+1. **When Codex comes:** check its hook event names and rollout token fields against the current Codex source before building the parser.
+2. The App Store already has an unrelated "Binder - Journal & Notes" app. Binder doesn't ship there, but a quick trademark search is still worth doing before launch.
