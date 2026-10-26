@@ -97,7 +97,9 @@ Each note has frontmatter (`verified`, `source`) and two kinds of content:
 
 ## Build and test
 
-- This Mac has **only the Command Line Tools, not Xcode**. Build with `swift build` and test with `swift test`.
+- This Mac has **only the Command Line Tools, not Xcode**. **Use `make build` and `make test`** (`make test FILTER=NoteTests` runs one suite).
+- `make test` passes `-load-plugin-library` for Swift Testing's macros. With only the Command Line Tools, the plugin server fails to load them and `swift test` alone breaks.
+- `~/Desktop` syncs with iCloud, which stamps Finder attributes on build output and breaks codesign. So `.build` is a symlink to `~/Library/Caches/Binder/build`, which `make` creates.
 - Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`). XCTest isn't available without Xcode.
 - There are no third-party dependencies, the same as Dawn. The CLI parses its own arguments.
 - The app's executable target is `BinderApp`, renamed to `Binder` inside `Binder.app`. The CLI product is `binder`. The two names would collide on the case-insensitive file system if both were `binder`.
