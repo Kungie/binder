@@ -32,7 +32,7 @@ import Testing
     }
 
     @Test func claudeProjectFolderEncoding() {
-        #expect(HookIO.claudeProjectFolder(for: "/Users/erenmac/Desktop/Vektor Labs/binder") == "-Users-erenmac-Desktop-Vektor-Labs-binder")
+        #expect(HookIO.claudeProjectFolder(for: "/Users/x/Desktop/My Projects/binder") == "-Users-x-Desktop-My-Projects-binder")
         #expect(HookIO.claudeProjectFolder(for: "/Users/x/my.site") == "-Users-x-my-site")
     }
 }

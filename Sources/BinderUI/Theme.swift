@@ -32,8 +32,11 @@ public enum Fonts {
     public static func register() {
         guard !registered else { return }
         registered = true
-        let dirs = [Bundle.module.resourceURL?.appendingPathComponent("Fonts"), Bundle.main.resourceURL?.appendingPathComponent("Fonts")]
-        for dir in dirs.compactMap({ $0 }) {
+        // Inside Binder.app the fonts sit in Contents/Resources/Fonts. Only outside an app bundle (tests, snapshots
+        // from the build folder) do we touch Bundle.module, whose accessor stops the process when the bundle is missing.
+        let inApp = Bundle.main.resourceURL?.appendingPathComponent("Fonts")
+        let dirs = inApp.map { FileManager.default.fileExists(atPath: $0.path) } == true ? [inApp!] : [Bundle.module.resourceURL?.appendingPathComponent("Fonts")].compactMap { $0 }
+        for dir in dirs {
             let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
             for file in files where ["woff2", "ttf", "otf"].contains(file.pathExtension) {
                 CTFontManagerRegisterFontsForURL(file as CFURL, .process, nil)

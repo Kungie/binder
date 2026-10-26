@@ -50,7 +50,7 @@ import Testing
     }
 
     @Test func launcherEscapesQuotesInPath() {
-        #expect(SessionLauncher.command(dir: URL(fileURLWithPath: "/Users/x/Desktop/Vektor Labs/it's")) == "cd '/Users/x/Desktop/Vektor Labs/it'\\''s' && claude")
+        #expect(SessionLauncher.command(dir: URL(fileURLWithPath: "/Users/x/Desktop/My Projects/it's")) == "cd '/Users/x/Desktop/My Projects/it'\\''s' && claude")
     }
 
     @Test func terminalScriptsAreWellFormed() throws {

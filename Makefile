@@ -1,4 +1,4 @@
-.PHONY: build test cli clean scratch
+.PHONY: build test cli app install run snapshots clean scratch
 
 # ~/Desktop syncs with iCloud, which stamps Finder attributes on build products and breaks codesign.
 # Keep .build as a link to a folder outside iCloud.
@@ -22,6 +22,21 @@ test: scratch
 cli: scratch
 	swift build -c release --product binder
 	@echo "Built $$(swift build -c release --show-bin-path)/binder"
+
+app: scratch
+	./scripts/build-app.sh
+
+install: app
+	rm -rf /Applications/Binder.app
+	cp -R build/Binder.app /Applications/Binder.app
+	open /Applications/Binder.app
+
+run: app
+	open build/Binder.app
+
+snapshots: scratch
+	swift build --product BinderApp
+	"$$(swift build --show-bin-path)/BinderApp" snapshot docs/snapshots
 
 clean:
 	rm -rf "$(SCRATCH)" build
