@@ -10,6 +10,19 @@ What each direction shows:
 - **The menu bar panel.** It shows how much of the session's context is used, offers "Hand off now", and lists what was caught this session with Keep, Edit and Drop.
 - **The main window at first launch.** Binder shows what it found on this Mac and asks only for what it can't guess.
 
+`flow/` holds the v1 screens, in the order a new user sees them:
+- `install`: the DMG window
+- `boot`: animated, with a replay button
+- `permissions`
+- `look-around`: animated, and the homelab question can be answered
+- `about-you`
+- `vault`
+- `connect`
+- `menu-bar`: interactive. Keep sucks a card into the brain, Drop shreds it.
+- `library`: the main window with a project note
+
+The spec that goes with them is `../docs/specs/2026-10-26-binder-v1-design.md`.
+
 `explorations/` keeps the two directions that weren't picked: A · Signal (signal red) and B · Oxblood (deep red with cream paper).
 
 The `.dc.html` files are Claude Design canvas sources. Opened directly in a browser they render as plain HTML. They load their fonts from Google Fonts and need no other runtime to be readable.

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder first run, connect agents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&amp;family=Space+Grotesk:wght@400;500;600&amp;family=Space+Mono:wght@700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#050303}
+@keyframes bnd-spark{0%,100%{opacity:0}40%,60%{opacity:1}}
+</style>
+</helmet>
+<div style="width: 880px; height: 680px; box-sizing: border-box; background: #0E0908; border: 1px solid #2A1B19; display: flex; flex-direction: column; font-family: 'Space Grotesk', sans-serif; color: #F3E9D6; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; border-bottom: 1px solid #2A1B19; background: #050303; display: flex; align-items: center; padding: 0 14px; gap: 8px">
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="flex-grow: 1; text-align: center; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: #A09189; margin-right: 52px">BINDER · SETUP</span>
+  </div>
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+    <aside style="width: 260px; flex-shrink: 0; border-right: 1px solid #2A1B19; padding: 28px 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 50% 30%, rgba(242,166,12,0.2), rgba(5,3,3,0) 65%)">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px">
+        <svg width="170" height="198" viewBox="0 0 240 280" role="img" aria-label="Binder holding a plug, about to connect it">
+          <defs><clipPath id="connDome"><path d="M52 118 A68 68 0 0 1 188 118 Z"/></clipPath></defs>
+          <rect x="82" y="236" width="14" height="28" fill="#D2C09B"/>
+          <rect x="144" y="236" width="14" height="28" fill="#D2C09B"/>
+          <rect x="74" y="260" width="26" height="6" fill="#D2C09B"/>
+          <rect x="140" y="260" width="26" height="6" fill="#D2C09B"/>
+          <rect x="26" y="176" width="24" height="10" fill="#D2C09B"/>
+          <rect x="190" y="170" width="22" height="10" fill="#D2C09B"/>
+          <rect x="210" y="160" width="16" height="30" fill="#F2A60C"/>
+          <rect x="226" y="164" width="10" height="4" fill="#F3E9D6"/>
+          <rect x="226" y="182" width="10" height="4" fill="#F3E9D6"/>
+          <path d="M218 190 C218 240 160 250 120 272" fill="none" stroke="#F2A60C" stroke-width="4"/>
+          <path d="M238 156 L246 150 M240 175 L250 175 M238 194 L246 200" stroke="#F3E9D6" stroke-width="3" style="animation: bnd-spark 1.4s ease-in-out infinite"/>
+          <rect x="60" y="228" width="128" height="8" fill="#F2A60C"/>
+          <rect x="48" y="128" width="144" height="102" fill="#F3E9D6"/>
+          <rect x="48" y="128" width="28" height="102" fill="#D2C09B"/>
+          <circle cx="62" cy="150" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <circle cx="62" cy="180" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <circle cx="62" cy="210" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <rect x="94" y="146" width="80" height="50" fill="#050303"/>
+          <rect x="112" y="160" width="10" height="16" fill="#F2A60C"/>
+          <rect x="146" y="160" width="10" height="16" fill="#F2A60C"/>
+          <path d="M124 184 Q134 191 144 184" stroke="#F2A60C" stroke-width="3" fill="none"/>
+          <path d="M52 118 A68 68 0 0 1 188 118 Z" fill="#160D0B"/>
+          <g clip-path="url(#connDome)">
+            <circle cx="98" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="120" cy="84" r="24" fill="#F2A60C"/>
+            <circle cx="142" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="108" cy="106" r="16" fill="#F2A60C"/>
+            <circle cx="132" cy="106" r="16" fill="#F2A60C"/>
+            <path d="M120 62 V118" stroke="#5A3A00" stroke-width="3"/>
+            <path d="M94 88 q8 -8 16 0 M130 88 q8 -8 16 0 M98 104 q6 6 12 0 M130 104 q6 6 12 0" stroke="#5A3A00" stroke-width="2.5" fill="none"/>
+            <path d="M50 60 H190 M50 66 H190 M50 72 H190 M50 78 H190 M50 84 H190 M50 90 H190 M50 96 H190 M50 102 H190 M50 108 H190 M50 114 H190" stroke="#050303" stroke-width="1.5" opacity="0.4"/>
+          </g>
+          <path d="M52 118 A68 68 0 0 1 188 118" fill="none" stroke="#F3E9D6" stroke-width="4"/>
+          <path d="M72 96 A52 52 0 0 1 98 62" fill="none" stroke="#F3E9D6" stroke-width="4" opacity="0.55"/>
+          <rect x="40" y="116" width="160" height="12" fill="#F2A60C"/>
+        </svg>
+        <p style="margin: 0; font-family: 'VT323', monospace; font-size: 20px; color: #F2A60C; text-align: center">PLUGGING IN.</p>
+      </div>
+      <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.1em">
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> HELLO</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> PERMISSIONS</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> LOOK AROUND</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> ABOUT YOU</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> YOUR BINDER</li>
+        <li style="color: #F3E9D6">▸ CONNECT</li>
+      </ol>
+    </aside>
+
+    <main style="flex-grow: 1; padding: 28px 36px; display: flex; flex-direction: column; gap: 16px; min-width: 0">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 28px; line-height: 1.05">Last step. Plug me in.</h1>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #E6D9BE">I add two small hooks. Agents read your binder when a session starts and leave me notes when it ends. Your other hooks stay where they are.</p>
+      </div>
+
+      <section style="border: 1px solid #2A1B19; background: #050303; display: flex; flex-direction: column" aria-label="Claude Code">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2A1B19">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-weight: 600; font-size: 15px">Claude Code</span>
+            <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.08em; color: #A09189">FOUND IN ~/.claude</span>
+          </div>
+          <span style="font-family: 'VT323', monospace; font-size: 22px; color: #F2A60C">CONNECTED</span>
+        </div>
+        <div style="padding: 10px 14px; font-family: 'VT323', monospace; font-size: 18px; line-height: 1.3; white-space: pre; color: #E6D9BE"><span style="color: #A09189">~/.claude/settings.json</span>
+<span style="color: #F2A60C">+</span> SessionStart  →  binder card
+<span style="color: #F2A60C">+</span> Stop          →  binder capture</div>
+      </section>
+
+      <section style="border: 1px solid #2A1B19; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; gap: 12px" aria-label="Codex">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-weight: 600; font-size: 15px">Codex</span>
+          <span style="font-size: 13px; color: #E6D9BE">Not installed. The day ~/.codex shows up, I'll offer to connect it.</span>
+        </div>
+        <span style="font-family: 'VT323', monospace; font-size: 22px; color: #A09189; flex-shrink: 0">WAITING</span>
+      </section>
+
+      <section style="padding: 14px 16px; border: 1px solid #2A1B19; display: flex; flex-direction: column; gap: 10px; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 15% 20%, rgba(242,166,12,0.16), rgba(5,3,3,0) 60%)" aria-label="Try it">
+        <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.1em; color: #A09189">TRY IT</span>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5">Open a session in <span style="font-family: 'VT323', monospace; font-size: 18px; color: #F2A60C">~/Desktop/dawn</span> and ask where the site is hosted. It should say Cloudflare Pages without asking you back.</p>
+        <div style="display: flex; gap: 8px">
+          <button type="button" style="height: 32px; padding: 0 14px; border: 0; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 12px; box-shadow: 3px 3px 0 #8F5A00">Open a session in dawn</button>
+        </div>
+      </section>
+
+      <p style="margin: 0; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; color: #A09189">Changed your mind later? binder uninstall takes both hooks out.</p>
+
+      <div style="display: flex; gap: 10px; margin-top: auto">
+        <a href="menu-bar.dc.html" style="height: 40px; padding: 0 20px; display: inline-flex; align-items: center; text-decoration: none; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 14px; box-shadow: 3px 3px 0 #8F5A00">Done</a>
+        <span style="align-self: center; font-size: 13px; color: #A09189">I'll be in the menu bar.</span>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":680}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

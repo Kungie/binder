@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder first run, boot</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&amp;family=Space+Grotesk:wght@400;500;600&amp;family=Space+Mono:wght@700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#050303}
+@keyframes bnd-on{0%{transform:scaleY(.008);opacity:0}30%{transform:scaleY(.008);opacity:1}100%{transform:scaleY(1);opacity:1}}
+@keyframes bnd-flicker{0%{opacity:0}8%{opacity:.9}10%{opacity:.12}18%{opacity:1}20%{opacity:.3}28%{opacity:1}100%{opacity:1}}
+@keyframes bnd-in{from{opacity:0}to{opacity:1}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-fill{from{width:0}to{width:100%}}
+@keyframes bnd-blink{0%,90%,100%{transform:scaleY(1)}94%{transform:scaleY(.1)}}
+@keyframes bnd-glow{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes bnd-caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes bnd-sweep{from{transform:translateY(-40px)}to{transform:translateY(600px)}}
+</style>
+</helmet>
+<div style="width: 880px; height: 600px; box-sizing: border-box; background: #0E0908; border: 1px solid #2A1B19; display: flex; flex-direction: column; font-family: 'Space Grotesk', sans-serif; color: #F3E9D6; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; border-bottom: 1px solid #2A1B19; background: #050303; display: flex; align-items: center; padding: 0 14px; gap: 8px">
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="flex-grow: 1; text-align: center; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: #A09189">BINDER</span>
+    <button type="button" onClick="{{replay}}" style="height: 24px; padding: 0 10px; border: 1px solid #2A1B19; background: transparent; color: #A09189; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; cursor: pointer">REPLAY</button>
+  </div>
+
+  <sc-if value="{{on}}" hint-placeholder-val="{{ true }}">
+  <div style="flex-grow: 1; position: relative; display: flex; transform-origin: center; animation: bnd-on 0.5s ease-out both; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 30% 50%, rgba(242,166,12,0.2), rgba(5,3,3,0) 60%)">
+    <div style="position: absolute; left: 0; right: 0; top: 0; height: 40px; background: linear-gradient(180deg, rgba(242,166,12,0), rgba(242,166,12,0.07), rgba(242,166,12,0)); animation: bnd-sweep 3.2s linear 0.4s infinite; pointer-events: none" aria-hidden="true"></div>
+
+    <div style="width: 380px; display: flex; align-items: center; justify-content: center">
+      <svg width="260" height="303" viewBox="0 0 240 280" role="img" aria-label="Binder the mascot booting up, its brain flickering on">
+        <defs><clipPath id="bootDome"><path d="M52 118 A68 68 0 0 1 188 118 Z"/></clipPath></defs>
+        <rect x="58" y="266" width="124" height="5" fill="#2A1B19"/>
+        <rect x="82" y="236" width="14" height="28" fill="#D2C09B"/>
+        <rect x="144" y="236" width="14" height="28" fill="#D2C09B"/>
+        <rect x="74" y="260" width="26" height="6" fill="#D2C09B"/>
+        <rect x="140" y="260" width="26" height="6" fill="#D2C09B"/>
+        <rect x="26" y="176" width="24" height="10" fill="#D2C09B"/>
+        <rect x="190" y="176" width="24" height="10" fill="#D2C09B"/>
+        <rect x="60" y="228" width="128" height="8" fill="#F2A60C"/>
+        <rect x="48" y="128" width="144" height="102" fill="#F3E9D6"/>
+        <rect x="48" y="128" width="28" height="102" fill="#D2C09B"/>
+        <circle cx="62" cy="150" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+        <circle cx="62" cy="180" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+        <circle cx="62" cy="210" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+        <rect x="94" y="146" width="80" height="50" fill="#050303"/>
+        <g style="transform-box: fill-box; transform-origin: center; animation: bnd-on 0.4s ease-out 1.4s both">
+          <g style="transform-box: fill-box; transform-origin: center; animation: bnd-blink 4.5s ease-in-out 3.5s infinite">
+            <rect x="112" y="160" width="10" height="16" fill="#F2A60C"/>
+            <rect x="146" y="160" width="10" height="16" fill="#F2A60C"/>
+          </g>
+          <path d="M124 184 Q134 191 144 184" stroke="#F2A60C" stroke-width="3" fill="none"/>
+        </g>
+        <rect x="94" y="206" width="80" height="3" fill="#160D0B"/>
+        <rect x="94" y="213" width="80" height="5" fill="#160D0B"/>
+        <path d="M52 118 A68 68 0 0 1 188 118 Z" fill="#160D0B"/>
+        <g clip-path="url(#bootDome)">
+          <g style="animation: bnd-flicker 1.1s linear 0.7s both">
+            <circle cx="98" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="120" cy="84" r="24" fill="#F2A60C"/>
+            <circle cx="142" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="108" cy="106" r="16" fill="#F2A60C"/>
+            <circle cx="132" cy="106" r="16" fill="#F2A60C"/>
+            <path d="M120 62 V118" stroke="#5A3A00" stroke-width="3"/>
+            <path d="M94 88 q8 -8 16 0 M130 88 q8 -8 16 0 M98 104 q6 6 12 0 M130 104 q6 6 12 0 M108 72 q5 -5 10 0 M124 72 q5 -5 10 0" stroke="#5A3A00" stroke-width="2.5" fill="none"/>
+          </g>
+          <ellipse cx="120" cy="92" rx="60" ry="40" fill="#F2A60C" opacity="0.18" style="animation: bnd-glow 2.4s ease-in-out 2s infinite"/>
+          <path d="M50 60 H190 M50 66 H190 M50 72 H190 M50 78 H190 M50 84 H190 M50 90 H190 M50 96 H190 M50 102 H190 M50 108 H190 M50 114 H190" stroke="#050303" stroke-width="1.5" opacity="0.4"/>
+        </g>
+        <path d="M52 118 A68 68 0 0 1 188 118" fill="none" stroke="#F3E9D6" stroke-width="4"/>
+        <path d="M72 96 A52 52 0 0 1 98 62" fill="none" stroke="#F3E9D6" stroke-width="4" opacity="0.55"/>
+        <rect x="40" y="116" width="160" height="12" fill="#F2A60C"/>
+      </svg>
+    </div>
+
+    <div style="flex-grow: 1; padding: 64px 56px 48px 8px; display: flex; flex-direction: column; gap: 22px">
+      <div style="font-family: 'VT323', monospace; font-size: 22px; line-height: 1.35; color: #F2A60C; text-shadow: 0 0 10px rgba(242,166,12,0.35)">
+        <div style="animation: bnd-in 0.01s steps(1) 0.5s both; color: #F3E9D6">BINDER 1.0</div>
+        <div style="animation: bnd-in 0.01s steps(1) 0.9s both">CHECKING THE MAC ......... OK</div>
+        <div style="animation: bnd-in 0.01s steps(1) 1.3s both">WARMING UP THE BRAIN ..... OK</div>
+        <div style="animation: bnd-in 0.01s steps(1) 1.8s both">CALIBRATING NOSINESS ..... 100%</div>
+        <div style="animation: bnd-in 0.01s steps(1) 2.3s both">SECRETS .................. NOT INTERESTED</div>
+        <div style="animation: bnd-in 0.01s steps(1) 2.8s both; color: #F3E9D6">READY<span style="animation: bnd-caret 1s steps(1) 2.8s infinite">_</span></div>
+      </div>
+      <div style="height: 8px; background: #2A1B19" role="img" aria-label="Boot progress">
+        <div style="height: 8px; animation: bnd-fill 2.6s steps(26) 0.4s both; background-image: repeating-linear-gradient(90deg, #F2A60C 0px, #F2A60C 6px, #8F5A00 6px, #8F5A00 8px)"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; animation: bnd-rise 0.5s ease-out 3.2s both">
+        <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 900; font-size: 36px; line-height: 1; color: #F3E9D6; text-shadow: 0 3px 0 #050303, 0 6px 0 #F2A60C">Hello. I'm Binder.</h1>
+        <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #E6D9BE">I remember the boring parts, so your agents stop asking where the site is hosted.</p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; animation: bnd-rise 0.5s ease-out 3.5s both">
+        <a href="permissions.dc.html" style="height: 40px; padding: 0 20px; display: inline-flex; align-items: center; text-decoration: none; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 14px; box-shadow: 3px 3px 0 #8F5A00">Let's start</a>
+        <span style="font-size: 13px; color: #A09189">Takes about two minutes.</span>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    return {
+      on: s.on !== false,
+      replay: () => {
+        this.setState({ on: false });
+        setTimeout(() => this.setState({ on: true }), 40);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

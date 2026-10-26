@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder main window, a project note</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&amp;family=Space+Grotesk:wght@400;500;600&amp;family=Space+Mono:wght@700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#050303}
+a{color:#F2A60C;text-decoration:none}a:hover{color:#F3E9D6}
+</style>
+</helmet>
+<div style="width: 1240px; height: 820px; box-sizing: border-box; background: #0E0908; border: 1px solid #2A1B19; display: flex; flex-direction: column; font-family: 'Space Grotesk', sans-serif; color: #F3E9D6; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; border-bottom: 1px solid #2A1B19; background: #050303; display: flex; align-items: center; padding: 0 14px; gap: 8px">
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="flex-grow: 1; text-align: center; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: #A09189; margin-right: 52px">BINDER</span>
+  </div>
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+
+    <nav style="width: 220px; flex-shrink: 0; border-right: 1px solid #2A1B19; box-sizing: border-box; padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px)" aria-label="Binder sections">
+      <label style="display: block">
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search your binder</span>
+        <input type="search" placeholder="Search your binder" style="width: 100%; height: 32px; box-sizing: border-box; padding: 0 10px; background: #0E0908; border: 1px solid #2A1B19; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-size: 13px">
+      </label>
+      <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.08em">
+        <li><a href="menu-bar.dc.html" style="height: 30px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #F3E9D6">INBOX <span style="font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 0; background: #F2A60C; color: #160D0B; padding: 0 6px">3</span></a></li>
+        <li style="height: 30px; padding: 0 8px; display: flex; align-items: center; color: #E6D9BE">ME</li>
+        <li style="height: 30px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #E6D9BE">MACHINES <span style="font-family: 'VT323', monospace; font-size: 18px; color: #A09189">2</span></li>
+        <li style="height: 30px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #E6D9BE">ACCESS <span style="font-family: 'VT323', monospace; font-size: 18px; color: #A09189">2</span></li>
+        <li style="height: 30px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #E6D9BE">SERVERS <span style="font-family: 'VT323', monospace; font-size: 18px; color: #A09189">2</span></li>
+        <li style="height: 30px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #E6D9BE">PROJECTS <span style="font-family: 'VT323', monospace; font-size: 18px; color: #A09189">3</span></li>
+        <li style="height: 30px; padding: 0 8px 0 20px; display: flex; align-items: center; background: #2A1B19; color: #F2A60C" aria-current="page">▸ DAWN</li>
+        <li style="height: 30px; padding: 0 8px 0 20px; display: flex; align-items: center; color: #A09189">SITE</li>
+        <li style="height: 30px; padding: 0 8px 0 20px; display: flex; align-items: center; color: #A09189">BINDER</li>
+        <li style="height: 30px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; color: #E6D9BE">HANDOFFS <span style="font-family: 'VT323', monospace; font-size: 18px; color: #A09189">4</span></li>
+      </ul>
+      <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid #2A1B19">
+        <svg width="40" height="28" viewBox="40 46 160 84" aria-hidden="true">
+          <defs><clipPath id="libDome"><path d="M52 118 A68 68 0 0 1 188 118 Z"/></clipPath></defs>
+          <path d="M52 118 A68 68 0 0 1 188 118 Z" fill="#160D0B"/>
+          <g clip-path="url(#libDome)">
+            <circle cx="98" cy="96" r="20" fill="#F2A60C"/><circle cx="120" cy="84" r="24" fill="#F2A60C"/><circle cx="142" cy="96" r="20" fill="#F2A60C"/><circle cx="108" cy="106" r="16" fill="#F2A60C"/><circle cx="132" cy="106" r="16" fill="#F2A60C"/>
+            <path d="M120 62 V118" stroke="#5A3A00" stroke-width="5"/>
+          </g>
+          <path d="M52 118 A68 68 0 0 1 188 118" fill="none" stroke="#F3E9D6" stroke-width="8"/>
+          <rect x="40" y="116" width="160" height="14" fill="#F2A60C"/>
+        </svg>
+        <div style="display: flex; flex-direction: column">
+          <span style="font-family: 'VT323', monospace; font-size: 17px; color: #E6D9BE">215 MEMORIES</span>
+          <span style="font-family: 'VT323', monospace; font-size: 17px; color: #A09189">LAST LOOK 09:14</span>
+        </div>
+      </div>
+      <button type="button" style="height: 30px; border: 1px solid #2A1B19; background: transparent; color: #A09189; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.08em; text-align: left; padding: 0 8px">SETTINGS</button>
+    </nav>
+
+    <main style="flex-grow: 1; min-width: 0; padding: 26px 32px; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.12em; color: #A09189">PROJECTS / DAWN.MD</span>
+          <h1 style="margin: 0 0 6px; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 900; font-size: 44px; line-height: 0.95; text-shadow: 0 3px 0 #050303, 0 6px 0 #F2A60C">dawn</h1>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <span style="height: 24px; padding: 0 8px; display: inline-flex; align-items: center; border: 1px solid #2A1B19; font-family: 'VT323', monospace; font-size: 17px; color: #F2A60C">VERIFIED 09:14 TODAY</span>
+            <span style="height: 24px; padding: 0 8px; display: inline-flex; align-items: center; border: 1px solid #2A1B19; font-family: 'VT323', monospace; font-size: 17px; color: #E6D9BE">FROM THIS MAC + YOU</span>
+            <span style="height: 24px; padding: 0 8px; display: inline-flex; align-items: center; border: 1px solid #2A1B19; font-family: 'VT323', monospace; font-size: 17px; color: #E6D9BE">4 DECISIONS</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-shrink: 0">
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Open in Obsidian</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; background: #F3E9D6; color: #160D0B; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Edit</button>
+        </div>
+      </div>
+
+      <section style="border: 1px solid #2A1B19; padding: 12px 16px 6px; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 90% 10%, rgba(242,166,12,0.14), rgba(5,3,3,0) 55%)" aria-label="Observed">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px">
+          <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">OBSERVED · I REWRITE THIS PART</span>
+          <span style="font-family: 'VT323', monospace; font-size: 17px; color: #A09189">LAST 09:14</span>
+        </div>
+        <dl style="margin: 0; display: grid; grid-template-columns: 110px minmax(0, 1fr); font-size: 13.5px">
+          <dt style="padding: 7px 0; border-top: 1px solid #2A1B19; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189">REPO</dt>
+          <dd style="margin: 0; padding: 7px 0; border-top: 1px solid #2A1B19">github.com/Kungie/dawn · main · clean</dd>
+          <dt style="padding: 7px 0; border-top: 1px solid #2A1B19; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189">STACK</dt>
+          <dd style="margin: 0; padding: 7px 0; border-top: 1px solid #2A1B19">Swift package, SwiftUI menu bar app</dd>
+          <dt style="padding: 7px 0; border-top: 1px solid #2A1B19; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189">RELEASE</dt>
+          <dd style="margin: 0; padding: 7px 0; border-top: 1px solid #2A1B19">GitHub Releases, zip and dmg from scripts/build-app.sh</dd>
+          <dt style="padding: 7px 0; border-top: 1px solid #2A1B19; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189">SITE</dt>
+          <dd style="margin: 0; padding: 7px 0; border-top: 1px solid #2A1B19">Cloudflare Pages, see <a href="#">[[site]]</a></dd>
+          <dt style="padding: 7px 0; border-top: 1px solid #2A1B19; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189">BUILDS ON</dt>
+          <dd style="margin: 0; padding: 7px 0; border-top: 1px solid #2A1B19"><a href="#">[[this-mac]]</a> · no server needed</dd>
+        </dl>
+      </section>
+
+      <section style="display: flex; flex-direction: column" aria-label="Decisions">
+        <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189; padding-bottom: 6px">DECISIONS</span>
+        <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 130px; gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid #2A1B19">
+          <span style="font-family: 'VT323', monospace; font-size: 18px; color: #F2A60C">26 OCT</span><span style="font-size: 13.5px">The dawn site deploys to Cloudflare Pages.</span><span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189; text-align: right">KEPT FROM A COMMAND</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 130px; gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid #2A1B19">
+          <span style="font-family: 'VT323', monospace; font-size: 18px; color: #F2A60C">17 OCT</span><span style="font-size: 13.5px">Licence is AGPL-3.0, not MIT.</span><span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189; text-align: right">KEPT FROM THE CHAT</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 130px; gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid #2A1B19">
+          <span style="font-family: 'VT323', monospace; font-size: 18px; color: #F2A60C">17 OCT</span><span style="font-size: 13.5px">Ships as a free app. The USB stick is shelved, don't bring device specs back.</span><span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189; text-align: right">WRITTEN BY YOU</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 130px; gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid #2A1B19; border-bottom: 1px solid #2A1B19">
+          <span style="font-family: 'VT323', monospace; font-size: 18px; color: #F2A60C">12 OCT</span><span style="font-size: 13.5px">The panel stays 340 pt wide.</span><span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189; text-align: right">KEPT FROM THE CHAT</span>
+        </div>
+      </section>
+
+      <form style="display: flex; gap: 8px; margin-top: auto" aria-label="Add a memory">
+        <label style="flex-grow: 1">
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add a memory to dawn</span>
+          <input type="text" placeholder="Tell me something worth remembering about dawn" style="width: 100%; height: 40px; box-sizing: border-box; padding: 0 12px; background: #050303; border: 1px solid #2A1B19; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-size: 14px">
+        </label>
+        <button type="button" style="height: 40px; padding: 0 18px; border: 0; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 13px; box-shadow: 3px 3px 0 #8F5A00">File it</button>
+      </form>
+    </main>
+
+    <aside style="width: 300px; flex-shrink: 0; border-left: 1px solid #2A1B19; box-sizing: border-box; padding: 26px 20px; display: flex; flex-direction: column; gap: 20px" aria-label="Context">
+      <section style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">LINKED</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <a href="#" style="height: 26px; padding: 0 8px; display: inline-flex; align-items: center; border: 1px solid #2A1B19; font-family: 'VT323', monospace; font-size: 18px">[[site]]</a>
+          <a href="#" style="height: 26px; padding: 0 8px; display: inline-flex; align-items: center; border: 1px solid #2A1B19; font-family: 'VT323', monospace; font-size: 18px">[[this-mac]]</a>
+          <a href="#" style="height: 26px; padding: 0 8px; display: inline-flex; align-items: center; border: 1px solid #2A1B19; font-family: 'VT323', monospace; font-size: 18px">[[me]]</a>
+        </div>
+      </section>
+
+      <section style="border: 1px solid #2A1B19; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px" aria-label="Last handoff">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">LAST HANDOFF</span>
+          <span style="font-family: 'VT323', monospace; font-size: 17px; color: #A09189">SAT 21:40</span>
+        </div>
+        <dl style="margin: 0; display: grid; grid-template-columns: 62px minmax(0, 1fr); row-gap: 5px; font-size: 13px">
+          <dt style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #F2A60C">DONE</dt><dd style="margin: 0">Panel redesign merged.</dd>
+          <dt style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #F2A60C">LEFT</dt><dd style="margin: 0">Notarization.</dd>
+          <dt style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #F2A60C">DON'T</dt><dd style="margin: 0">Touch Resources/Fonts.</dd>
+          <dt style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #F2A60C">NEXT</dt><dd style="margin: 0">Release notes for 0.3.</dd>
+        </dl>
+        <button type="button" style="height: 30px; border: 0; background: #F3E9D6; color: #160D0B; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; margin-top: 4px">Pick up from here</button>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1; min-height: 0" aria-label="What agents see">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">WHAT AGENTS SEE IN DAWN</span>
+          <span style="font-family: 'VT323', monospace; font-size: 17px; color: #A09189">≈ 410 TOKENS</span>
+        </div>
+        <div style="flex-grow: 1; border: 1px solid #2A1B19; padding: 10px 12px; font-family: 'VT323', monospace; font-size: 17px; line-height: 1.28; color: #E6D9BE; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px)">BINDER CARD · VERIFIED, USE IT<br>dawn: Swift menu bar app.<br>Releases on GitHub.<br>Site on Cloudflare Pages.<br>No server. Don't make SSH keys.<br>Licence AGPL-3.0.<br>Eren: Turkish in chat, English<br>in files. Short answers. Ask<br>before pushing.<br><span style="color: #F2A60C">NEXT: release notes for 0.3.</span></div>
+      </section>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1240,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

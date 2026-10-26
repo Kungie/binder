@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder menu bar panel, keep and drop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&amp;family=Space+Grotesk:wght@400;500;600&amp;family=Space+Mono:wght@700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#050303}
+.bnd-suck{animation:bnd-suck .7s cubic-bezier(.55,0,.85,.35) forwards;transform-origin:12% 0;pointer-events:none}
+@keyframes bnd-suck{0%{transform:none;opacity:1}22%{transform:scale(.97,.9);opacity:1}100%{transform:translate(var(--tx),var(--ty)) scale(.03,.06) skewX(-18deg);opacity:.15}}
+.bnd-strip{animation:bnd-fall .85s cubic-bezier(.5,0,.9,.5) forwards}
+@keyframes bnd-fall{0%{transform:none;opacity:1}18%{transform:translateY(5px)}100%{transform:translateY(150px) rotate(var(--rot));opacity:0}}
+.bnd-gulp{animation:bnd-gulp .5s ease-out}
+@keyframes bnd-gulp{0%{transform:scale(1)}35%{transform:scale(1.22)}100%{transform:scale(1)}}
+@keyframes bnd-glow{0%,100%{opacity:.25}50%{opacity:.7}}
+@keyframes bnd-bite{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.6)}}
+@keyframes bnd-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="width: 440px; height: 860px; box-sizing: border-box; position: relative; overflow: hidden; font-family: 'Space Grotesk', sans-serif; color: #F3E9D6; background: #050303">
+  <div style="height: 28px; background: #0E0908; border-bottom: 1px solid #2A1B19; display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 14px">
+    <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #A09189">MON 09:41</span>
+    <span style="height: 22px; padding: 0 6px; display: inline-flex; align-items: center; gap: 4px; background: #2A1B19">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 12 A7 7 0 0 1 16 12 Z" fill="none" stroke="#F3E9D6" stroke-width="1.6"/><circle cx="9" cy="9.5" r="3" fill="#F3E9D6"/><rect x="1" y="12" width="16" height="2" fill="#F3E9D6"/></svg>
+      <span style="font-family: 'VT323', monospace; font-size: 17px; color: #F3E9D6">{{count}}</span>
+    </span>
+  </div>
+
+  <section style="position: absolute; left: 70px; top: 36px; width: 350px; box-sizing: border-box; background: #0E0908; border: 1px solid #2A1B19; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 30px 60px rgba(0,0,0,0.6)" aria-label="Binder menu bar panel">
+
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="position: relative; width: 64px; height: 44px; flex-shrink: 0">
+        <svg width="64" height="44" viewBox="40 46 160 84" class="{{gulpCls}}" role="img" aria-label="Binder's brain, where kept items go">
+          <defs><clipPath id="mbDome"><path d="M52 118 A68 68 0 0 1 188 118 Z"/></clipPath></defs>
+          <path d="M52 118 A68 68 0 0 1 188 118 Z" fill="#160D0B"/>
+          <g clip-path="url(#mbDome)">
+            <circle cx="98" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="120" cy="84" r="24" fill="#F2A60C"/>
+            <circle cx="142" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="108" cy="106" r="16" fill="#F2A60C"/>
+            <circle cx="132" cy="106" r="16" fill="#F2A60C"/>
+            <path d="M120 62 V118" stroke="#5A3A00" stroke-width="4"/>
+            <path d="M94 88 q8 -8 16 0 M130 88 q8 -8 16 0 M98 104 q6 6 12 0 M130 104 q6 6 12 0" stroke="#5A3A00" stroke-width="3" fill="none"/>
+            <ellipse cx="120" cy="92" rx="64" ry="44" fill="#F2A60C" style="animation: bnd-glow 2.6s ease-in-out infinite"/>
+          </g>
+          <path d="M52 118 A68 68 0 0 1 188 118" fill="none" stroke="#F3E9D6" stroke-width="7"/>
+          <rect x="40" y="116" width="160" height="14" fill="#F2A60C"/>
+        </svg>
+      </div>
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 15px; letter-spacing: 0.04em">BINDER</span>
+        <span style="font-family: 'VT323', monospace; font-size: 18px; color: #A09189">{{memories}} MEMORIES · {{count}} TO REVIEW</span>
+      </div>
+    </div>
+
+    <div style="padding: 12px 14px; border: 1px solid #2A1B19; display: flex; flex-direction: column; gap: 8px; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 25% 30%, rgba(242,166,12,0.18), rgba(5,3,3,0) 70%)">
+      <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">THIS SESSION · DAWN · CLAUDE CODE</span>
+      <div style="display: flex; align-items: baseline; gap: 10px">
+        <span style="font-family: 'VT323', monospace; font-size: 56px; line-height: 0.8; color: #F2A60C; text-shadow: 0 0 14px rgba(242,166,12,0.45)">71%</span>
+        <span style="font-size: 13px; color: #E6D9BE">of context used. Getting long.</span>
+      </div>
+      <div style="height: 6px; background: #2A1B19" role="img" aria-label="71 percent of context used">
+        <div style="width: 71%; height: 6px; background-image: repeating-linear-gradient(90deg, #F2A60C 0px, #F2A60C 6px, #8F5A00 6px, #8F5A00 8px)"></div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <button type="button" style="height: 30px; padding: 0 12px; border: 0; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 12px; box-shadow: 3px 3px 0 #8F5A00">Hand off now</button>
+        <button type="button" style="height: 30px; padding: 0 12px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Not yet</button>
+      </div>
+    </div>
+
+    <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">CAUGHT THIS SESSION</span>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; min-height: 380px">
+      <sc-for list="{{items}}" as="item" hint-placeholder-count="4">
+        <div style="position: relative; height: 88px">
+          <sc-if value="{{item.whole}}" hint-placeholder-val="{{ true }}">
+            <div class="{{item.cls}}" style="position: absolute; inset: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid #2A1B19; background: #0E0908; display: flex; flex-direction: column; gap: 6px; --tx: -150px; --ty: {{item.ty}}">
+              <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #F2A60C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{item.tag}}</span>
+              <p style="margin: 0; font-size: 13.5px; line-height: 1.3">{{item.text}}</p>
+              <div style="display: flex; gap: 6px; margin-top: auto">
+                <button type="button" onClick="{{item.keep}}" style="height: 24px; padding: 0 12px; border: 0; background: #F3E9D6; color: #160D0B; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer">Keep</button>
+                <button type="button" style="height: 24px; padding: 0 12px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Edit</button>
+                <button type="button" onClick="{{item.drop}}" style="height: 24px; padding: 0 12px; border: 0; background: transparent; color: #A09189; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer">Drop</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{item.shredding}}" hint-placeholder-val="{{ false }}">
+            <div style="position: absolute; inset: 0" aria-label="Shredding">
+              <div style="position: absolute; left: -4px; right: -4px; top: -3px; height: 4px; background: #F2A60C; z-index: 2; animation: bnd-bite 0.18s steps(2) 4"></div>
+              <sc-for list="{{item.strips}}" as="strip" hint-placeholder-count="8">
+                <div class="bnd-strip" style="position: absolute; top: 0; bottom: 0; overflow: hidden; left: {{strip.left}}; width: 12.5%; --rot: {{strip.rot}}; animation-delay: {{strip.delay}}">
+                  <div style="position: absolute; top: 0; bottom: 0; width: 800%; left: {{strip.shift}}; box-sizing: border-box; padding: 10px 12px; border: 1px solid #2A1B19; background: #0E0908; display: flex; flex-direction: column; gap: 6px">
+                    <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; color: #F2A60C; white-space: nowrap">{{item.tag}}</span>
+                    <p style="margin: 0; font-size: 13.5px; line-height: 1.3">{{item.text}}</p>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+      <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 28px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; animation: bnd-in 0.4s ease-out both">
+          <span style="font-family: 'VT323', monospace; font-size: 26px; color: #F2A60C">ALL FILED.</span>
+          <span style="font-size: 13px; color: #E6D9BE">Nothing to review. I'll call you when there is.</span>
+          <button type="button" onClick="{{reset}}" style="height: 28px; padding: 0 12px; border: 1px solid #2A1B19; background: transparent; color: #A09189; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; cursor: pointer">RUN THE DEMO AGAIN</button>
+        </div>
+      </sc-if>
+    </div>
+
+    <button type="button" onClick="{{keepAll}}" style="height: 36px; border: 0; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 13px; box-shadow: 3px 3px 0 #8F5A00; cursor: pointer">{{keepAllLabel}}</button>
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <button type="button" style="height: 26px; padding: 0; border: 0; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px">Open Binder</button>
+      <button type="button" style="height: 26px; padding: 0; border: 0; background: transparent; color: #A09189; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px">Add a memory</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":440,"height":860}}'>
+class Component extends DCLogic {
+  catalog() {
+    return [
+      { id: 'a', tag: 'FROM A COMMAND · wrangler pages deploy', text: 'The dawn site deploys to Cloudflare Pages.' },
+      { id: 'b', tag: 'SEEN ON THIS MAC · ~/.ssh/config', text: 'hetzner-1 opens with id_ed25519_hetzner. No new key needed.' },
+      { id: 'c', tag: 'FROM THE CHAT', text: 'Release notes live in docs/releases, one file per version.' },
+      { id: 'd', tag: 'FROM THE CHAT · PROBABLY A ONE-OFF', text: '"Let’s try Tailwind for a minute."' }
+    ];
+  }
+  patch(key, id, value) {
+    const s = this.state || {};
+    const next = Object.assign({}, s[key] || {});
+    next[id] = value;
+    this.setState({ [key]: next });
+  }
+  keep(id) {
+    this.patch('st', id, 'in');
+    setTimeout(() => {
+      const s = this.state || {};
+      this.patch('gone', id, true);
+      this.setState({ mem: (s.mem || 214) + 1, gulp: true });
+      setTimeout(() => this.setState({ gulp: false }), 520);
+    }, 700);
+  }
+  drop(id) {
+    this.patch('st', id, 'out');
+    setTimeout(() => this.patch('gone', id, true), 1150);
+  }
+  renderVals() {
+    const s = this.state || {};
+    const st = s.st || {};
+    const gone = s.gone || {};
+    const visible = this.catalog().filter((x) => !gone[x.id]);
+    const strips = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({
+      left: (k * 12.5) + '%',
+      shift: (-k * 100) + '%',
+      rot: ((k % 2 ? 1 : -1) * (4 + (k * 3) % 9)) + 'deg',
+      delay: (0.12 + ((k * 37) % 8) * 0.035) + 's'
+    }));
+    const items = visible.map((x, i) => ({
+      tag: x.tag,
+      text: x.text,
+      whole: st[x.id] !== 'out',
+      shredding: st[x.id] === 'out',
+      cls: st[x.id] === 'in' ? 'bnd-suck' : '',
+      ty: (-(250 + i * 96)) + 'px',
+      strips,
+      keep: () => this.keep(x.id),
+      drop: () => this.drop(x.id)
+    }));
+    const pending = visible.filter((x) => !st[x.id]);
+    return {
+      items,
+      empty: visible.length === 0,
+      count: pending.length,
+      memories: s.mem || 214,
+      gulpCls: s.gulp ? 'bnd-gulp' : '',
+      keepAllLabel: pending.length ? 'Keep all ' + pending.length : 'Nothing left to keep',
+      keepAll: () => pending.forEach((x, i) => setTimeout(() => this.keep(x.id), i * 220)),
+      reset: () => this.setState({ st: {}, gone: {}, mem: 214, gulp: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder first run, your binder</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&amp;family=Space+Grotesk:wght@400;500;600&amp;family=Space+Mono:wght@700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#050303}
+@keyframes bnd-in{from{opacity:0}to{opacity:1}}
+@keyframes bnd-write{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+</style>
+</helmet>
+<div style="width: 880px; height: 680px; box-sizing: border-box; background: #0E0908; border: 1px solid #2A1B19; display: flex; flex-direction: column; font-family: 'Space Grotesk', sans-serif; color: #F3E9D6; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; border-bottom: 1px solid #2A1B19; background: #050303; display: flex; align-items: center; padding: 0 14px; gap: 8px">
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="flex-grow: 1; text-align: center; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: #A09189; margin-right: 52px">BINDER · SETUP</span>
+  </div>
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+    <aside style="width: 260px; flex-shrink: 0; border-right: 1px solid #2A1B19; padding: 28px 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 50% 30%, rgba(242,166,12,0.2), rgba(5,3,3,0) 65%)">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px">
+        <svg width="170" height="198" viewBox="0 0 240 280" role="img" aria-label="Binder with its cover open, pages flying in" style="animation: bnd-write 1.2s ease-in-out infinite">
+          <defs><clipPath id="vaultDome"><path d="M52 118 A68 68 0 0 1 188 118 Z"/></clipPath></defs>
+          <rect x="82" y="236" width="14" height="28" fill="#D2C09B"/>
+          <rect x="144" y="236" width="14" height="28" fill="#D2C09B"/>
+          <rect x="74" y="260" width="26" height="6" fill="#D2C09B"/>
+          <rect x="140" y="260" width="26" height="6" fill="#D2C09B"/>
+          <rect x="196" y="150" width="30" height="38" fill="#F3E9D6" stroke="#160D0B" stroke-width="2" transform="rotate(12 211 169)"/>
+          <path d="M202 162 H220 M202 170 H220 M202 178 H214" stroke="#160D0B" stroke-width="2" transform="rotate(12 211 169)"/>
+          <rect x="14" y="140" width="26" height="32" fill="#F3E9D6" stroke="#160D0B" stroke-width="2" transform="rotate(-14 27 156)"/>
+          <path d="M19 150 H35 M19 157 H35 M19 164 H30" stroke="#160D0B" stroke-width="2" transform="rotate(-14 27 156)"/>
+          <rect x="60" y="228" width="128" height="8" fill="#F2A60C"/>
+          <rect x="48" y="128" width="144" height="102" fill="#F3E9D6"/>
+          <rect x="48" y="128" width="28" height="102" fill="#D2C09B"/>
+          <circle cx="62" cy="150" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <circle cx="62" cy="180" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <circle cx="62" cy="210" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <rect x="94" y="146" width="80" height="50" fill="#050303"/>
+          <rect x="112" y="162" width="10" height="14" fill="#F2A60C"/>
+          <rect x="146" y="162" width="10" height="14" fill="#F2A60C"/>
+          <rect x="128" y="182" width="12" height="7" fill="#F2A60C"/>
+          <path d="M52 118 A68 68 0 0 1 188 118 Z" fill="#160D0B"/>
+          <g clip-path="url(#vaultDome)">
+            <circle cx="98" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="120" cy="84" r="24" fill="#F2A60C"/>
+            <circle cx="142" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="108" cy="106" r="16" fill="#F2A60C"/>
+            <circle cx="132" cy="106" r="16" fill="#F2A60C"/>
+            <path d="M120 62 V118" stroke="#5A3A00" stroke-width="3"/>
+            <path d="M94 88 q8 -8 16 0 M130 88 q8 -8 16 0 M98 104 q6 6 12 0 M130 104 q6 6 12 0" stroke="#5A3A00" stroke-width="2.5" fill="none"/>
+            <path d="M50 60 H190 M50 66 H190 M50 72 H190 M50 78 H190 M50 84 H190 M50 90 H190 M50 96 H190 M50 102 H190 M50 108 H190 M50 114 H190" stroke="#050303" stroke-width="1.5" opacity="0.4"/>
+          </g>
+          <path d="M52 118 A68 68 0 0 1 188 118" fill="none" stroke="#F3E9D6" stroke-width="4"/>
+          <path d="M72 96 A52 52 0 0 1 98 62" fill="none" stroke="#F3E9D6" stroke-width="4" opacity="0.55"/>
+          <rect x="40" y="116" width="160" height="12" fill="#F2A60C"/>
+        </svg>
+        <p style="margin: 0; font-family: 'VT323', monospace; font-size: 20px; color: #F2A60C; text-align: center">WRITING IT<br>ALL DOWN.</p>
+      </div>
+      <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.1em">
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> HELLO</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> PERMISSIONS</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> LOOK AROUND</li>
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> ABOUT YOU</li>
+        <li style="color: #F3E9D6">▸ YOUR BINDER</li>
+        <li style="color: #A09189">· CONNECT</li>
+      </ol>
+    </aside>
+
+    <main style="flex-grow: 1; padding: 28px 36px; display: flex; flex-direction: column; gap: 16px; min-width: 0">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 28px; line-height: 1.05">Here's your binder.</h1>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #E6D9BE">Plain Markdown files. Open them in Obsidian, in any editor, or never. Lines between the observed markers are mine to rewrite. Everything else is yours.</p>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #2A1B19; background: #050303">
+        <span style="font-family: 'VT323', monospace; font-size: 20px; color: #F3E9D6; flex-grow: 1">~/Binder</span>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Change</button>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Put it in my Obsidian vault</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; flex-grow: 1; min-height: 0">
+        <div style="border: 1px solid #2A1B19; padding: 12px 14px; font-family: 'VT323', monospace; font-size: 19px; line-height: 1.32; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px)" aria-label="Folder tree">
+          <div style="color: #F3E9D6">~/Binder</div>
+          <div style="animation: bnd-in 0.01s steps(1) 0.2s both"><span style="color: #A09189">├ </span>me.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 0.4s both"><span style="color: #A09189">├ </span>machines/</div>
+          <div style="animation: bnd-in 0.01s steps(1) 0.6s both"><span style="color: #A09189">│ └ </span>this-mac.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 0.8s both"><span style="color: #A09189">├ </span>access/</div>
+          <div style="animation: bnd-in 0.01s steps(1) 1.0s both"><span style="color: #A09189">│ ├ </span>ssh.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 1.2s both"><span style="color: #A09189">│ └ </span>accounts.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 1.4s both"><span style="color: #A09189">├ </span>servers/</div>
+          <div style="animation: bnd-in 0.01s steps(1) 1.6s both"><span style="color: #A09189">│ ├ </span>hetzner-1.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 1.8s both"><span style="color: #A09189">│ └ </span>homelab.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 2.0s both"><span style="color: #A09189">└ </span>projects/</div>
+          <div style="animation: bnd-in 0.01s steps(1) 2.2s both"><span style="color: #A09189">  ├ </span>dawn.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 2.4s both"><span style="color: #A09189">  ├ </span>site.md <span style="color: #F2A60C">■</span></div>
+          <div style="animation: bnd-in 0.01s steps(1) 2.6s both"><span style="color: #A09189">  └ </span>binder.md <span style="color: #F2A60C">■</span></div>
+        </div>
+
+        <div style="border: 1px solid #2A1B19; background: #050303; display: flex; flex-direction: column; min-width: 0" aria-label="Preview of projects/dawn.md">
+          <div style="height: 30px; border-bottom: 1px solid #2A1B19; display: flex; align-items: center; justify-content: space-between; padding: 0 12px">
+            <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189">PROJECTS/DAWN.MD</span>
+            <span style="font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #F2A60C">OBSIDIAN-READY</span>
+          </div>
+          <div style="padding: 10px 14px; font-family: 'VT323', monospace; font-size: 18px; line-height: 1.3; white-space: pre; overflow: hidden; color: #E6D9BE"><span style="color: #A09189">---
+verified: 2026-10-26 09:14
+source: observed, you
+---</span>
+<span style="color: #F3E9D6"># dawn</span>
+<span style="color: #A09189">&lt;!-- binder:observed start --&gt;</span>
+- repo: github.com/Kungie/dawn
+- stack: Swift, SwiftUI
+- release: GitHub Releases, zip + dmg
+- site: Cloudflare Pages, see <span style="color: #F2A60C">[[site]]</span>
+- built on: <span style="color: #F2A60C">[[this-mac]]</span>
+<span style="color: #A09189">&lt;!-- binder:observed end --&gt;</span>
+<span style="color: #F3E9D6">## Decisions</span>
+- 10-17 licence is AGPL-3.0
+- 10-17 ships as an app, not a stick</div>
+        </div>
+      </div>
+
+      <p style="margin: 0; font-family: 'VT323', monospace; font-size: 19px; color: #A09189">9 NOTES · 0 SECRETS · EVERY LINE CAME FROM THIS MAC OR FROM YOU</p>
+
+      <div style="display: flex; gap: 10px">
+        <a href="connect.dc.html" style="height: 40px; padding: 0 20px; display: inline-flex; align-items: center; text-decoration: none; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 14px; box-shadow: 3px 3px 0 #8F5A00">Continue</a>
+        <button type="button" style="height: 40px; padding: 0 18px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px">Open in Finder</button>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":680}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

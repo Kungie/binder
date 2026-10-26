@@ -2,7 +2,9 @@
 
 Binder is a macOS app and CLI that gives AI coding agents a lasting memory of you: who you are, your machines, your hosting, your SSH keys and your projects. It also hands a long session over to a fresh one without losing the thread. The marketing line is **AG~~I~~M: Artificial General ~~Intelligence~~ Memory**.
 
-**Status:** design phase, with no code yet. Next we settle the open questions at the bottom, write the spec in `docs/specs/`, and then write the implementation plan. Nothing gets built before the spec is approved.
+**Status:** the v1 spec is written and waiting for the user's review: `docs/specs/2026-10-26-binder-v1-design.md`. The screens are in `design/flow/`. Next comes the implementation plan. There is no code yet, and nothing gets built before the spec is approved. Where the spec and this file disagree, the spec wins.
+
+**Purpose, in the user's words:** a virtual memory for individual developers and hobbyists. It covers how each project is going, personal preferences, preferred apps and tools, hosting and machine details, and where to find the keys for access. Every project and session can reach it, and it fills itself as automatically as possible. Everything the user has described is in v1.
 
 ## Working with the user
 
@@ -85,7 +87,8 @@ A plain Markdown folder. The default is `~/Binder`, and first launch also offers
   access/accounts.md
   servers/<host>.md
   projects/<name>.md
-  .binder/            # proposal inbox and search index, managed by the app
+  handoffs/<project>/<yyyy-mm-dd-hhmm>.md
+  .binder/            # inbox, cached cards, transcript cursors, state, log (managed)
 ```
 
 Each note has frontmatter (`verified`, `source`) and two kinds of content:

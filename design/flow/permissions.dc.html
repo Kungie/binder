@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Binder first run, permissions</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&amp;family=Space+Grotesk:wght@400;500;600&amp;family=Space+Mono:wght@700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#050303}
+</style>
+</helmet>
+<div style="width: 880px; height: 600px; box-sizing: border-box; background: #0E0908; border: 1px solid #2A1B19; display: flex; flex-direction: column; font-family: 'Space Grotesk', sans-serif; color: #F3E9D6; overflow: hidden">
+  <div style="height: 40px; flex-shrink: 0; border-bottom: 1px solid #2A1B19; background: #050303; display: flex; align-items: center; padding: 0 14px; gap: 8px">
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 6px; background: #2A1B19; display: inline-block"></span>
+    <span style="flex-grow: 1; text-align: center; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; color: #A09189; margin-right: 52px">BINDER · SETUP</span>
+  </div>
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+    <aside style="width: 260px; flex-shrink: 0; border-right: 1px solid #2A1B19; padding: 28px 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; background-color: #050303; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.42) 3px), radial-gradient(ellipse at 50% 30%, rgba(242,166,12,0.2), rgba(5,3,3,0) 65%)">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px">
+        <svg width="170" height="198" viewBox="0 0 240 280" role="img" aria-label="Binder holding up a small key, looking up">
+          <defs><clipPath id="permDome"><path d="M52 118 A68 68 0 0 1 188 118 Z"/></clipPath></defs>
+          <rect x="82" y="236" width="14" height="28" fill="#D2C09B"/>
+          <rect x="144" y="236" width="14" height="28" fill="#D2C09B"/>
+          <rect x="74" y="260" width="26" height="6" fill="#D2C09B"/>
+          <rect x="140" y="260" width="26" height="6" fill="#D2C09B"/>
+          <rect x="26" y="176" width="24" height="10" fill="#D2C09B"/>
+          <rect x="190" y="138" width="10" height="46" fill="#D2C09B"/>
+          <circle cx="195" cy="126" r="9" fill="none" stroke="#F2A60C" stroke-width="4"/>
+          <rect x="193" y="98" width="4" height="20" fill="#F2A60C"/>
+          <rect x="197" y="102" width="7" height="4" fill="#F2A60C"/>
+          <rect x="60" y="228" width="128" height="8" fill="#F2A60C"/>
+          <rect x="48" y="128" width="144" height="102" fill="#F3E9D6"/>
+          <rect x="48" y="128" width="28" height="102" fill="#D2C09B"/>
+          <circle cx="62" cy="150" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <circle cx="62" cy="180" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <circle cx="62" cy="210" r="8" fill="none" stroke="#160D0B" stroke-width="4"/>
+          <rect x="94" y="146" width="80" height="50" fill="#050303"/>
+          <rect x="114" y="154" width="10" height="12" fill="#F2A60C"/>
+          <rect x="148" y="154" width="10" height="12" fill="#F2A60C"/>
+          <path d="M126 182 H142" stroke="#F2A60C" stroke-width="3"/>
+          <path d="M52 118 A68 68 0 0 1 188 118 Z" fill="#160D0B"/>
+          <g clip-path="url(#permDome)">
+            <circle cx="98" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="120" cy="84" r="24" fill="#F2A60C"/>
+            <circle cx="142" cy="96" r="20" fill="#F2A60C"/>
+            <circle cx="108" cy="106" r="16" fill="#F2A60C"/>
+            <circle cx="132" cy="106" r="16" fill="#F2A60C"/>
+            <path d="M120 62 V118" stroke="#5A3A00" stroke-width="3"/>
+            <path d="M94 88 q8 -8 16 0 M130 88 q8 -8 16 0 M98 104 q6 6 12 0 M130 104 q6 6 12 0" stroke="#5A3A00" stroke-width="2.5" fill="none"/>
+            <path d="M50 60 H190 M50 66 H190 M50 72 H190 M50 78 H190 M50 84 H190 M50 90 H190 M50 96 H190 M50 102 H190 M50 108 H190 M50 114 H190" stroke="#050303" stroke-width="1.5" opacity="0.4"/>
+          </g>
+          <path d="M52 118 A68 68 0 0 1 188 118" fill="none" stroke="#F3E9D6" stroke-width="4"/>
+          <path d="M72 96 A52 52 0 0 1 98 62" fill="none" stroke="#F3E9D6" stroke-width="4" opacity="0.55"/>
+          <rect x="40" y="116" width="160" height="12" fill="#F2A60C"/>
+        </svg>
+        <p style="margin: 0; font-family: 'VT323', monospace; font-size: 20px; color: #F2A60C; text-align: center">I ASK ONCE. PROMISE.</p>
+      </div>
+      <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.1em">
+        <li style="color: #A09189"><span style="color: #F2A60C">■</span> HELLO</li>
+        <li style="color: #F3E9D6">▸ PERMISSIONS</li>
+        <li style="color: #A09189">· LOOK AROUND</li>
+        <li style="color: #A09189">· ABOUT YOU</li>
+        <li style="color: #A09189">· YOUR BINDER</li>
+        <li style="color: #A09189">· CONNECT</li>
+      </ol>
+    </aside>
+
+    <main style="flex-grow: 1; padding: 32px 36px; display: flex; flex-direction: column; gap: 16px; min-width: 0">
+      <h1 style="margin: 0; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 28px; line-height: 1.05">A few permissions first.</h1>
+      <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #E6D9BE">macOS asks on my behalf. I use each one only for the thing written next to it.</p>
+
+      <div style="display: flex; flex-direction: column; border-top: 1px solid #2A1B19">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid #2A1B19">
+          <div style="display: flex; flex-direction: column; gap: 3px">
+            <span style="font-weight: 600; font-size: 15px">Desktop and Documents</span>
+            <span style="font-size: 13px; color: #E6D9BE">Your projects live there. I read repo and deploy files, nothing else.</span>
+          </div>
+          <span style="font-family: 'VT323', monospace; font-size: 20px; color: #F2A60C; text-align: right">GRANTED</span>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid #2A1B19">
+          <div style="display: flex; flex-direction: column; gap: 3px">
+            <span style="font-weight: 600; font-size: 15px">Local network</span>
+            <span style="font-size: 13px; color: #E6D9BE">To spot your homelab. I knock on SSH and a few web ports, then leave.</span>
+          </div>
+          <button type="button" style="height: 32px; border: 0; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 12px; box-shadow: 3px 3px 0 #8F5A00">Allow</button>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid #2A1B19">
+          <div style="display: flex; flex-direction: column; gap: 3px">
+            <span style="font-weight: 600; font-size: 15px">Notifications</span>
+            <span style="font-size: 13px; color: #E6D9BE">One nudge when a session gets long. Not a pen pal.</span>
+          </div>
+          <button type="button" style="height: 32px; border: 0; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 12px; box-shadow: 3px 3px 0 #8F5A00">Allow</button>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid #2A1B19">
+          <div style="display: flex; flex-direction: column; gap: 3px">
+            <span style="font-weight: 600; font-size: 15px">Terminal <span style="margin-left: 6px; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: 0.1em; color: #A09189; border: 1px solid #2A1B19; padding: 1px 5px">OPTIONAL</span></span>
+            <span style="font-size: 13px; color: #E6D9BE">So "Open a new session" can open one for you, in the right folder.</span>
+          </div>
+          <button type="button" style="height: 32px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px">Allow</button>
+        </div>
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid #2A1B19">
+          <label for="loginToggle" style="display: flex; flex-direction: column; gap: 3px; cursor: pointer">
+            <span style="font-weight: 600; font-size: 15px">Open at login</span>
+            <span style="font-size: 13px; color: #E6D9BE">So I'm around when you are.</span>
+          </label>
+          <div style="display: flex; justify-content: flex-end">
+            <button id="loginToggle" type="button" aria-pressed="true" aria-label="Open at login" style="width: 44px; height: 24px; padding: 3px; border: 0; background: #F2A60C; display: flex; justify-content: flex-end">
+              <span style="width: 18px; height: 18px; background: #160D0B; display: block"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin: 0; font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; line-height: 1.6; letter-spacing: 0.04em; color: #A09189">~/.ssh, ~/.claude and ~/.codex need no permission. I read them. I never write to ~/.ssh.</p>
+
+      <div style="display: flex; gap: 10px; margin-top: auto">
+        <a href="look-around.dc.html" style="height: 40px; padding: 0 20px; display: inline-flex; align-items: center; text-decoration: none; background: #F2A60C; color: #160D0B; font-family: 'Archivo', sans-serif; font-stretch: 125%; font-weight: 800; font-size: 14px; box-shadow: 3px 3px 0 #8F5A00">Continue</a>
+        <button type="button" style="height: 40px; padding: 0 18px; border: 1px solid #A09189; background: transparent; color: #F3E9D6; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px">Skip the optional one</button>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
