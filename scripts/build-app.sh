@@ -48,6 +48,7 @@ codesign --force --sign - "$APP" >/dev/null
 
 # Installer: a disk image with the drag-to-Applications window. Needs dmgbuild (pip install dmgbuild).
 DMGBUILD="${DMGBUILD:-$(command -v dmgbuild || true)}"
+[ -z "$DMGBUILD" ] && [ -x "$HOME/Library/Caches/Binder/venv/bin/dmgbuild" ] && DMGBUILD="$HOME/Library/Caches/Binder/venv/bin/dmgbuild"
 if [ -n "$DMGBUILD" ]; then
   "$RENDER" dmg-background build/dmg-background.png
   rm -f build/Binder.dmg

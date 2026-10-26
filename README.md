@@ -1,64 +1,78 @@
-# Binder
+<h1 align="center">
+  <img src="docs/icon.png" width="104" alt="Binder icon: a glass dome with an amber brain inside, on black CRT glass"><br>
+  Binder
+</h1>
+
+<p align="center">A memory for your AI agents. Remembers you, your machines, your hosting and your SSH keys, so a fresh Claude Code session doesn't ask where the site is hosted.</p>
+
+<p align="center">
+  <a href="https://github.com/Kungie/binder/releases/latest"><img src="https://img.shields.io/github/v/release/Kungie/binder?label=release&color=f2a60c&labelColor=2a1b19&style=flat-square" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-f3e9d6?logo=apple&logoColor=f3e9d6&labelColor=2a1b19&style=flat-square&color=050303" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f2a60c?labelColor=2a1b19&style=flat-square" alt="Licence: AGPL-3.0"></a>
+</p>
+
+<p align="center"><img src="docs/readme.png" width="400" alt="Binder in a Mac menu bar: a dome icon with 4 next to it, and Binder's panel hanging under it. This session in dawn is at 71% of its context, with Hand off now and Not yet. Below, four things it caught: the dawn site deploys to Cloudflare Pages, hetzner-1 opens with id_ed25519_hetzner, release notes live in docs/releases, and a one-off about Tailwind, each with Keep, Edit and Drop."></p>
+
+<p align="center"><a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKungie%2Fbinder%2Fbadges%2Fdownloads.json" alt="Download for Mac (total downloads)"></a></p>
+
+---
 
 AG~~I~~M. Artificial General ~~Intelligence~~ Memory.
 
-Binder is a small macOS app and CLI that remembers you, your machines, your hosting and your SSH keys. A fresh AI session starts out knowing your setup and doesn't ask where the site is hosted. When a session gets long, Binder hands it over to a new one without losing the thread.
+Long AI sessions get worse the longer they run. Fresh ones don't know the topic. Binder takes that trade-off away: it keeps what your agents keep asking for in plain Markdown, and hands it to every new session.
 
-It works with Claude Code today. Codex support comes later.
+## What it does
+
+**Looks around first.** Binder reads what's already on your Mac:
+- `~/.ssh/config` and the names of your keys
+- the git and `gh` identity
+- the hosting CLIs you're signed in to (Vercel, Netlify, Fly, Cloudflare, Hetzner, Supabase)
+- your projects' deploy files and domains
+- your homelab, if you let it knock on the local network
+
+It writes all of that down, so agents stop guessing.
+
+**Catches what sessions decide.** When a Claude Code session ends, Binder notes what the agent actually did. For example, `wrangler pages deploy` becomes "the site deploys to Cloudflare Pages". It shows each catch in the menu bar for you to keep or drop. Keep sends it into Binder's brain, Drop shreds it. If you say yes, it also reads the session with your own Claude plan to catch decisions that were only said out loud.
+
+**Briefs every new session.** At session start Claude Code gets a short card: who you are, how you like to work, this project, its servers and keys, and where the last session stopped. The main window shows exactly what the agent sees.
+
+**Hands off long sessions.** When a session is getting long, Binder says so. One click writes a handoff card and opens a fresh session in the same folder, which starts with the card.
+
+<p align="center"><img src="docs/first-run.png" width="660" alt="Binder's first run, Let me look around first: rows for This Mac, SSH, GitHub, hosting, domains, projects and agents marked FOUND, and a homelab question with Mine and Not mine."></p>
 
 ## Install
 
-Download `Binder.dmg` (or `Binder.zip`) from Releases and drag Binder into Applications. It isn't notarized, so the first time you open it, go to System Settings › Privacy & Security and click **Open Anyway**.
+Needs macOS 14+ and [Claude Code](https://docs.claude.com/en/docs/claude-code/setup).
 
-Setup takes about two minutes:
+Download `Binder.dmg` and drag Binder into Applications. It isn't notarized, so the first time you open it, go to System Settings › Privacy & Security and click **Open Anyway**. Setup takes about two minutes.
 
-1. Binder asks for a few permissions, each with a one-line reason.
-2. It looks around this Mac.
-3. It asks only what it can't guess about you.
-4. It writes your binder.
-5. It plugs into Claude Code.
+To build it yourself: `git clone https://github.com/Kungie/binder.git && cd binder && make install`
 
-## What it reads, and what it never touches
+## The CLI
 
-Binder reads:
-- `~/.ssh/config` and the names of your `*.pub` keys
-- the git and `gh` identity
-- the hosting CLIs you're signed in to: Vercel, Netlify, Fly, Cloudflare, Hetzner and Supabase
-- the deploy files and domains in your projects
+The app ships the `binder` CLI at `Binder.app/Contents/Helpers/binder`. Claude Code's hooks call it:
 
-If you allow it, it also checks your local network for a homelab.
+| Command | Called by | What it does |
+|---|---|---|
+| `binder card` | SessionStart | gives the agent its context card |
+| `binder capture` | Stop | catches what the session did |
 
-It writes Markdown into `~/Binder` (or a folder inside your Obsidian vault). It never writes to `~/.ssh` and never opens a private key. It stores pointers to secrets, never the secrets themselves. Nothing leaves your Mac: there's no account and no telemetry.
+You can also run these yourself:
 
-Reading your sessions with your own Claude plan, to catch decisions you only said out loud, is off until you say yes.
+| Command | What it does |
+|---|---|
+| `binder observe` | looks around again |
+| `binder handoff` | writes a handoff card |
+| `binder install` / `binder uninstall` | adds or removes the hooks |
+| `binder doctor` | checks that everything is wired up |
 
-## The pieces
+## Good to know
 
-- **Menu bar.** Approve what a session caught. Keep sends it into Binder's brain, Drop shreds it. You'll also see a nudge when a session is getting long, with "Hand off now".
-- **Main window.** Every note, what agents see for each project, the last handoff, and the settings.
-- **`binder` CLI.** Lives in `Binder.app/Contents/Helpers/binder`. Claude Code's hooks call it:
-
-  | Command | Called by | What it does |
-  |---|---|---|
-  | `binder card` | the SessionStart hook | gives the agent its context card |
-  | `binder capture` | the Stop hook | catches what the session did |
-
-  You can also run these yourself:
-  - `binder observe` looks around and updates your notes
-  - `binder handoff` writes a handoff card for a fresh session
-  - `binder install` / `binder uninstall` add or remove the hooks
-  - `binder doctor` checks that everything is wired up
-
-## Build from source
-
-macOS 14+, Swift 6 (the Command Line Tools are enough).
-
-```sh
-make test       # all tests
-make app        # build/Binder.app and build/Binder.zip (and build/Binder.dmg with: pip install dmgbuild)
-make snapshots  # renders every screen to docs/snapshots
-```
+- Everything stays on your Mac. There's no account, no cloud and no telemetry.
+- Binder never writes to `~/.ssh` and never opens a private key. It stores pointers to secrets ("the token is in 1Password"), never the secrets themselves, and anything that looks like a token is filtered out before it's saved.
+- Your binder is a plain Markdown folder (`~/Binder` by default) that you can open in Obsidian or any editor. Binder only rewrites the lines between its observed markers; everything else is yours.
+- Binder is an independent project, not affiliated with Anthropic. Claude is a trademark of Anthropic, PBC.
 
 ## Licence
 
-AGPL-3.0.
+[AGPL-3.0](LICENSE). Fonts under the SIL Open Font License, see `Sources/BinderUI/Resources/Fonts`.

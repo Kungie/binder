@@ -53,6 +53,7 @@ public enum Snapshot {
             ("onboarding-\(step.rawValue)-\(step.railLabel.lowercased().replacingOccurrences(of: " ", with: "-"))",
              AnyView(OnboardingView(model: demoOnboarding(step))), CGSize(width: 880, height: 720))
         } + [
+            ("readme", AnyView(ReadmeScene()), CGSize(width: 400, height: 860)),
             ("library", AnyView(demoLibrary(.projects)), CGSize(width: 1240, height: 820)),
             ("library-settings", AnyView(demoLibrary(.settings)), CGSize(width: 1240, height: 820))
         ]
@@ -83,6 +84,39 @@ func demoLibrary(_ kind: SectionKind) -> some View {
     let library = LibraryModel(vault: vault, home: FileManager.default.temporaryDirectory)
     library.selectedKind = kind
     return LibraryView(model: library, app: app)
+}
+
+/// The README's picture: a dark menu bar with Binder's item highlighted and its panel hanging under it.
+struct ReadmeScene: View {
+    var body: some View {
+        let model = DemoVault.model(.review)
+        return VStack(alignment: .trailing, spacing: 0) {
+            HStack(spacing: 16) {
+                Spacer()
+                Text("Mon 09:41").font(.system(size: 13, weight: .medium)).foregroundColor(.white.opacity(0.85))
+                HStack(spacing: 3) {
+                    Image(nsImage: MenuBarIcon.image(state: .review(4))).renderingMode(.template).foregroundColor(.white)
+                    Text("4").font(Fonts.vt(17)).foregroundColor(.white)
+                }
+                .padding(.horizontal, 7).frame(height: 22)
+                .background(Color.white.opacity(0.18))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .background(Color(white: 0.12))
+            PanelContainer(model: model)
+                .padding(.trailing, 14)
+                .padding(.top, 6)
+                .shadow(color: .black.opacity(0.6), radius: 24, y: 12)
+            Spacer(minLength: 0)
+        }
+        .frame(width: 400, height: 860, alignment: .top)
+        .background(
+            LinearGradient(colors: [Color(hex: 0x1B1210), Phosphor.black], startPoint: .top, endPoint: .bottom)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
 }
 
 /// Every mood side by side, for review.
