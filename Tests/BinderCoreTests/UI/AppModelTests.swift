@@ -139,4 +139,15 @@ func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
         model.refresh()
         #expect(model.handoffSuggested)
     }
+
+    @Test func relocateFollowsMovedVault() throws {
+        let model = AppModel(vault: vault, home: home)
+        model.refresh()
+        let moved = Vault(root: makeTempDir("obsidian").appendingPathComponent("Binder"))
+        try moved.ensureLayout()
+        try ProposalStore(vault: moved).add(proposal("Seen in the new place."))
+        model.relocate(to: moved)
+        #expect(model.vault.root == moved.root)
+        #expect(model.proposals.map(\.text) == ["Seen in the new place."])
+    }
 }

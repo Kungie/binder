@@ -109,7 +109,10 @@ struct SettingsView: View {
 
     func move(_ prompt: String) {
         guard let url = choose(prompt) else { return }
-        do { try model.moveVault(into: url) } catch { message.value = "Couldn't move the binder: \(error.localizedDescription)" }
+        do {
+            try model.moveVault(into: url)
+            actions.vaultMoved(model.vault)
+        } catch { message.value = "Couldn't move the binder: \(error.localizedDescription)" }
     }
 
     func addRoot() {

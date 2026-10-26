@@ -27,7 +27,7 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var state: BinderState
     @Published public var phases: [String: CardPhase] = [:]
 
-    public let vault: Vault
+    @Published public private(set) var vault: Vault
     public let home: URL
     let now: () -> Date
     private var watchers: [DirectoryWatcher] = []
@@ -138,6 +138,16 @@ public final class AppModel: ObservableObject {
                 MainActor.assumeIsolated { self?.refresh() }
             }
         }
+    }
+
+    /// The binder moved (Settings, or into an Obsidian vault): read and watch the new place.
+    public func relocate(to newVault: Vault) {
+        let watching = !watchers.isEmpty
+        stopWatching()
+        vault = newVault
+        phases = [:]
+        refresh()
+        if watching { startWatching() }
     }
 
     public func stopWatching() {

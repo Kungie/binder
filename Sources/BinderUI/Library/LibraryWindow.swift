@@ -8,13 +8,16 @@ public struct LibraryActions {
     public var runDoctor: () -> [DoctorLine] = { [] }
     public var installHooks: (Bool) -> Bool = { _ in false }
     public var hooksInstalled: () -> Bool = { false }
+    public var vaultMoved: (Vault) -> Void = { _ in }
 
     public init(openSession: @escaping (String) -> Void = { _ in }, runDoctor: @escaping () -> [DoctorLine] = { [] },
-                installHooks: @escaping (Bool) -> Bool = { _ in false }, hooksInstalled: @escaping () -> Bool = { false }) {
+                installHooks: @escaping (Bool) -> Bool = { _ in false }, hooksInstalled: @escaping () -> Bool = { false },
+                vaultMoved: @escaping (Vault) -> Void = { _ in }) {
         self.openSession = openSession
         self.runDoctor = runDoctor
         self.installHooks = installHooks
         self.hooksInstalled = hooksInstalled
+        self.vaultMoved = vaultMoved
     }
 }
 

@@ -85,9 +85,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let installer = installer, vault = vault
             library = LibraryWindowController(model: LibraryModel(vault: vault, home: home), app: app, actions: LibraryActions(
                 openSession: { SessionLauncher.launch(in: URL(fileURLWithPath: $0)) },
-                runDoctor: { Doctor.report(vault: vault, installer: installer, runner: SystemRunner()) },
+                runDoctor: { [weak self] in Doctor.report(vault: self?.vault ?? vault, installer: installer, runner: SystemRunner()) },
                 installHooks: { add in (try? add ? installer.install() : installer.uninstall()) != nil },
-                hooksInstalled: { installer.isInstalled }
+                hooksInstalled: { installer.isInstalled },
+                vaultMoved: { [weak self] moved in self?.app?.relocate(to: moved) }
             ))
         }
         NSApp.activate(ignoringOtherApps: true)
