@@ -290,6 +290,7 @@ public struct BinderField: View {
             Group {
                 if isSnapshot {
                     Text(text.isEmpty ? placeholder : text)
+                        .lineLimit(1)
                         .foregroundColor(text.isEmpty ? Phosphor.dim : Phosphor.cream)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {

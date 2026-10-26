@@ -1,4 +1,5 @@
 import AppKit
+import BinderCore
 import SwiftUI
 
 /// `BinderApp snapshot <dir>`: renders screens with demo data to PNGs, for checking them against the design.
@@ -48,8 +49,20 @@ public enum Snapshot {
         ] + DemoVault.Kind.allCases.map { kind in
             ("panel-\(kind.rawValue)", AnyView(PanelContainer(model: DemoVault.model(kind)).frame(maxHeight: .infinity, alignment: .top).background(Phosphor.black)),
              CGSize(width: PanelView.width, height: 820))
+        } + OnboardingStep.allCases.map { step in
+            ("onboarding-\(step.rawValue)-\(step.railLabel.lowercased().replacingOccurrences(of: " ", with: "-"))",
+             AnyView(OnboardingView(model: demoOnboarding(step))), CGSize(width: 880, height: 720))
         }
     }
+}
+
+@MainActor
+func demoOnboarding(_ step: OnboardingStep) -> OnboardingModel {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent("binder-demo-home-\(UUID().uuidString)")
+    let model = OnboardingModel(home: home, runner: SystemRunner(), permissions: SystemPermissions(),
+                                settingsURL: home.appendingPathComponent(".claude/settings.json"), binderPath: "/Applications/Binder.app/Contents/Helpers/binder")
+    model.loadDemo(step: step)
+    return model
 }
 
 /// Every mood side by side, for review.

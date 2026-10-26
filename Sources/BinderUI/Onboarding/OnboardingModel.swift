@@ -279,6 +279,56 @@ public final class OnboardingModel: ObservableObject {
         return nil
     }
 
+    /// Believable content for snapshots, without running any observer.
+    func loadDemo(step: OnboardingStep) {
+        self.step = step
+        rows = [
+            LookRow(label: "THIS MAC", detail: "macOS 27.0.1 · zsh · Homebrew, 214 packages", status: .found),
+            LookRow(label: "SSH", detail: "3 hosts · 4 keys · 1 key opens nothing", status: .found),
+            LookRow(label: "GITHUB", detail: "Signed in as Kungie", status: .found),
+            LookRow(label: "HOSTING", detail: "Cloudflare and Vercel, both signed in", status: .found),
+            LookRow(label: "DOMAINS", detail: "2 domains in project configs", status: .found),
+            LookRow(label: "PROJECTS", detail: "6 repos found", status: .found),
+            LookRow(label: "AGENTS", detail: "Claude Code found · Codex not installed", status: .half),
+            LookRow(label: "HOMELAB", detail: "Something answers SSH on 192.168.1.20. Yours?", status: .ask)
+        ]
+        homelabQuestion = "Something answers SSH on 192.168.1.20. Yours?"
+        filesRead = 41
+        lookingDone = true
+        profile = Profile(name: "Eren", role: "One-person studio. Small instruments and Mac apps.", timeZone: "Europe/Berlin",
+                          language: "Turkish in chat, English in files", workingStyle: ["Short answers", "Ask before pushing", "Recommend, don't list"],
+                          taste: ["Swift", "SwiftUI", "HTML", "Python"], avoid: ["Electron"], nowAndNext: "Shipping Binder v1. Keeping Dawn healthy.")
+        writtenFiles = ["me.md", "machines/this-mac.md", "access/ssh.md", "access/accounts.md", "servers/hetzner-1.md",
+                        "servers/homelab.md", "projects/dawn.md", "projects/site.md", "projects/binder.md"]
+        permissionStatus[.folders] = .granted
+        demoPreview = """
+        ---
+        verified: 2026-10-26 09:14
+        source: observed, you
+        ---
+        # dawn
+        <!-- binder:observed start -->
+        - repo: github.com/kungie/dawn
+        - stack: Swift, SwiftUI
+        - release: GitHub Releases, zip + dmg
+        - site: Cloudflare Pages, see [[site]]
+        <!-- binder:observed end -->
+        ## Decisions
+        - 10-17 licence is AGPL-3.0
+        """
+    }
+
+    var demoPreview: String?
+
+    /// The raw text of the first project note, for the Vault step's preview.
+    public var previewText: String {
+        if let demoPreview { return demoPreview }
+        guard let first = writtenFiles.first(where: { $0.hasPrefix("projects/") }) else { return "" }
+        return (try? String(contentsOf: vaultRoot.appendingPathComponent(first), encoding: .utf8)) ?? ""
+    }
+
+    public var previewName: String { writtenFiles.first(where: { $0.hasPrefix("projects/") }) ?? "" }
+
     // MARK: Progress
 
     struct Progress: Codable {
