@@ -1,0 +1,13 @@
+{
+  "model": "opus",
+  "cleanupPeriodDays": 365,
+  "permissions": { "allow": ["Bash(git status)"] },
+  "hooks": {
+    "Notification": [
+      { "matcher": "", "hooks": [{ "type": "command", "command": "\"/Applications/Dawn.app/Contents/MacOS/Dawn\" hook" }] }
+    ],
+    "Stop": [
+      { "matcher": "", "hooks": [{ "type": "command", "command": "\"/Applications/Dawn.app/Contents/MacOS/Dawn\" hook stop" }] }
+    ]
+  }
+}
