@@ -45,7 +45,10 @@ public enum Snapshot {
         [
             ("mascot-moods", AnyView(MoodSheet()), CGSize(width: 1240, height: 260)),
             ("components", AnyView(ComponentSheet()), CGSize(width: 720, height: 300))
-        ]
+        ] + DemoVault.Kind.allCases.map { kind in
+            ("panel-\(kind.rawValue)", AnyView(PanelContainer(model: DemoVault.model(kind)).frame(maxHeight: .infinity, alignment: .top).background(Phosphor.black)),
+             CGSize(width: PanelView.width, height: 820))
+        }
     }
 }
 

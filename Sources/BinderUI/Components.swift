@@ -4,10 +4,12 @@ import SwiftUI
 public struct PrimaryButtonStyle: ButtonStyle {
     var size: CGFloat
     var height: CGFloat
+    var fullWidth: Bool
 
-    public init(size: CGFloat = 13, height: CGFloat = 36) {
+    public init(size: CGFloat = 13, height: CGFloat = 36, fullWidth: Bool = false) {
         self.size = size
         self.height = height
+        self.fullWidth = fullWidth
     }
 
     public func makeBody(configuration: Configuration) -> some View {
@@ -16,7 +18,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
             .font(Fonts.archivo(size, weight: 800))
             .foregroundColor(Phosphor.ink)
             .padding(.horizontal, 16)
-            .frame(minHeight: height)
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
             .background(Phosphor.amber)
             .background(Phosphor.amberDeep.offset(x: pressed ? 0 : 3, y: pressed ? 0 : 3))
             .offset(x: pressed ? 2 : 0, y: pressed ? 2 : 0)
@@ -239,4 +241,12 @@ public struct TitleStrip: View {
         .frame(height: 40)
         .overlay(alignment: .bottom) { Rectangle().fill(Phosphor.line).frame(height: 1) }
     }
+}
+
+/// View-local state without `@State`: with only the Command Line Tools, the macOS 27 SDK resolves `@State`
+/// to a SwiftUI macro whose plugin isn't installed. `@StateObject private var x = Local(false)` works everywhere.
+public final class Local<Value>: ObservableObject {
+    @Published public var value: Value
+
+    public init(_ value: Value) { self.value = value }
 }

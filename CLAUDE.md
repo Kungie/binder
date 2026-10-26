@@ -101,6 +101,7 @@ Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - `make test` passes `-load-plugin-library` for Swift Testing's macros. With only the Command Line Tools, the plugin server fails to load them and `swift test` alone breaks.
 - `~/Desktop` syncs with iCloud, which stamps Finder attributes on build output and breaks codesign. So `.build` is a symlink to `~/Library/Caches/Binder/build`, which `make` creates.
 - Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`). XCTest isn't available without Xcode.
+- **Never write `@State` in SwiftUI views.** With only the Command Line Tools, the macOS 27 SDK resolves it to a macro whose plugin isn't installed, and the build fails. Use `@StateObject private var x = Local(value)` (`Local` is in `Components.swift`).
 - There are no third-party dependencies, the same as Dawn. The CLI parses its own arguments.
 - The app's executable target is `BinderApp`, renamed to `Binder` inside `Binder.app`. The CLI product is `binder`. The two names would collide on the case-insensitive file system if both were `binder`.
 - Implementation plans live in `docs/plans/`.
