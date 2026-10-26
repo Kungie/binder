@@ -377,3 +377,19 @@ public struct StepHeading: View {
         }
     }
 }
+
+/// A vertical ScrollView, or a plain stack while rendering snapshots (ImageRenderer can't draw NSScrollView).
+public struct Scroll<Content: View>: View {
+    var content: Content
+    @Environment(\.isSnapshot) private var isSnapshot
+
+    public init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    public var body: some View {
+        if isSnapshot {
+            VStack(alignment: .leading, spacing: 0) { content }.frame(maxHeight: .infinity, alignment: .top).clipped()
+        } else {
+            ScrollView { content }
+        }
+    }
+}

@@ -52,7 +52,10 @@ public enum Snapshot {
         } + OnboardingStep.allCases.map { step in
             ("onboarding-\(step.rawValue)-\(step.railLabel.lowercased().replacingOccurrences(of: " ", with: "-"))",
              AnyView(OnboardingView(model: demoOnboarding(step))), CGSize(width: 880, height: 720))
-        }
+        } + [
+            ("library", AnyView(demoLibrary(.projects)), CGSize(width: 1240, height: 820)),
+            ("library-settings", AnyView(demoLibrary(.settings)), CGSize(width: 1240, height: 820))
+        ]
     }
 }
 
@@ -63,6 +66,23 @@ func demoOnboarding(_ step: OnboardingStep) -> OnboardingModel {
                                 settingsURL: home.appendingPathComponent(".claude/settings.json"), binderPath: "/Applications/Binder.app/Contents/Helpers/binder")
     model.loadDemo(step: step)
     return model
+}
+
+@MainActor
+func demoLibrary(_ kind: SectionKind) -> some View {
+    let app = DemoVault.model(.review)
+    let vault = app.vault
+    _ = try? Handoff.write(HandoffCard(done: ["Panel redesign merged"], left: ["Notarization"], dontTouch: ["Resources/Fonts"],
+                                       next: "Release notes for 0.3."), project: "dawn", vault: vault, now: Date())
+    try? NoteIO.update(vault.url("projects/dawn.md"), title: "dawn") {
+        $0.replacingObserved(["- repo: github.com/kungie/dawn · main · clean", "- stack: Swift package, SwiftUI menu bar app",
+                              "- release: GitHub Releases, zip and dmg", "- site: Cloudflare Pages, see [[site]]", "- builds on: [[this-mac]]"])
+            .setting("verified", ISO8601DateFormatter().string(from: Date())).setting("source", "observed, you")
+    }
+    try? NoteIO.write(Note.new(title: "Me").replacingObserved([]), to: vault.url("me.md"))
+    let library = LibraryModel(vault: vault, home: FileManager.default.temporaryDirectory)
+    library.selectedKind = kind
+    return LibraryView(model: library, app: app)
 }
 
 /// Every mood side by side, for review.

@@ -62,7 +62,7 @@ public enum CardBuilder {
     }
 
     /// The user's own lines: not headings, not the observed block, not the Decisions section.
-    static func freeLines(_ note: Note) -> [String] {
+    public static func freeLines(_ note: Note) -> [String] {
         var result: [String] = []
         var inObserved = false, inDecisions = false
         for line in note.body.components(separatedBy: "\n") {
@@ -106,7 +106,7 @@ public enum CardBuilder {
         return lines
     }
 
-    static func links(in text: String) -> [String] {
+    public static func links(in text: String) -> [String] {
         var seen: [String] = []
         for match in text.matches(of: #/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/#) where !seen.contains(String(match.1)) {
             seen.append(String(match.1))

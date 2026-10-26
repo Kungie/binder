@@ -7,10 +7,11 @@ public struct BinderState: Codable, Equatable, Sendable {
     public var projectRoots = ["~/Desktop", "~/Documents", "~/Developer", "~/Projects", "~/code"]
     public var lastObserve: Date?
     public var onboarded = false
+    public var observeIntervalHours = 6
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case summarizerConsent, handoffThreshold, projectRoots, lastObserve, onboarded }
+    enum CodingKeys: String, CodingKey { case summarizerConsent, handoffThreshold, projectRoots, lastObserve, onboarded, observeIntervalHours }
 
     /// Every key is optional, so a file written by an older version keeps the settings it has.
     public init(from decoder: Decoder) throws {
@@ -21,6 +22,7 @@ public struct BinderState: Codable, Equatable, Sendable {
         projectRoots = try c.decodeIfPresent([String].self, forKey: .projectRoots) ?? d.projectRoots
         lastObserve = try c.decodeIfPresent(Date.self, forKey: .lastObserve)
         onboarded = try c.decodeIfPresent(Bool.self, forKey: .onboarded) ?? d.onboarded
+        observeIntervalHours = try c.decodeIfPresent(Int.self, forKey: .observeIntervalHours) ?? d.observeIntervalHours
     }
 
     public var clampedThreshold: Double { min(max(handoffThreshold, 0.50), 0.90) }

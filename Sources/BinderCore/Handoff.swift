@@ -80,6 +80,12 @@ public enum Handoff {
         pendingFiles(project: project, vault: vault).last.flatMap { NoteIO.read($0) }.map(parse)
     }
 
+    /// The newest card for `project`, picked up or not.
+    public static func latest(project: String, vault: Vault) -> (card: HandoffCard, url: URL)? {
+        guard let url = files(project: project, vault: vault).last, let note = NoteIO.read(url) else { return nil }
+        return (parse(note), url)
+    }
+
     public static func markConsumed(project: String, vault: Vault) throws {
         for url in pendingFiles(project: project, vault: vault) {
             try NoteIO.update(url, title: "Handoff") { $0.setting("consumed", "true") }
