@@ -54,7 +54,7 @@ public struct DMGBackground: View {
             }
             .position(x: 320, y: 200)
             MascotHead(size: 150).position(x: 320, y: 420 - 34)
-            Text("v1.0.3").font(Fonts.vt(18)).foregroundColor(Phosphor.dim).position(x: 610, y: 398)
+            Text("v1.0.4").font(Fonts.vt(18)).foregroundColor(Phosphor.dim).position(x: 610, y: 398)
         }
         .frame(width: 640, height: 420)
         .clipped()
