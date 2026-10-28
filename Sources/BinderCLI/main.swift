@@ -11,6 +11,7 @@ Usage:
   binder capture          Catch what a session decided (called by the Stop hook)
   binder handoff [--cwd <dir>]
                           Write a handoff card for a fresh session
+  binder tidy [--all]     Move stale and repeated lines to Superseded
   binder install          Add Binder's hooks to Claude Code
   binder uninstall        Take them out again
   binder doctor           Check that everything is wired up
@@ -46,6 +47,8 @@ case "observe":
 case "handoff":
     let cwd = args.firstIndex(of: "--cwd").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
     exit(Commands.handoff(paths, cwd: cwd ?? FileManager.default.currentDirectoryPath))
+case "tidy":
+    exit(Commands.tidy(paths, everything: args.contains("--all")))
 case "install":
     exit(Commands.install(paths, remove: false))
 case "uninstall":

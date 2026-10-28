@@ -60,8 +60,8 @@ private final class SpySummarizer: Summarizer, @unchecked Sendable {
     }
 
     @Test func cliSummarizerParsesModelJSON() throws {
-        let reply = "Here you go:\n[{\"kind\":\"decision\",\"text\":\"Release notes live in docs/releases.\",\"confidence\":\"high\"},{\"kind\":\"preference\",\"text\":\"Short answers.\"}]\n"
-        let runner = FakeRunner(results: ["claude -p --model haiku --output-format text": ok(reply)])
+        let reply = "Here you go:\n{\"new\":[{\"kind\":\"decision\",\"scope\":\"project\",\"text\":\"Release notes live in docs/releases.\",\"confidence\":\"high\"},{\"kind\":\"preference\",\"scope\":\"me\",\"text\":\"Short answers.\"}],\"outdated\":[]}\n"
+        let runner = SpyRunner(reply: reply)
         let summarizer = ClaudeCLISummarizer(runner: runner, session: "sess-1")
         let proposals = summarizer.proposals(from: [.user("Put release notes in docs/releases please")], project: "dawn")
         #expect(proposals.map(\.text) == ["Release notes live in docs/releases.", "Short answers."])

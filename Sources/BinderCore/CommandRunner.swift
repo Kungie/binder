@@ -24,9 +24,12 @@ public protocol CommandRunner: Sendable {
 public struct SystemRunner: CommandRunner {
     /// Added to the child's environment, e.g. `BINDER_NESTED=1` so a nested `claude -p` doesn't re-enter Binder's hooks.
     let extraEnvironment: [String: String]
+    /// Where the child runs; nil keeps this process's working directory.
+    let directory: URL?
 
-    public init(extraEnvironment: [String: String] = [:]) {
+    public init(extraEnvironment: [String: String] = [:], directory: URL? = nil) {
         self.extraEnvironment = extraEnvironment
+        self.directory = directory
     }
 
     static let extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
@@ -53,6 +56,10 @@ public struct SystemRunner: CommandRunner {
         env["PATH"] = Self.searchPath.joined(separator: ":")
         env.merge(extraEnvironment) { _, new in new }
         process.environment = env
+        if let directory {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            process.currentDirectoryURL = directory
+        }
 
         let out = Pipe(), err = Pipe()
         process.standardOutput = out

@@ -13,4 +13,22 @@ public enum Memory {
         try NoteIO.update(vault.url(target), title: title) { $0.appendingDecision("\(f.string(from: now)) · \(clean) · written by you") }
         return true
     }
+
+    /// Moves decisions a later one made untrue into the note's `## Superseded` section.
+    public static func supersede(_ lines: [String], in target: String, vault: Vault, now: Date = .now) throws {
+        let url = vault.url(target)
+        guard !lines.isEmpty, let note = NoteIO.read(url) else { return }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        let updated = note.superseding(lines, on: f.string(from: now))
+        if updated != note { try NoteIO.write(updated, to: url) }
+    }
+
+    /// Puts a superseded line back.
+    public static func restore(_ supersededLine: String, in target: String, vault: Vault) throws {
+        let url = vault.url(target)
+        guard let note = NoteIO.read(url) else { return }
+        try NoteIO.write(note.restoring(supersededLine), to: url)
+    }
 }

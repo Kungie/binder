@@ -4,9 +4,17 @@ import Foundation
 /// and where the last session stopped. Plain text, at most `budget` characters, secrets redacted.
 public enum CardBuilder {
     public static let header = "BINDER CARD · VERIFIED, USE IT. If something you need is missing, ask once and say what you'd write down."
-    public static let budget = 2400
-    static let meLimit = 12
+    /// About a thousand tokens.
+    public static let budget = 3_600
+    static let meLimit = 14
     static let codeHosts = Set(SSHObserver.codeHosts)
+
+    /// The project for a session's folder: its git repo, or, outside git, a folder that has its own note.
+    public static func project(for folder: URL, vault: Vault) -> GitRepo? {
+        if let repo = GitRepo.locate(from: folder) { return repo }
+        let name = folder.lastPathComponent
+        return FileManager.default.fileExists(atPath: vault.url("projects/\(name).md").path) ? GitRepo(root: folder, remote: nil) : nil
+    }
 
     public static func build(vault: Vault, repo: GitRepo?) -> String {
         var me = meLines(vault)
@@ -19,7 +27,12 @@ public enum CardBuilder {
             let note = NoteIO.read(vault.url("projects/\(repo.name).md"))
             if let note {
                 projectLines = note.observedLines + freeLines(note)
-                decisions = note.decisions.reversed().map { "- \($0)" }
+                // Date and text only: where a line came from matters in the note, not to the agent.
+                decisions = note.decisions.reversed().map { line in
+                    let date = line.components(separatedBy: " · ").first ?? ""
+                    let text = decisionText(line)
+                    return text == line ? "- \(line)" : "- \(date) · \(text)"
+                }
             } else {
                 projectLines = ["- nothing in the binder yet"]
             }
@@ -61,7 +74,7 @@ public enum CardBuilder {
         return Array((note.observedLines + freeLines(note) + kept).prefix(meLimit))
     }
 
-    /// The user's own lines: not headings, not the observed block, not the Decisions section.
+    /// The user's own lines: not headings, not the observed block, not Decisions or Superseded.
     public static func freeLines(_ note: Note) -> [String] {
         var result: [String] = []
         var inObserved = false, inDecisions = false
@@ -69,7 +82,7 @@ public enum CardBuilder {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed == Note.observedStart { inObserved = true; continue }
             if trimmed == Note.observedEnd { inObserved = false; continue }
-            if trimmed.hasPrefix("#") { inDecisions = trimmed == Note.decisionsHeading; continue }
+            if trimmed.hasPrefix("#") { inDecisions = trimmed == Note.decisionsHeading || trimmed == Note.supersededHeading; continue }
             guard !inObserved, !inDecisions, !trimmed.isEmpty else { continue }
             result.append(trimmed)
         }
@@ -77,7 +90,7 @@ public enum CardBuilder {
     }
 
     /// `2026-10-17 · Licence is AGPL-3.0 · kept from the chat` → `Licence is AGPL-3.0`.
-    static func decisionText(_ decision: String) -> String {
+    public static func decisionText(_ decision: String) -> String {
         let parts = decision.components(separatedBy: " · ")
         return parts.count >= 3 ? parts[1..<(parts.count - 1)].joined(separator: " · ") : decision
     }

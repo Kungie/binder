@@ -21,11 +21,12 @@ let dawnRepo = GitRepo(root: URL(fileURLWithPath: "/Users/x/Desktop/dawn"), remo
     @Test func cardRespectsBudget() throws {
         let vault = try fixtureVault()
         try NoteIO.update(vault.url("projects/dawn.md"), title: "dawn") { note in
-            (1...40).reduce(note) { n, i in n.appendingDecision("2026-11-\(String(format: "%02d", min(i, 28))) · Decision number \(i) with enough words to take up some room · kept from the chat") }
+            (1...90).reduce(note) { n, i in n.appendingDecision("2026-11-\(String(format: "%02d", min(i, 28))) · Decision number \(i) with enough words to take up some room · kept from the chat") }
         }
         let card = CardBuilder.build(vault: vault, repo: dawnRepo)
         #expect(card.count <= CardBuilder.budget)
-        #expect(card.contains("Decision number 40 "))
+        #expect(card.contains("Decision number 90 "))
+        #expect(!card.contains("kept from the chat"))
         #expect(!card.contains("Decision number 1 "))
         #expect(card.hasPrefix(CardBuilder.header))
     }

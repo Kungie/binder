@@ -25,8 +25,9 @@ import Testing
 
     @Test func cliSummarizerParsesHandoffJSON() throws {
         let reply = #"Sure. {"done":["Panel redesign merged"],"left":["Notarization"],"dontTouch":["Resources/Fonts"],"next":"Release notes for 0.3."}"#
-        let runner = FakeRunner(results: ["claude -p --model haiku --output-format text": ok(reply)])
+        let runner = SpyRunner(reply: reply)
         let card = try #require(ClaudeCLISummarizer(runner: runner, session: "s").handoff(from: [.user("wrap up")]))
+        #expect(runner.calls.first?.args.contains("--no-session-persistence") == true)
         #expect(card == HandoffCard(done: ["Panel redesign merged"], left: ["Notarization"], dontTouch: ["Resources/Fonts"], next: "Release notes for 0.3."))
         #expect(ClaudeCLISummarizer(runner: FakeRunner(), session: "s").handoff(from: [.user("x")]) == nil)
     }

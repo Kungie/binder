@@ -16,6 +16,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     let notifier = HandoffNotifier()
     var sessionWatch: AnyCancellable?
     var updater: Updater?
+    var keeper: MemoryKeeper?
 
     public override init() { super.init() }
 
@@ -59,6 +60,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                               app: Bundle.main.bundleURL, relaunch: { Self.relaunch() })
         self.updater = updater
         updater.start()
+        keeper = MemoryKeeper(vault: { [weak self] in self?.app?.vault ?? model.vault }, helper: helperPath)
+        keeper?.start()
         status = StatusItemController(model: model, actions: PanelActions(
             handOff: { [weak self] in self?.handOff() },
             openSession: { [weak self] in
@@ -86,7 +89,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let vault = app.vault, consent = app.state.summarizerConsent
         app.handoff = .writing(session: session.session)
         Task.detached {
-            let url = HandoffAction.run(session: session, vault: vault, consent: consent, runner: SystemRunner(extraEnvironment: ["BINDER_NESTED": "1"]))
+            let url = HandoffAction.run(session: session, vault: vault, consent: consent, runner: ClaudeCLISummarizer.runner())
             let project = HandoffAction.project(for: session)
             let prompt = url == nil ? nil : Handoff.latest(project: project, vault: vault).map { Handoff.prompt($0.card, project: project) }
             await MainActor.run {

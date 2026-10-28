@@ -36,6 +36,7 @@ struct NoteView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if !detail.facts.isEmpty { observed }
                     if !detail.decisions.isEmpty { decisions }
+                    if !detail.superseded.isEmpty { superseded }
                     if !detail.freeText.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             SectionLabel("Your notes")
@@ -102,6 +103,22 @@ struct NoteView: View {
                 }
                 .padding(.vertical, 8)
                 .overlay(alignment: .top) { Rectangle().fill(Phosphor.line).frame(height: 1) }
+            }
+        }
+    }
+
+    /// Lines later ones made untrue: kept out of the card, shown dim here, one click to bring back.
+    var superseded: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Superseded · not on the card").padding(.bottom, 6)
+            ForEach(Array(detail.superseded.prefix(12).enumerated()), id: \.offset) { _, line in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(CardBuilder.decisionText(line.replacingOccurrences(of: #" · superseded \d{4}-\d{2}-\d{2}$"#, with: "", options: .regularExpression)))
+                        .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim).strikethrough(color: Phosphor.line)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Restore") { model.restore(line, in: detail.ref) }.buttonStyle(QuietButtonStyle())
+                }
+                .padding(.vertical, 4)
             }
         }
     }

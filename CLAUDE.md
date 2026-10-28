@@ -113,6 +113,14 @@ Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - Upload all three: `gh release create vX.Y.Z build/Binder.dmg build/Binder.zip build/Binder.zip.sig`. The in-app updater (`Update.swift`, `UpdateInstaller.swift`, `Updater.swift`) ignores a release without `Binder.zip.sig`, and installs only a zip whose signature matches the public key in `Update.publicKey`, whose bundle id is `io.github.kungie.binder` and whose version matches the tag.
 - An update replaces `Binder.app` only. The vault, `.binder/state.json`, the pointer in Application Support and the Claude Code hooks stay. New settings must decode with `decodeIfPresent` and a default, so older state files keep what they have.
 
+## How the summarizer runs (cost and freshness)
+
+- `claude -p` runs bare: `ClaudeCLISummarizer.arguments` gives it a short `--system-prompt`, `--tools ""`, `--strict-mcp-config`, `--setting-sources ""`, `--disable-slash-commands`, `--no-session-persistence`, from an empty scratch folder (`ClaudeCLISummarizer.runner()`). That's about 1k tokens of overhead per call instead of ~85k with Claude Code's full context. `--bare` is not usable: it needs an API key, and users sign in with their plan.
+- Batched: the Stop hook claims talk through `SummarizeQueue` only once 4,000 characters are waiting or 20 minutes passed; the app's `MemoryKeeper` sweeps sessions quiet for 10 minutes. Each byte is summarized once, in windows of 12,000 characters (the latest 3 per run).
+- Each call sees the newest 40 decisions of the project and of me.md and returns `{"new": [...], "outdated": ["P2", "M1"]}`. "me" is only for what's true of the person across projects. Outdated lines move to `## Superseded` (never deleted, restorable in the library, never on the card).
+- `Tidy` (every 6 hours in the app, or `binder tidy [--all]`) moves exact repeats always, and with consent lines newer ones made untrue, for notes changed since their last tidy.
+- The card budget is 3,600 characters, about 1k tokens.
+
 ## Privacy rules
 
 - Local only. No telemetry, no account, no cloud. The one network call of its own is the daily update check to GitHub's releases API (on by default, off in Settings › Updates), and it sends nothing but the request itself.

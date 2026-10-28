@@ -73,7 +73,7 @@ struct ConnectView: View {
 
     var consent: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text("Can I read your sessions with your Claude plan, to catch decisions you only said out loud? It costs a few thousand tokens when a session ends.")
+            Text("Can I read your sessions with your Claude plan, to catch decisions you only said out loud and keep old ones from going stale? I read in batches with Haiku: roughly the talk itself plus a thousand tokens each time.")
                 .font(Fonts.grotesk(13))
                 .foregroundColor(Phosphor.cream2)
                 .fixedSize(horizontal: false, vertical: true)

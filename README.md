@@ -32,6 +32,8 @@ Long AI sessions get worse the longer they run. Fresh ones don't know the topic.
 
 It writes all of that down, so agents stop guessing.
 
+**Keeps itself fresh.** When a later decision makes an older one untrue, the older one moves to the note's `## Superseded` section: still in the file, off the card, one click to restore. The card stays under about a thousand tokens.
+
 **Catches what sessions decide.** When a Claude Code session ends, Binder notes what the agent actually did. For example, `wrangler pages deploy` becomes "the site deploys to Cloudflare Pages". It shows each catch in the menu bar for you to keep or drop. Keep sends it into Binder's brain, Drop shreds it. If you say yes, it also reads the session with your own Claude plan to catch decisions that were only said out loud.
 
 **Briefs every new session.** At session start Claude Code gets a short card: who you are, how you like to work, this project, its servers and keys, and where the last session stopped. The main window shows exactly what the agent sees.
@@ -69,6 +71,7 @@ You can also run these yourself:
 | `binder handoff` | writes a handoff card |
 | `binder install` / `binder uninstall` | adds or removes the hooks |
 | `binder doctor` | checks that everything is wired up |
+| `binder tidy [--all]` | moves repeated and outdated lines to each note's Superseded section |
 
 ## Good to know
 

@@ -36,11 +36,17 @@ public struct TranscriptChunk: Sendable {
 /// Reads `~/.claude/projects/*/<session>.jsonl` from a byte offset onward.
 /// A half-written last line is left for the next read; lines that aren't JSON are skipped.
 public enum Transcript {
-    public static func read(_ url: URL, from offset: UInt64) throws -> TranscriptChunk {
+    /// `upTo` stops at that byte, so two readers can split a file without reading the same lines twice.
+    public static func read(_ url: URL, from offset: UInt64, upTo end: UInt64? = nil) throws -> TranscriptChunk {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         try handle.seek(toOffset: offset)
-        let data = try handle.readToEnd() ?? Data()
+        let data: Data
+        if let end {
+            data = end > offset ? try handle.read(upToCount: Int(end - offset)) ?? Data() : Data()
+        } else {
+            data = try handle.readToEnd() ?? Data()
+        }
         guard let lastNewline = data.lastIndex(of: UInt8(ascii: "\n")) else {
             return TranscriptChunk(entries: [], endOffset: offset, sessionID: nil, cwd: nil)
         }

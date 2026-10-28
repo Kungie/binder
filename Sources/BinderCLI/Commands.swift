@@ -32,7 +32,7 @@ enum Commands {
     /// SessionStart: print the context card for the folder the session started in.
     static func card(_ paths: Paths, stdin: Data) {
         guard paths.vaultExists, let input = HookIO.readInput(stdin) else { return }
-        let repo = GitRepo.locate(from: URL(fileURLWithPath: input.cwd))
+        let repo = CardBuilder.project(for: URL(fileURLWithPath: input.cwd), vault: paths.vault)
         let card: String
         if let repo {
             let cache = CardCache(vault: paths.vault)
@@ -51,35 +51,78 @@ enum Commands {
         FileHandle.standardOutput.write(HookIO.sessionStartOutput(card))
     }
 
-    /// Stop: catch commands right away; if the user agreed, hand the slow summarizer to a detached process.
+    /// Stop: catch commands right away. If the user agreed, and enough talk has piled up (or long enough has
+    /// passed), hand that stretch to the summarizer in a detached process.
     static func capture(_ paths: Paths, stdin: Data) {
         guard paths.vaultExists, let input = HookIO.readInput(stdin) else { return }
         do {
             let result = try Capture.run(input: input, vault: paths.vault, runner: SystemRunner(), summarizer: nil)
-            if BinderState.load(paths.vault).summarizerConsent, let transcript = input.transcriptPath, result.endOffset > result.startOffset {
-                HookIO.spawnDetached(paths.binder, ["summarize", input.sessionID, transcript, String(result.startOffset), input.cwd])
+            if BinderState.load(paths.vault).summarizerConsent, let transcript = input.transcriptPath,
+               let range = SummarizeQueue(vault: paths.vault).claim(session: input.sessionID, transcript: URL(fileURLWithPath: transcript),
+                                                                    startingAt: result.startOffset, now: Date()) {
+                HookIO.spawnDetached(paths.binder, ["summarize", input.sessionID, transcript,
+                                                    String(range.lowerBound), String(range.upperBound), input.cwd])
             }
         } catch {
             paths.vault.log("capture failed: \(error)")
         }
     }
 
-    /// The detached half of capture: read the same part of the transcript and ask the summarizer.
+    /// The detached half of capture: read the claimed stretch, window by window, against what the binder
+    /// already says. New things go to the inbox; lines the talk made untrue move to Superseded.
+    /// Arguments: session, transcript, start, end, cwd.
     static func summarize(_ paths: Paths, _ args: [String]) {
-        guard args.count == 4, let offset = UInt64(args[2]), BinderState.load(paths.vault).summarizerConsent else { return }
-        let (session, transcript, cwd) = (args[0], args[1], args[3])
+        guard args.count == 5, let start = UInt64(args[2]), let end = UInt64(args[3]),
+              BinderState.load(paths.vault).summarizerConsent else { return }
+        let (session, transcript, cwd) = (args[0], args[1], args[4])
+        // One summarizer at a time, so two never rewrite the same note at once.
+        let lock = open(paths.vault.internalDir.appendingPathComponent("summarize.lock").path, O_CREAT | O_RDWR, 0o644)
+        if lock >= 0 { flock(lock, LOCK_EX) }
+        defer { if lock >= 0 { flock(lock, LOCK_UN); close(lock) } }
         do {
-            let chunk = try Transcript.read(URL(fileURLWithPath: transcript), from: offset)
-            let project = GitRepo.locate(from: URL(fileURLWithPath: cwd))?.name
-            let summarizer = ClaudeCLISummarizer(runner: SystemRunner(extraEnvironment: ["BINDER_NESTED": "1"]), session: session)
+            let chunk = try Transcript.read(URL(fileURLWithPath: transcript), from: start, upTo: end)
+            let project = projectName(cwd: cwd, paths: paths)
+            let summarizer = ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: session)
             let store = ProposalStore(vault: paths.vault)
-            for p in summarizer.proposals(from: chunk.entries, project: project) { _ = try store.add(p) }
+            for window in ClaudeCLISummarizer.windows(chunk.entries) {
+                let review = summarizer.review(entries: window, project: project,
+                                               known: .load(vault: paths.vault, project: project))
+                for p in review.proposals { _ = try store.add(p) }
+                for (target, group) in Dictionary(grouping: review.outdated, by: \.target) {
+                    try Memory.supersede(group.map(\.line), in: target, vault: paths.vault)
+                }
+            }
         } catch {
             paths.vault.log("summarize failed: \(error)")
         }
     }
 
+    /// The project a session's things belong to: its git repo, a folder with its own note, or a folder that sits
+    /// inside one of your project folders (`~/Desktop/Vektor Labs`). Your home or a project folder itself is none.
+    static func projectName(cwd: String, paths: Paths) -> String? {
+        let folder = URL(fileURLWithPath: cwd).standardizedFileURL
+        if let repo = CardBuilder.project(for: folder, vault: paths.vault) { return repo.name }
+        let roots = BinderState.load(paths.vault).projectRoots.map { paths.expand($0).standardizedFileURL.path }
+        let parent = folder.deletingLastPathComponent().path
+        return roots.contains(parent) ? folder.lastPathComponent : nil
+    }
+
     // MARK: Commands people run
+
+    /// Moves stale and repeated lines to Superseded: notes changed since the last tidy, or all with --all.
+    static func tidy(_ paths: Paths, everything: Bool) -> Int32 {
+        guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }
+        let consent = BinderState.load(paths.vault).summarizerConsent
+        let moved = Tidy.run(vault: paths.vault, summarizer: consent ? ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil) : nil,
+                             everything: everything)
+        if moved.isEmpty {
+            print("Nothing stale.")
+        } else {
+            for (path, n) in moved.sorted(by: { $0.key < $1.key }) { print("\(path): \(n) \(plural(n, "line")) to Superseded") }
+        }
+        if !consent { print("Only exact repeats were checked. Turn on reading with your Claude plan to catch outdated lines too.") }
+        return 0
+    }
 
     static func observe(_ paths: Paths, lan: Bool) -> Int32 {
         let state = BinderState.load(paths.vault)
@@ -107,7 +150,7 @@ enum Commands {
         let entries = (try? Transcript.read(transcript, from: 0).entries) ?? []
         var card: HandoffCard?
         if BinderState.load(paths.vault).summarizerConsent {
-            card = ClaudeCLISummarizer(runner: SystemRunner(extraEnvironment: ["BINDER_NESTED": "1"]), session: nil).handoff(from: entries)
+            card = ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil).handoff(from: entries)
         }
         do {
             let url = try Handoff.write(card ?? Handoff.fallback(from: entries), project: project, vault: paths.vault, now: Date())

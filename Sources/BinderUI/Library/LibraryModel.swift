@@ -45,6 +45,8 @@ public struct NoteDetail: Sendable {
     public var decisions: [Decision]
     public var freeText: [String]
     public var links: [String]
+    /// Lines moved out of Decisions because later ones made them untrue, newest first.
+    public var superseded: [String] = []
     public var lastHandoff: HandoffCard?
     public var cardPreview: String?
     public var cardTokens: Int
@@ -116,6 +118,7 @@ public final class LibraryModel: ObservableObject {
         var detail = NoteDetail(ref: ref, title: title(of: ref.path) ?? ref.title, verified: note.value("verified"), source: note.value("source"),
                                 facts: facts, decisions: decisions, freeText: CardBuilder.freeLines(note),
                                 links: CardBuilder.links(in: note.render()), lastHandoff: nil, cardPreview: nil, cardTokens: 0)
+        detail.superseded = note.superseded.reversed()
         if ref.path.hasPrefix("projects/") {
             let name = String(ref.path.dropFirst("projects/".count).dropLast(3))
             detail.lastHandoff = Handoff.latest(project: name, vault: vault)?.card
@@ -131,6 +134,12 @@ public final class LibraryModel: ObservableObject {
         let added = (try? Memory.add(text, to: ref.path, vault: vault)) ?? false
         if added { objectWillChange.send() }
         return added
+    }
+
+    /// Puts a superseded line back among the note's decisions.
+    public func restore(_ supersededLine: String, in ref: NoteRef) {
+        try? Memory.restore(supersededLine, in: ref.path, vault: vault)
+        objectWillChange.send()
     }
 
     public func update(_ change: (inout BinderState) -> Void) {

@@ -57,7 +57,7 @@ struct SettingsView: View {
                         Chip("On", on: model.state.summarizerConsent) { model.update { $0.summarizerConsent = true } }
                         Chip("Off", on: !model.state.summarizerConsent) { model.update { $0.summarizerConsent = false } }
                     }
-                    Text("Catches decisions you only said out loud. It costs a few thousand tokens when a session ends, on your own plan.")
+                    Text("Catches decisions you only said out loud, and moves lines they make untrue to Superseded. It reads talk in batches with Haiku on your own plan, roughly the talk itself plus a thousand tokens per batch.")
                         .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
