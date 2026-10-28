@@ -12,6 +12,7 @@ enum MainMenu {
         app.addItem(.separator())
         app.addItem(item("Open Binder", #selector(AppDelegate.openBinder), "o", target: delegate))
         app.addItem(item("Settings…", #selector(AppDelegate.showSettings), ",", target: delegate))
+        app.addItem(item("Check for Updates…", #selector(AppDelegate.checkForUpdates), "", target: delegate))
         app.addItem(.separator())
         app.addItem(withTitle: "Hide Binder", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let others = app.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")

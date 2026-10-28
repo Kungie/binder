@@ -15,6 +15,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     var scheduler: ObserveScheduler?
     let notifier = HandoffNotifier()
     var sessionWatch: AnyCancellable?
+    var updater: Updater?
 
     public override init() { super.init() }
 
@@ -53,6 +54,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         model.refresh()
         model.startWatching()
         app = model
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? Binder.version
+        let updater = Updater(current: version, vault: { [weak self] in self?.app?.vault ?? model.vault },
+                              app: Bundle.main.bundleURL, relaunch: { Self.relaunch() })
+        self.updater = updater
+        updater.start()
         status = StatusItemController(model: model, actions: PanelActions(
             handOff: { [weak self] in self?.handOff() },
             openSession: { [weak self] in
@@ -62,7 +68,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             openBinder: { [weak self] in self?.showLibrary() },
             addMemory: { [weak self] in self?.showLibrary() }
-        ))
+        ), updater: updater)
         scheduler = ObserveScheduler(vault: { [weak self] in self?.vault ?? Vault(root: Vault.defaultRoot) }, home: home,
                                      onRunning: { [weak self] in self?.status?.observing = $0 },
                                      onFinished: { [weak self] in self?.app?.refresh() })
@@ -103,7 +109,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let installer = installer, vault = vault
             let model = LibraryModel(vault: vault, home: home)
             libraryModel = model
-            library = LibraryWindowController(model: model, app: app, actions: LibraryActions(
+            library = LibraryWindowController(model: model, app: app, updater: updater, actions: LibraryActions(
                 openSession: { SessionLauncher.launch(in: URL(fileURLWithPath: $0)) },
                 runDoctor: { [weak self] in Doctor.report(vault: self?.vault ?? vault, installer: installer, runner: SystemRunner()) },
                 installHooks: { add in (try? add ? installer.install() : installer.uninstall()) != nil },
@@ -120,6 +126,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         guard app != nil else { onboarding?.showWindow(nil); return }
         showLibrary()
         libraryModel?.selectedKind = .settings
+    }
+
+    /// Check for Updates… in the app menu: Settings, with a check running.
+    @objc func checkForUpdates() {
+        showSettings()
+        guard let updater else { return }
+        Task { await updater.check(manual: true) }
+    }
+
+    /// Opens the freshly installed app a second after this one quits.
+    static func relaunch() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundleURL.path]
+        try? p.run()
+        NSApp.terminate(nil)
     }
 
     @objc func openBinder() {

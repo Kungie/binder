@@ -106,9 +106,16 @@ Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - The app's executable target is `BinderApp`, renamed to `Binder` inside `Binder.app`. The CLI product is `binder`. The two names would collide on the case-insensitive file system if both were `binder`.
 - Implementation plans live in `docs/plans/`.
 
+## Releasing and updates
+
+- Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, `Binder.version` in `BinderCore.swift` and the DMG background's version text in `Icon.swift`.
+- `make release` builds `build/Binder.dmg`, `build/Binder.zip` and signs the zip into `build/Binder.zip.sig` (Ed25519, private key in the login Keychain under `io.github.kungie.binder.update-signing`, made once by `swift scripts/update-key.swift`). **Never print, copy or commit the private key.**
+- Upload all three: `gh release create vX.Y.Z build/Binder.dmg build/Binder.zip build/Binder.zip.sig`. The in-app updater (`Update.swift`, `UpdateInstaller.swift`, `Updater.swift`) ignores a release without `Binder.zip.sig`, and installs only a zip whose signature matches the public key in `Update.publicKey`, whose bundle id is `io.github.kungie.binder` and whose version matches the tag.
+- An update replaces `Binder.app` only. The vault, `.binder/state.json`, the pointer in Application Support and the Claude Code hooks stay. New settings must decode with `decodeIfPresent` and a default, so older state files keep what they have.
+
 ## Privacy rules
 
-- Local only. No telemetry, no account, no cloud.
+- Local only. No telemetry, no account, no cloud. The one network call of its own is the daily update check to GitHub's releases API (on by default, off in Settings › Updates), and it sends nothing but the request itself.
 - Never store secrets (private keys, tokens, passwords). Store pointers instead, for example "the token is in 1Password, item Hetzner API".
 - Personal details only ever come from the user.
 

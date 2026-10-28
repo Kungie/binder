@@ -458,7 +458,8 @@ public struct Scroll<Content: View>: View {
 
     public var body: some View {
         if isSnapshot {
-            VStack(alignment: .leading, spacing: 0) { content }.frame(maxHeight: .infinity, alignment: .top).clipped()
+            // minHeight 0: take the space offered and clip what overflows, rather than growing past it.
+            VStack(alignment: .leading, spacing: 0) { content }.frame(minHeight: 0, maxHeight: .infinity, alignment: .top).clipped()
         } else {
             ScrollView { content }
         }

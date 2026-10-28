@@ -8,10 +8,15 @@ public struct BinderState: Codable, Equatable, Sendable {
     public var lastObserve: Date?
     public var onboarded = false
     public var observeIntervalHours = 6
+    /// Ask GitHub once a day whether there's a newer Binder.
+    public var checkForUpdates = true
+    public var lastUpdateCheck: Date?
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case summarizerConsent, handoffThreshold, projectRoots, lastObserve, onboarded, observeIntervalHours }
+    enum CodingKeys: String, CodingKey {
+        case summarizerConsent, handoffThreshold, projectRoots, lastObserve, onboarded, observeIntervalHours, checkForUpdates, lastUpdateCheck
+    }
 
     /// Every key is optional, so a file written by an older version keeps the settings it has.
     public init(from decoder: Decoder) throws {
@@ -23,6 +28,8 @@ public struct BinderState: Codable, Equatable, Sendable {
         lastObserve = try c.decodeIfPresent(Date.self, forKey: .lastObserve)
         onboarded = try c.decodeIfPresent(Bool.self, forKey: .onboarded) ?? d.onboarded
         observeIntervalHours = try c.decodeIfPresent(Int.self, forKey: .observeIntervalHours) ?? d.observeIntervalHours
+        checkForUpdates = try c.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? d.checkForUpdates
+        lastUpdateCheck = try c.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)
     }
 
     public var clampedThreshold: Double { min(max(handoffThreshold, 0.50), 0.90) }

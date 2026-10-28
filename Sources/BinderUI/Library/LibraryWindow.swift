@@ -26,12 +26,14 @@ public struct LibraryView: View {
     @ObservedObject var model: LibraryModel
     @ObservedObject var app: AppModel
     var actions: LibraryActions
+    var updater: Updater?
     @StateObject private var search = Local("")
 
-    public init(model: LibraryModel, app: AppModel, actions: LibraryActions = LibraryActions()) {
+    public init(model: LibraryModel, app: AppModel, actions: LibraryActions = LibraryActions(), updater: Updater? = nil) {
         self.model = model
         self.app = app
         self.actions = actions
+        self.updater = updater
     }
 
     public var body: some View {
@@ -43,7 +45,7 @@ public struct LibraryView: View {
                 case .inbox:
                     InboxView(app: app).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 case .settings:
-                    SettingsView(model: model, actions: actions).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    SettingsView(model: model, actions: actions, updater: updater).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 case .graph:
                     GraphView(vault: model.vault) { node in openFromGraph(node) }
                         .id(model.vault.root)
@@ -236,7 +238,7 @@ struct InboxView: View {
 /// A dark main window whose title bar is Binder's own title strip.
 @MainActor
 public final class LibraryWindowController: NSWindowController {
-    public init(model: LibraryModel, app: AppModel, actions: LibraryActions) {
+    public init(model: LibraryModel, app: AppModel, updater: Updater? = nil, actions: LibraryActions) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1240, height: 820),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
@@ -247,7 +249,7 @@ public final class LibraryWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("BinderLibrary")
         super.init(window: window)
-        window.contentView = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions)
+        window.contentView = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions, updater: updater)
             .environment(\.titlebarHeight, window.titlebarHeight))
         window.center()
     }

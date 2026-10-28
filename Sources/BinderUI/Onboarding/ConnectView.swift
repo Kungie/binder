@@ -107,7 +107,7 @@ struct ConnectView: View {
                 }
             }
         }
-        Text("Changed your mind later? binder uninstall takes both hooks out.")
+        Text("Changed your mind later? binder uninstall takes both hooks out. I'll also ask GitHub once a day for a newer Binder; that's off in Settings if you'd rather.")
             .font(Fonts.mono(11))
             .foregroundColor(Phosphor.dim)
     }

@@ -46,6 +46,7 @@ public struct PanelView: View {
 
     @ObservedObject var model: AppModel
     var actions: PanelActions
+    var updater: Updater?
     @StateObject private var brainFrame = Local(CGRect.zero)
     @StateObject private var cardFrames = Local([String: CGRect]())
     @StateObject private var gulp = Local(false)
@@ -54,9 +55,10 @@ public struct PanelView: View {
     @StateObject private var scrollHeight = Local(CGFloat(0))
     @Environment(\.isSnapshot) private var isSnapshot
 
-    public init(model: AppModel, actions: PanelActions = PanelActions()) {
+    public init(model: AppModel, actions: PanelActions = PanelActions(), updater: Updater? = nil) {
         self.model = model
         self.actions = actions
+        self.updater = updater
     }
 
     public var body: some View {
@@ -80,6 +82,7 @@ public struct PanelView: View {
                     .buttonStyle(PrimaryButtonStyle(size: 13, height: 36, fullWidth: true))
                     .padding(.trailing, 3)
             }
+            if let updater { UpdateBanner(updater: updater) }
             footer
         }
         .padding(16)
@@ -238,13 +241,15 @@ public struct PanelContainer: View {
     @ObservedObject var model: AppModel
     @ObservedObject var geometry: PanelGeometry
     var actions: PanelActions
+    var updater: Updater?
 
     public static let notchHeight: CGFloat = PixelNotch.rows * PixelNotch.pixel
 
-    public init(model: AppModel, geometry: PanelGeometry = PanelGeometry(), actions: PanelActions = PanelActions()) {
+    public init(model: AppModel, geometry: PanelGeometry = PanelGeometry(), actions: PanelActions = PanelActions(), updater: Updater? = nil) {
         self.model = model
         self.geometry = geometry
         self.actions = actions
+        self.updater = updater
     }
 
     public var body: some View {
@@ -253,7 +258,7 @@ public struct PanelContainer: View {
                 .frame(width: PixelNotch.width, height: Self.notchHeight)
                 .padding(.leading, max(0, geometry.arrowX - PixelNotch.width / 2))
                 .frame(maxWidth: .infinity, alignment: .leading)
-            PanelView(model: model, actions: actions)
+            PanelView(model: model, actions: actions, updater: updater)
                 .background(Phosphor.black2)
                 .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
                 .overlay(alignment: .top) { PixelBleed(centerX: geometry.arrowX).frame(height: PixelNotch.pixel * 3) }
@@ -318,5 +323,28 @@ struct PixelBleed: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// A new version, in the panel: only while one is out, installing, or failed to install.
+struct UpdateBanner: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        switch updater.status {
+        case let .available(version):
+            HStack(spacing: 10) {
+                Text("BINDER \(version) IS OUT").font(Fonts.vt(20)).foregroundColor(Phosphor.amber)
+                Spacer()
+                Button("Update") { Task { await updater.install() } }.buttonStyle(PrimaryButtonStyle(size: 12, height: 30))
+            }
+            .padding(.trailing, 3)
+        case let .installing(version):
+            Text("UPDATING TO \(version)…").font(Fonts.vt(20)).foregroundColor(Phosphor.amber)
+        case let .failed(message) where message.contains("left Binder") || message.contains("replace myself") || message.contains("download the update"):
+            Text(message).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.cream2).fixedSize(horizontal: false, vertical: true)
+        default:
+            EmptyView()
+        }
     }
 }

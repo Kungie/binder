@@ -19,10 +19,10 @@ public final class StatusItemController: NSObject {
     private var lastPending: Int?
     public var observing = false { didSet { updateItem() } }
 
-    public init(model: AppModel, actions: PanelActions) {
+    public init(model: AppModel, actions: PanelActions, updater: Updater? = nil) {
         self.model = model
         let geometry = PanelGeometry()
-        hosting = NSHostingController(rootView: PanelContainer(model: model, geometry: geometry, actions: actions))
+        hosting = NSHostingController(rootView: PanelContainer(model: model, geometry: geometry, actions: actions, updater: updater))
         hosting.sizingOptions = [.preferredContentSize]
         panel = BinderPanel(contentRect: NSRect(x: 0, y: 0, width: PanelView.width, height: 400),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)

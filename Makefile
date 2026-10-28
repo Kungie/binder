@@ -1,4 +1,4 @@
-.PHONY: build test cli app install run snapshots clean scratch
+.PHONY: build test cli app release install run snapshots clean scratch
 
 # ~/Desktop syncs with iCloud, which stamps Finder attributes on build products and breaks codesign.
 # Keep .build as a link to a folder outside iCloud.
@@ -25,6 +25,10 @@ cli: scratch
 
 app: scratch
 	./scripts/build-app.sh
+
+# The DMG and zip plus Binder.zip.sig, signed with the release key from the Keychain. Upload all three.
+release: app
+	swift scripts/sign-update.swift build/Binder.zip
 
 install: app
 	rm -rf /Applications/Binder.app

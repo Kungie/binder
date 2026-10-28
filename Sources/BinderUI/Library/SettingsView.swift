@@ -6,6 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: LibraryModel
     var actions: LibraryActions
+    var updater: Updater?
     @StateObject private var doctor = Local<[DoctorLine]>([])
     @StateObject private var message = Local<String?>(nil)
     @StateObject private var hooks = Local<Bool?>(nil)
@@ -71,6 +72,16 @@ struct SettingsView: View {
                         .buttonStyle(GhostButtonStyle(height: 30))
                     }
                 }
+                group("Updates") {
+                    HStack(spacing: 8) {
+                        Chip("Check every day", on: model.state.checkForUpdates) { model.update { $0.checkForUpdates = true } }
+                        Chip("Off", on: !model.state.checkForUpdates) { model.update { $0.checkForUpdates = false } }
+                    }
+                    if let updater { UpdateSettings(updater: updater) }
+                    Text("Binder asks GitHub for the latest release, nothing else. Updates replace the app only; your binder and settings stay as they are.")
+                        .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 group("Check everything") {
                     Button("Run binder doctor") { doctor.value = actions.runDoctor() }.buttonStyle(GhostButtonStyle(height: 30))
                     ForEach(Array(doctor.value.enumerated()), id: \.offset) { _, line in
@@ -120,5 +131,44 @@ struct SettingsView: View {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let path = url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path
         model.update { if !$0.projectRoots.contains(path) { $0.projectRoots.append(path) } }
+    }
+}
+
+/// This version, the last answer from GitHub, and the buttons to check and to update.
+struct UpdateSettings: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button("Check for updates") { Task { await updater.check(manual: true) } }
+                .buttonStyle(GhostButtonStyle(height: 30))
+                .disabled(updater.status == .checking)
+            if case .available = updater.status {
+                Button("Update now") { Task { await updater.install() } }.buttonStyle(PrimaryButtonStyle(size: 12, height: 30))
+            }
+            Text(line).font(Fonts.vt(19)).foregroundColor(highlight ? Phosphor.amber : Phosphor.cream2)
+        }
+        if case let .failed(message) = updater.status {
+            Text(message).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.cream2).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    var highlight: Bool {
+        if case .available = updater.status { return true }
+        return false
+    }
+
+    var line: String {
+        switch updater.status {
+        case .idle: return "THIS IS BINDER \(updater.current)"
+        case .checking: return "CHECKING…"
+        case let .upToDate(date):
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return "UP TO DATE · \(updater.current) · CHECKED \(f.string(from: date))"
+        case let .available(version): return "\(version) IS OUT · YOU HAVE \(updater.current)"
+        case let .installing(version): return "UPDATING TO \(version)…"
+        case .failed: return "THIS IS BINDER \(updater.current)"
+        }
     }
 }

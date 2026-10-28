@@ -48,6 +48,10 @@ Download `Binder.dmg` and drag Binder into Applications. It isn't notarized, so 
 
 To build it yourself: `git clone https://github.com/Kungie/binder.git && cd binder && make install`
 
+## Releasing
+
+`make release` builds the DMG and zip and writes `Binder.zip.sig` with the release key from the login Keychain (`swift scripts/update-key.swift` makes it once). Upload all three to the GitHub release; the app ignores a release without the signature.
+
 ## The CLI
 
 The app ships the `binder` CLI at `Binder.app/Contents/Helpers/binder`. Claude Code's hooks call it:
@@ -69,6 +73,7 @@ You can also run these yourself:
 ## Good to know
 
 - Everything stays on your Mac. There's no account, no cloud and no telemetry.
+- Binder updates itself. Once a day it asks GitHub whether there's a newer release, and **Update** in the menu bar installs it. Every update is signed, and Binder only installs one that carries its release key's signature. An update replaces the app and nothing else: your binder, settings and hooks stay as they are. Settings › Updates turns the daily check off and has a **Check for updates** button.
 - Binder never writes to `~/.ssh` and never opens a private key. It stores pointers to secrets ("the token is in 1Password"), never the secrets themselves, and anything that looks like a token is filtered out before it's saved.
 - Your binder is a plain Markdown folder (`~/Binder` by default) that you can open in Obsidian or any editor. Binder only rewrites the lines between its observed markers; everything else is yours.
 - Binder is an independent project, not affiliated with Anthropic. Claude is a trademark of Anthropic, PBC.
