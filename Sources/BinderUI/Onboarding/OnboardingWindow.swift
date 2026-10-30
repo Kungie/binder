@@ -26,7 +26,6 @@ public struct OnboardingView: View {
         }
         .frame(minWidth: 880, minHeight: 720)
         .background(Phosphor.black2)
-        .ignoresSafeArea(.container, edges: .top)
         .environment(\.colorScheme, .dark)
     }
 }
@@ -44,10 +43,12 @@ public final class OnboardingWindowController: NSWindowController {
         window.backgroundColor = NSColor(Phosphor.black)
         window.isReleasedWhenClosed = false
         super.init(window: window)
-        window.contentView = NSHostingView(rootView: OnboardingView(model: model, openSession: openSession, done: { [weak window] in
+        let hosting = NSHostingView(rootView: OnboardingView(model: model, openSession: openSession, done: { [weak window] in
             window?.close()
             done()
         }).environment(\.titlebarHeight, window.titlebarHeight))
+        hosting.safeAreaRegions = [] // the title strip is the title bar; see LibraryWindowController
+        window.contentView = hosting
         window.center()
     }
 

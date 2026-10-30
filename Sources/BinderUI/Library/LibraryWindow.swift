@@ -64,7 +64,6 @@ public struct LibraryView: View {
         }
         .frame(minWidth: 1040, minHeight: 700)
         .background(Phosphor.black2)
-        .ignoresSafeArea(.container, edges: .top)
         .environment(\.colorScheme, .dark)
         .onAppear { model.reload() }
     }
@@ -249,8 +248,12 @@ public final class LibraryWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("BinderLibrary")
         super.init(window: window)
-        window.contentView = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions, updater: updater)
+        let hosting = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions, updater: updater)
             .environment(\.titlebarHeight, window.titlebarHeight))
+        // The title strip fills the title bar itself. Left as a safe area, scroll views stretch up behind
+        // the strip and scroll their content over it.
+        hosting.safeAreaRegions = []
+        window.contentView = hosting
         window.center()
     }
 
