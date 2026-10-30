@@ -106,6 +106,12 @@ Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - The app's executable target is `BinderApp`, renamed to `Binder` inside `Binder.app`. The CLI product is `binder`. The two names would collide on the case-insensitive file system if both were `binder`.
 - Implementation plans live in `docs/plans/`.
 
+## Performance
+
+- A SwiftUI `TimelineView(.animation)` never stops by itself: it keeps drawing in a closed, minimized or background window, at full display rate. Anything long-lived must pause through `ScreenProbe`, set a `minimumInterval`, and keep what doesn't change by itself in a separate view that redraws only when its data does. `GraphView` is the model: the scene redraws on change, the pulse layer runs at 20 fps while the window is in front.
+- `Local.value` resolves a generic key path on every read. Read it once per frame, never per node.
+- The main window is released when it closes, so a closed window holds no views or graphics memory. `LibraryModel` stays, and keeps the selection.
+
 ## Releasing and updates
 
 - Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, `Binder.version` in `BinderCore.swift` and the DMG background's version text in `Icon.swift`.

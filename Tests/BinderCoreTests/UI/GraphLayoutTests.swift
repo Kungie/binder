@@ -46,6 +46,37 @@ import Testing
         }
     }
 
+    @Test func stopsMovingOnceItCools() {
+        let l = GraphLayout(graph: graph())
+        #expect(l.moving)
+        for _ in 0..<600 { l.step() }
+        #expect(!l.moving)
+    }
+
+    @Test func anyTouchWakesASettledLayout() {
+        func cooled() -> GraphLayout {
+            let l = GraphLayout(graph: graph())
+            for _ in 0..<600 { l.step() }
+            return l
+        }
+        let held = cooled()
+        held.hold("projects/a.md", at: .zero)
+        #expect(held.moving)
+        held.release("projects/a.md")
+        #expect(held.moving)
+
+        let reheated = cooled()
+        reheated.reheat()
+        #expect(reheated.moving)
+
+        let grown = cooled()
+        let root = makeTempDir("layout-grown")
+        write("# Me\n", to: root.appendingPathComponent("me.md"))
+        write("# new\n", to: root.appendingPathComponent("projects/new.md"))
+        grown.update(VaultGraph.build(vault: Vault(root: root)))
+        #expect(grown.moving)
+    }
+
     @Test func aDraggedNodeStaysWhereItIsHeld() {
         let l = GraphLayout(graph: graph())
         for _ in 0..<100 { l.step() }

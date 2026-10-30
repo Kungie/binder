@@ -32,10 +32,16 @@ final class GraphLayout: ObservableObject {
     private(set) var alpha: Double = 1
     static let restAlpha = 0.01
     static let cooling = 0.99
+    /// False once nothing moves, so the view can stop drawing.
+    @Published private(set) var moving = true
 
     init(graph: VaultGraph) { update(graph) }
 
     var settled: Bool { alpha < Self.restAlpha && held.isEmpty }
+
+    private func syncMoving() {
+        if moving == settled { moving = !settled }
+    }
 
     func position(_ id: String) -> CGPoint? { index[id].map { nodes[$0].position } }
 
@@ -62,6 +68,7 @@ final class GraphLayout: ObservableObject {
         }
         held = held.filter { index[$0.key] != nil }
         if old.count != nodes.count || old.keys.contains(where: { index[$0] == nil }) { alpha = max(alpha, 0.6) }
+        syncMoving()
     }
 
     /// Where everything starts: you in the middle, folders in a ring, their notes fanned out behind them,
@@ -128,15 +135,21 @@ final class GraphLayout: ObservableObject {
         nodes[i].position = point
         nodes[i].velocity = .zero
         alpha = max(alpha, 0.3)
+        syncMoving()
+        objectWillChange.send() // the drag draws with the pointer, not with the next step
     }
 
     func release(_ id: String) {
         held[id] = nil
         alpha = max(alpha, 0.3)
+        syncMoving()
     }
 
     /// Wakes the layout up again (after a drag, or new notes).
-    func reheat(_ to: Double = 0.4) { alpha = max(alpha, to) }
+    func reheat(_ to: Double = 0.4) {
+        alpha = max(alpha, to)
+        syncMoving()
+    }
 
     func step() {
         guard !settled, !nodes.isEmpty else { return }
@@ -189,6 +202,7 @@ final class GraphLayout: ObservableObject {
         }
         alpha *= Self.cooling
         if !held.isEmpty { alpha = max(alpha, 0.3) }
+        syncMoving()
     }
 
     /// The nearest node to `point` (world coordinates) within `reach`.

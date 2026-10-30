@@ -31,6 +31,25 @@ import Testing
         (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews)
     }
 
+    @Test func onlyAWindowInFrontOfTheUserIsLive() {
+        #expect(ScreenProbe.live(appActive: true, occlusion: .visible))
+        #expect(!ScreenProbe.live(appActive: false, occlusion: .visible))
+        #expect(!ScreenProbe.live(appActive: true, occlusion: []))
+    }
+
+    @Test func closingTheWindowTellsTheApp() throws {
+        let vault = Vault(root: makeTempDir("window"))
+        try vault.ensureLayout()
+        var closed = 0
+        let controller = LibraryWindowController(model: LibraryModel(vault: vault, home: makeTempDir("home")),
+                                                 app: AppModel(vault: vault, home: makeTempDir("home")),
+                                                 actions: LibraryActions(), onClose: { closed += 1 })
+        let window = try #require(controller.window)
+        window.orderFront(nil)
+        window.close()
+        #expect(closed == 1)
+    }
+
     @Test(arguments: [SectionKind.inbox, .settings])
     func scrollViewsStopBelowTheTitleBar(kind: SectionKind) throws {
         let window = try window(showing: kind)

@@ -236,8 +236,11 @@ struct InboxView: View {
 
 /// A dark main window whose title bar is Binder's own title strip.
 @MainActor
-public final class LibraryWindowController: NSWindowController {
-    public init(model: LibraryModel, app: AppModel, updater: Updater? = nil, actions: LibraryActions) {
+public final class LibraryWindowController: NSWindowController, NSWindowDelegate {
+    private let onClose: () -> Void
+
+    public init(model: LibraryModel, app: AppModel, updater: Updater? = nil, actions: LibraryActions, onClose: @escaping () -> Void = {}) {
+        self.onClose = onClose
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1240, height: 820),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
@@ -246,17 +249,22 @@ public final class LibraryWindowController: NSWindowController {
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = NSColor(Phosphor.black)
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName("BinderLibrary")
         super.init(window: window)
+        window.delegate = self
         let hosting = NSHostingView(rootView: LibraryView(model: model, app: app, actions: actions, updater: updater)
             .environment(\.titlebarHeight, window.titlebarHeight))
         // The title strip fills the title bar itself. Left as a safe area, scroll views stretch up behind
         // the strip and scroll their content over it.
         hosting.safeAreaRegions = []
         window.contentView = hosting
-        window.center()
+        if !window.setFrameUsingName(Self.frameName) { window.center() }
+        window.setFrameAutosaveName(Self.frameName)
     }
+
+    static let frameName = "BinderLibrary"
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    public func windowWillClose(_ notification: Notification) { onClose() }
 }

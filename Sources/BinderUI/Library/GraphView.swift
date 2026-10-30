@@ -12,9 +12,15 @@ struct GraphView: View {
     @StateObject private var hovered = Local<String?>(nil)
     @StateObject private var drag = Local<DragState?>(nil)
     @StateObject private var zoomBase = Local<CGFloat?>(nil)
+    @StateObject private var inFront = Local(false)
     @Environment(\.isSnapshot) private var isSnapshot
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let vault: Vault
+
+    /// The signals and the breathing run well under the display's rate: a full-window redraw is what costs.
+    static let pulseInterval = 1.0 / 20
+    /// The layout moves at this pace, two steps at a time, then stops until something touches it.
+    static let sceneFrame: UInt64 = 33_000_000
 
     struct Camera {
         var pan: CGSize = .zero
@@ -40,13 +46,17 @@ struct GraphView: View {
                     Phosphor.black
                     RadialGradient(colors: [Phosphor.amber.opacity(0.13), .clear], center: .center, startRadius: 0, endRadius: max(geo.size.width, geo.size.height) * 0.55)
                 }
-                TimelineView(.animation(paused: isSnapshot)) { timeline in
+                // Behind the scene, the only part that changes by itself. The scene redraws when the layout,
+                // the camera or the hover does, so a cooled graph costs next to nothing.
+                TimelineView(.animation(minimumInterval: Self.pulseInterval, paused: !live || reduceMotion)) { timeline in
                     Canvas { ctx, size in
-                        if !isSnapshot { layout.step() }
-                        draw(&ctx, size: size, time: isSnapshot ? 2.4 : timeline.date.timeIntervalSinceReferenceDate)
-                    } symbols: {
-                        MascotHead(size: 46, rimWidth: 7).tag(0)
+                        drawPulse(&ctx, frame(size), time: isSnapshot ? 2.4 : timeline.date.timeIntervalSinceReferenceDate)
                     }
+                }
+                Canvas { ctx, size in
+                    drawScene(&ctx, frame(size))
+                } symbols: {
+                    MascotHead(size: 46, rimWidth: 7).tag(0)
                 }
                 .contentShape(Rectangle())
                 .gesture(dragGesture(size: geo.size))
@@ -68,6 +78,16 @@ struct GraphView: View {
                 hud(size: geo.size)
             }
             .clipped()
+            .background(ScreenProbe { inFront.value = $0 })
+            .task(id: live && layout.moving) {
+                guard live else { return }
+                while !Task.isCancelled, layout.moving {
+                    layout.step()
+                    layout.step()
+                    layout.objectWillChange.send()
+                    try? await Task.sleep(nanoseconds: Self.sceneFrame)
+                }
+            }
             .onAppear {
                 layout.update(VaultGraph.build(vault: vault))
                 guard !camera.value.fitted else { return }
@@ -78,12 +98,9 @@ struct GraphView: View {
         }
     }
 
-    // MARK: Coordinates
+    private var live: Bool { !isSnapshot && inFront.value }
 
-    func screen(_ p: CGPoint, size: CGSize) -> CGPoint {
-        CGPoint(x: size.width / 2 + camera.value.pan.width + p.x * camera.value.scale,
-                y: size.height / 2 + camera.value.pan.height + p.y * camera.value.scale)
-    }
+    // MARK: Coordinates
 
     func world(_ p: CGPoint, size: CGSize) -> CGPoint {
         CGPoint(x: (p.x - size.width / 2 - camera.value.pan.width) / camera.value.scale,
@@ -144,20 +161,78 @@ struct GraphView: View {
 
     // MARK: Drawing
 
-    func draw(_ ctx: inout GraphicsContext, size: CGSize, time: Double) {
-        let nodes = layout.nodes
-        let focus = hovered.value
-        let near = focus.map { layout.graph.neighbours(of: $0).union([$0]) } ?? []
-        let scale = camera.value.scale
+    /// What a drawing needs, read once. `Local.value` resolves a generic key path on every read, which was
+    /// half of the frame when done per node.
+    struct Frame {
+        var nodes: [GraphLayout.Node]
+        var links: [GraphLayout.Link]
+        var camera: Camera
+        var focus: String?
+        var near: Set<String>
+        var size: CGSize
+
+        func screen(_ p: CGPoint) -> CGPoint {
+            CGPoint(x: size.width / 2 + camera.pan.width + p.x * camera.scale,
+                    y: size.height / 2 + camera.pan.height + p.y * camera.scale)
+        }
+
         func lit(_ id: String) -> Bool { focus == nil || near.contains(id) }
+    }
+
+    func frame(_ size: CGSize) -> Frame {
+        let focus = hovered.value
+        return Frame(nodes: layout.nodes, links: layout.links, camera: camera.value, focus: focus,
+                     near: focus.map { layout.graph.neighbours(of: $0).union([$0]) } ?? [], size: size)
+    }
+
+    /// The moving part: the glow around you and your notes, and the signals. They stop with the window.
+    func drawPulse(_ ctx: inout GraphicsContext, _ f: Frame, time: Double) {
+        let scale = f.camera.scale
+        if !reduceMotion, live || isSnapshot {
+            // Every link fires now and then, a bright dot running from one end to the other.
+            for (k, link) in f.links.enumerated() where link.kind != .facet {
+                let h = Self.hash(k)
+                let period = 4 + Double(h % 60) / 10
+                let local = (time + Double(h % 997) / 97).truncatingRemainder(dividingBy: period)
+                let run = 1.1
+                guard local < run else { continue }
+                let t = local / run
+                let (from, to) = h % 2 == 0 ? (f.nodes[link.a], f.nodes[link.b]) : (f.nodes[link.b], f.nodes[link.a])
+                let p = f.screen(CGPoint(x: from.position.x + (to.position.x - from.position.x) * t,
+                                         y: from.position.y + (to.position.y - from.position.y) * t))
+                let fade = sin(t * .pi) * (f.lit(from.id) || f.lit(to.id) ? 1 : 0.3)
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
+                         with: .radialGradient(Gradient(colors: [Phosphor.amber.opacity(0.55 * fade), .clear]), center: p, startRadius: 0, endRadius: 7))
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 1.6, y: p.y - 1.6, width: 3.2, height: 3.2)), with: .color(Phosphor.cream.opacity(fade)))
+            }
+        }
+        for (i, node) in f.nodes.enumerated() where node.kind == .me || node.kind == .note {
+            let p = f.screen(node.position)
+            let r = layout.radius(node) * min(max(scale, 0.6), 1.6)
+            let dim = f.lit(node.id) ? 1.0 : 0.25
+            let breathe = reduceMotion || isSnapshot ? 1 : 0.8 + 0.2 * sin(time * 1.3 + Double(Self.hash(i) % 628) / 100)
+            let (reach, strength) = node.kind == .me ? (r * 4, 0.4 * breathe) : (r * 3, 0.35 * dim * breathe)
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - reach, y: p.y - reach, width: reach * 2, height: reach * 2)),
+                     with: .radialGradient(Gradient(colors: [Phosphor.amber.opacity(strength), .clear]), center: p, startRadius: 0, endRadius: reach))
+        }
+    }
+
+    /// The still part: links, nodes and labels.
+    func drawScene(_ ctx: inout GraphicsContext, _ f: Frame) {
+        let nodes = f.nodes
+        let focus = f.focus
+        let near = f.near
+        let scale = f.camera.scale
+        let lit = f.lit
+        let screen = f.screen
 
         // Links: faint amber threads; the hovered note's light up.
-        for link in layout.links {
+        for link in f.links {
             let a = nodes[link.a], b = nodes[link.b]
             let touches = focus != nil && (a.id == focus || b.id == focus)
             var path = Path()
-            path.move(to: screen(a.position, size: size))
-            path.addLine(to: screen(b.position, size: size))
+            path.move(to: screen(a.position))
+            path.addLine(to: screen(b.position))
             let base: Double = switch link.kind {
             case .structure: 0.22
             case .link: 0.34
@@ -169,36 +244,13 @@ struct GraphView: View {
             ctx.stroke(path, with: .color(Phosphor.amber.opacity(opacity)), style: style)
         }
 
-        // Signals: every link fires now and then, a bright dot running from one end to the other.
-        if !reduceMotion {
-            for (k, link) in layout.links.enumerated() where link.kind != .facet {
-                let h = Self.hash(k)
-                let period = 4 + Double(h % 60) / 10
-                let local = (time + Double(h % 997) / 97).truncatingRemainder(dividingBy: period)
-                let run = 1.1
-                guard local < run else { continue }
-                let t = local / run
-                let (from, to) = h % 2 == 0 ? (nodes[link.a], nodes[link.b]) : (nodes[link.b], nodes[link.a])
-                let p = screen(CGPoint(x: from.position.x + (to.position.x - from.position.x) * t,
-                                       y: from.position.y + (to.position.y - from.position.y) * t), size: size)
-                let fade = sin(t * .pi) * (lit(from.id) || lit(to.id) ? 1 : 0.3)
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
-                         with: .radialGradient(Gradient(colors: [Phosphor.amber.opacity(0.55 * fade), .clear]), center: p, startRadius: 0, endRadius: 7))
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 1.6, y: p.y - 1.6, width: 3.2, height: 3.2)), with: .color(Phosphor.cream.opacity(fade)))
-            }
-        }
-
         // Nodes, then their labels on top.
-        for (i, node) in nodes.enumerated() {
-            let p = screen(node.position, size: size)
+        for node in nodes {
+            let p = screen(node.position)
             let r = layout.radius(node) * min(max(scale, 0.6), 1.6)
-            let on = lit(node.id)
-            let dim = on ? 1.0 : 0.25
-            let breathe = reduceMotion || isSnapshot ? 1 : 0.8 + 0.2 * sin(time * 1.3 + Double(Self.hash(i) % 628) / 100)
+            let dim = lit(node.id) ? 1.0 : 0.25
             switch node.kind {
             case .me:
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - r * 4, y: p.y - r * 4, width: r * 8, height: r * 8)),
-                         with: .radialGradient(Gradient(colors: [Phosphor.amber.opacity(0.4 * breathe), .clear]), center: p, startRadius: 0, endRadius: r * 4))
                 if let head = ctx.resolveSymbol(id: 0) {
                     let s = min(max(scale, 0.6), 1.5)
                     var c = ctx
@@ -212,8 +264,6 @@ struct GraphView: View {
                 ctx.stroke(circle, with: .color(Phosphor.cream.opacity(0.9 * dim)), lineWidth: 1.6)
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - r * 0.35, y: p.y - r * 0.35, width: r * 0.7, height: r * 0.7)), with: .color(Phosphor.amber.opacity(dim)))
             case .note:
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - r * 3, y: p.y - r * 3, width: r * 6, height: r * 6)),
-                         with: .radialGradient(Gradient(colors: [Phosphor.amber.opacity(0.35 * dim * breathe), .clear]), center: p, startRadius: 0, endRadius: r * 3))
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(Phosphor.amber.opacity(dim)))
                 if node.id == focus {
                     ctx.stroke(Path(ellipseIn: CGRect(x: p.x - r - 3, y: p.y - r - 3, width: r * 2 + 6, height: r * 2 + 6)), with: .color(Phosphor.cream), lineWidth: 1.2)
@@ -241,7 +291,7 @@ struct GraphView: View {
         var placed: [CGRect] = []
         let ordered = nodes.sorted { (rank($0), -$0.degree) < (rank($1), -$1.degree) }
         for node in ordered {
-            let p = screen(node.position, size: size)
+            let p = screen(node.position)
             let r = layout.radius(node) * min(max(scale, 0.6), 1.6)
             let on = lit(node.id)
             let highlighted = focus != nil && near.contains(node.id)

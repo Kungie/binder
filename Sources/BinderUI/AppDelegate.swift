@@ -110,7 +110,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         status?.hide()
         if library == nil {
             let installer = installer, vault = vault
-            let model = LibraryModel(vault: vault, home: home)
+            let model = libraryModel ?? LibraryModel(vault: vault, home: home)
             libraryModel = model
             library = LibraryWindowController(model: model, app: app, updater: updater, actions: LibraryActions(
                 openSession: { SessionLauncher.launch(in: URL(fileURLWithPath: $0)) },
@@ -118,7 +118,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 installHooks: { add in (try? add ? installer.install() : installer.uninstall()) != nil },
                 hooksInstalled: { installer.isInstalled },
                 vaultMoved: { [weak self] moved in self?.app?.relocate(to: moved) }
-            ))
+            ), onClose: { [weak self] in
+                // Binder lives in the menu bar: a closed window shouldn't keep its views and their graphics memory.
+                DispatchQueue.main.async {
+                    if self?.library?.window?.isVisible == false { self?.library = nil }
+                }
+            })
         }
         NSApp.activate(ignoringOtherApps: true)
         library?.showWindow(nil)
