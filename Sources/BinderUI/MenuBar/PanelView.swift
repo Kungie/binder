@@ -50,7 +50,6 @@ public struct PanelView: View {
     @StateObject private var brainFrame = Local(CGRect.zero)
     @StateObject private var cardFrames = Local([String: CGRect]())
     @StateObject private var gulp = Local(false)
-    @StateObject private var snoozed = Local<String?>(nil)
     @StateObject private var panelHeight = Local(CGFloat(0))
     @StateObject private var scrollHeight = Local(CGFloat(0))
     @Environment(\.isSnapshot) private var isSnapshot
@@ -152,11 +151,11 @@ public struct PanelView: View {
                 }
                 if let handoff = model.handoff, handoff.session == session.session {
                     handoffRow(handoff)
-                } else if model.handoffSuggested, snoozed.value != session.session {
+                } else if model.handoffWaiting {
                     HStack(spacing: 8) {
                         Button("Hand off now") { actions.handOff() }
                         .buttonStyle(PrimaryButtonStyle(size: 12, height: 30))
-                        Button("Not yet") { snoozed.value = session.session }.buttonStyle(GhostButtonStyle(height: 30))
+                        Button("Not yet") { model.notYet() }.buttonStyle(GhostButtonStyle(height: 30))
                     }
                 }
             }

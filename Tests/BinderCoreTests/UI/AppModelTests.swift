@@ -140,6 +140,37 @@ func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
         #expect(model.handoffSuggested)
     }
 
+    @Test func notYetClearsTheMenuBarDotForThatSession() throws {
+        try SessionStatus(session: "long", project: "dawn", cwd: "/x", reading: ContextReading(used: 150_000, window: 200_000), updatedAt: Date()).save(vault)
+        let model = AppModel(vault: vault, home: home)
+        model.refresh()
+        #expect(model.menuState(observing: false) == .handoffSoon)
+        model.notYet()
+        #expect(model.menuState(observing: false) == .idle)
+        #expect(model.handoffSuggested) // the panel still says it's getting long
+        model.refresh()
+        #expect(model.menuState(observing: false) == .idle)
+    }
+
+    @Test func notYetLetsTheReviewCountShow() throws {
+        try SessionStatus(session: "long", project: "dawn", cwd: "/x", reading: ContextReading(used: 150_000, window: 200_000), updatedAt: Date()).save(vault)
+        try ProposalStore(vault: vault).add(proposal("Waiting behind the dot."))
+        let model = AppModel(vault: vault, home: home)
+        model.refresh()
+        model.notYet()
+        #expect(model.menuState(observing: false) == .review(1))
+    }
+
+    @Test func aNewLongSessionBringsTheDotBack() throws {
+        try SessionStatus(session: "old", project: "dawn", cwd: "/x", reading: ContextReading(used: 150_000, window: 200_000), updatedAt: Date()).save(vault)
+        let model = AppModel(vault: vault, home: home)
+        model.refresh()
+        model.notYet()
+        try SessionStatus(session: "new", project: "dawn", cwd: "/x", reading: ContextReading(used: 150_000, window: 200_000), updatedAt: Date().addingTimeInterval(5)).save(vault)
+        model.refresh()
+        #expect(model.menuState(observing: false) == .handoffSoon)
+    }
+
     @Test func relocateFollowsMovedVault() throws {
         let model = AppModel(vault: vault, home: home)
         model.refresh()

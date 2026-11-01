@@ -42,6 +42,8 @@ public final class AppModel: ObservableObject {
     @Published public var phases: [String: CardPhase] = [:]
     /// Cleared by Done, or by itself once a new session takes over as "this session".
     @Published public var handoff: HandoffState?
+    /// The session answered with "Not yet": no Hand off buttons and no menu bar dot for it.
+    @Published public private(set) var snoozed: String?
 
     @Published public private(set) var vault: Vault
     public let home: URL
@@ -97,7 +99,18 @@ public final class AppModel: ObservableObject {
         return fraction >= state.clampedThreshold
     }
 
+    /// Suggested, and not put off with "Not yet".
+    public var handoffWaiting: Bool { handoffSuggested && session?.session != snoozed }
+
+    public func menuState(observing: Bool) -> MenuState {
+        if observing { return .observing }
+        if handoffWaiting { return .handoffSoon }
+        return pendingCount > 0 ? .review(pendingCount) : .idle
+    }
+
     // MARK: Acting
+
+    public func notYet() { snoozed = session?.session }
 
     public func keep(_ id: String, editedText: String? = nil) {
         guard proposals.contains(where: { $0.id == id }), phases[id] != .absorbing, phases[id] != .shredding else { return }

@@ -58,15 +58,9 @@ public final class StatusItemController: NSObject {
             .sink { [weak self] _ in self?.updateItem() }
     }
 
-    var menuState: MenuState {
-        if observing { return .observing }
-        if model.handoffSuggested { return .handoffSoon }
-        return model.pendingCount > 0 ? .review(model.pendingCount) : .idle
-    }
-
     private func updateItem() {
         guard let button = statusItem.button else { return }
-        let state = menuState
+        let state = model.menuState(observing: observing)
         let pending = model.pendingCount
         let (lit, sparkle) = BrainGlow.decide(previous: lastPending, current: pending)
         lastPending = pending
