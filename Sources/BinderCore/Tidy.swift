@@ -34,7 +34,7 @@ public enum Tidy {
         for path in notes(in: vault) {
             let url = vault.url(path)
             let modified = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? now
-            if !everything, let last = record.tidied[path], last >= modified { continue }
+            if !everything, record.covers(path, modified: modified) { continue }
             guard let note = NoteIO.read(url) else { continue }
             let newestFirst = Array(note.decisions.reversed())
             var stale = duplicates(newestFirst)
@@ -62,6 +62,15 @@ public enum Tidy {
 /// When each note was last tidied, so only notes that changed since get another look.
 struct TidyRecord: Codable {
     var tidied: [String: Date] = [:]
+
+    /// A date loses a hair going through the JSON, so a saved one can land just before the file date it copied.
+    static let slack: TimeInterval = 0.001
+
+    /// Whether the note hasn't changed since its last tidy.
+    func covers(_ path: String, modified: Date) -> Bool {
+        guard let last = tidied[path] else { return false }
+        return last.addingTimeInterval(Self.slack) >= modified
+    }
 
     static func url(_ vault: Vault) -> URL { vault.internalDir.appendingPathComponent("tidy.json") }
 

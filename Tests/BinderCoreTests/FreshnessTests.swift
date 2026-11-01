@@ -262,6 +262,19 @@ final class SpyRunner: CommandRunner, @unchecked Sendable {
         #expect(spy.calls.count == calls + 1)
     }
 
+    @Test func aSavedDateStillCoversTheNoteItWasReadFrom() throws {
+        let vault = try vault()
+        for i in 0..<200 {
+            let date = Date(timeIntervalSinceReferenceDate: 815_000_000 + Double(i) * 0.123_456_789)
+            var record = TidyRecord()
+            record.tidied["me.md"] = date
+            try record.save(vault)
+            let saved = TidyRecord.load(vault)
+            #expect(saved.covers("me.md", modified: date))
+            #expect(!saved.covers("me.md", modified: date.addingTimeInterval(1)))
+        }
+    }
+
     @Test func withoutTheModelOnlyRepeatsGo() throws {
         let vault = try vault()
         #expect(Tidy.run(vault: vault, summarizer: nil) == ["projects/binder.md": 1])
