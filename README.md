@@ -17,8 +17,6 @@
 
 ---
 
-AG~~I~~M. Artificial General ~~Intelligence~~ Memory.
-
 Long AI sessions get worse the longer they run. Fresh ones don't know the topic. Binder takes that trade-off away: it keeps what your agents keep asking for in plain Markdown, and hands it to every new session.
 
 ## What it does
