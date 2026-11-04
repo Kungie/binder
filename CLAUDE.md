@@ -60,7 +60,7 @@ Individual developers and hobbyists first, on macOS.
 
 - **Menu bar:** its main job is approving the potential context captured in the current session (Keep, Edit, Drop, Keep all). It also shows the handoff warning.
 - **Main window:** onboarding, detailed settings, and browsing and editing memory. This is where everyday use beyond approvals happens.
-- **CLI `binder`:** `card` (session start), `capture` (session end), `observe` (run the observers without the app), `install` and `uninstall` (hooks), and `handoff`.
+- **CLI `binder`:** `card` (session start), `capture` (session end, and `--now` from the PreCompact hook), `observe` (run the observers without the app), `install` and `uninstall` (hooks), `handoff`, `tidy`, `search`, `import` (CLAUDE.md and AGENTS.md as catches) and `index` (a repo's architecture as catches).
 
 ## First launch
 
@@ -137,7 +137,9 @@ Topic notes (`projects/<name>/<topic>.md`) are linked from the overview as `[[<n
 - Local only. No telemetry, no account, no cloud. The one network call of its own is the daily update check to GitHub's releases API (on by default, off in Settings › Updates), and it sends nothing but the request itself.
 - Never store secrets (private keys, tokens, passwords). Store pointers instead, for example "the token is in 1Password, item Hetzner API".
 - Personal details only ever come from the user.
-- `.binder/usage.json` holds counts only: lines are keyed by a hash, never their text.
+- `.binder/usage.json` holds counts and pins only: lines are keyed by a hash, never their text. `.binder/expiry.json` (temporary facts' last day) and `.binder/imported.json` (each imported file's hash) hold no text either.
+- Fading: a decision older than 90 days that no agent used leaves the card (never me.md or access notes). Wrong supersedes a line with `· wrong <day>` and records it as dropped.
+- Import and Summarize code run the model only with consent. Code summaries never open `.env`, key or credential files, or anything the secret filter flags.
 - Images and PDFs wait in `.binder/inbox/files` and reach the binder only on Keep. Drop deletes the waiting copy.
 - Everything Binder writes is English, whatever language a session is in.
 

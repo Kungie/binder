@@ -38,6 +38,12 @@ It writes all of that down, so agents stop guessing.
 
 **Sorts what it knows.** A project grows topic notes as the work does: hosting, api, auth, whatever it's about. A fact about a server or a hosting account also goes into that server's or provider's own note, so the graph shows what runs where. Split by topic sorts an older project's lines once. Every catch card says which note it goes to, and in detailed mode why.
 
+**Finds things fast.** `binder search hetzner docker` finds every line that mentions them, best first, with no model and no network. The session card tells the agent to run it when something is missing, and the main window's search looks inside notes too.
+
+**Reads what you already wrote.** Your `~/.claude/CLAUDE.md` and each project's `CLAUDE.md` and `AGENTS.md` turn into catches to keep or drop, so you don't start from zero. Summarize code reads a repo's file list, README and build files and offers its architecture the same way. Both use your own Claude plan, only if you say yes.
+
+**Forgets what stopped mattering.** A line no agent used for 90 days fades from the card but stays in the note, and Keep on card brings it back. Wrong moves a line to Superseded and stops Binder from suggesting it again. A fact that's only true until Friday expires on Friday. Before Claude Code compacts a long session, Binder catches what it decided, and lessons from commands that failed come in as catches too.
+
 **Keeps the files that matter.** Images and PDFs you attach to a session, and the ones the agent makes, show up as catch cards with a preview. Keep files them under `files/` in your binder and links them from the note. Nothing gets in without Keep.
 
 **Shows what sessions used.** Each note says how many session cards it was on and roughly how often an agent acted on it. You can edit any note, or delete a line or a whole note, inside Binder.
@@ -68,6 +74,7 @@ The app ships the `binder` CLI at `Binder.app/Contents/Helpers/binder`. Claude C
 |---|---|---|
 | `binder card` | SessionStart | gives the agent its context card |
 | `binder capture` | Stop | catches what the session did |
+| `binder capture --now` | PreCompact | the same, right before Claude Code compacts |
 
 You can also run these yourself:
 
@@ -78,6 +85,9 @@ You can also run these yourself:
 | `binder install` / `binder uninstall` | adds or removes the hooks |
 | `binder doctor` | checks that everything is wired up |
 | `binder tidy [--all]` | moves repeated and outdated lines to each note's Superseded section |
+| `binder search <words>` | finds what the binder says, best first (`--project`, `--all`, `--limit`) |
+| `binder import` | offers what CLAUDE.md and AGENTS.md say, as catches |
+| `binder index [<folder>]` | summarizes a repo's architecture into catches |
 
 ## Good to know
 
