@@ -286,7 +286,7 @@ struct GraphView: View {
             if focus != nil && near.contains(node.id) { return 1 }
             switch node.kind {
             case .me, .folder: return 2
-            case .note: return 3
+            case .note: return GraphLayout.isTopic(node.id) ? 4 : 3
             default: return 4
             }
         }
@@ -316,6 +316,7 @@ struct GraphView: View {
                          at: CGPoint(x: p.x, y: p.y + r + 5), anchor: .top)
             case .note:
                 guard scale >= 0.55 || highlighted else { continue }
+                if GraphLayout.isTopic(node.id), !Self.showsTopicLabel(scale: scale, highlighted: highlighted || node.id == focus) { continue }
                 ctx.draw(Text(node.label).font(Fonts.vt(highlighted && node.id == focus ? 19 : 16))
                     .foregroundColor((node.id == focus ? Phosphor.cream : Phosphor.cream2).opacity(on ? 0.85 : 0.22)),
                          at: CGPoint(x: p.x + r + 5, y: p.y), anchor: .leading)
@@ -327,6 +328,9 @@ struct GraphView: View {
             }
         }
     }
+
+    /// Topic labels crowd a big graph: they show when you hover near them or zoom in.
+    static func showsTopicLabel(scale: CGFloat, highlighted: Bool) -> Bool { highlighted || scale >= 1.8 }
 
     static func hash(_ k: Int) -> Int { Int((UInt64(k &+ 1) &* 2_654_435_761) % 1_000_003) }
 

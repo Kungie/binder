@@ -28,6 +28,8 @@ final class GraphLayout: ObservableObject {
     private(set) var graph = VaultGraph()
     private var index: [String: Int] = [:]
     private var held: [String: CGPoint] = [:]
+    /// How many topic notes each project overview has.
+    private var topicCounts: [String: Int] = [:]
     /// How hot the simulation is; it stops moving below `restAlpha`.
     private(set) var alpha: Double = 1
     static let restAlpha = 0.01
@@ -67,6 +69,7 @@ final class GraphLayout: ObservableObject {
             nodes[link.b].degree += 1
         }
         held = held.filter { index[$0.key] != nil }
+        topicCounts = Dictionary(grouping: nodes.map(\.id).filter(Self.isTopic), by: Self.parent(ofTopic:)).mapValues(\.count)
         if old.count != nodes.count || old.keys.contains(where: { index[$0] == nil }) { alpha = max(alpha, 0.6) }
         syncMoving()
     }
@@ -88,12 +91,33 @@ final class GraphLayout: ObservableObject {
                 out[child] = CGPoint(x: cos(a) * r, y: sin(a) * r)
             }
         }
+        // Topic notes fan out from their project, on the side away from you, instead of starting on the far ring.
+        let topics = Dictionary(grouping: graph.nodes.filter { isTopic($0.id) }, by: { parent(ofTopic: $0.id) })
+        for (project, children) in topics {
+            guard let p = out[project] else { continue }
+            let base = atan2(p.y, p.x)
+            for (j, child) in children.sorted(by: { $0.id < $1.id }).enumerated() {
+                let spread = Double(j) - Double(children.count - 1) / 2
+                let a = base + spread * min(0.45, 2.6 / Double(children.count))
+                let r = 55 + Double(j % 2) * 16
+                out[child.id] = CGPoint(x: p.x + cos(a) * r, y: p.y + sin(a) * r)
+            }
+        }
         let loose = graph.nodes.filter { out[$0.id] == nil }
         for (i, node) in loose.enumerated() {
             let angle = Double(i) / Double(max(loose.count, 1)) * 2 * .pi + 0.3
             out[node.id] = CGPoint(x: cos(angle) * 300, y: sin(angle) * 300)
         }
         return out
+    }
+
+    /// A project's topic note, `projects/<project>/<topic>.md`.
+    static func isTopic(_ id: String) -> Bool { id.hasPrefix("projects/") && id.split(separator: "/").count == 3 }
+
+    /// The overview a topic note hangs off.
+    static func parent(ofTopic id: String) -> String {
+        let parts = id.split(separator: "/")
+        return "projects/\(parts[1]).md"
     }
 
     static func charge(_ kind: GraphNode.Kind) -> Double {
@@ -106,8 +130,14 @@ final class GraphLayout: ObservableObject {
         }
     }
 
+    /// A topic and its project: a short, stiff link, so topics stay in a tight bunch around their project.
+    static func isTopicLink(_ link: Link, _ nodes: [Node]) -> Bool {
+        link.kind == .structure && (isTopic(nodes[link.a].id) || isTopic(nodes[link.b].id))
+    }
+
     static func rest(_ link: Link, _ nodes: [Node]) -> Double {
-        switch link.kind {
+        if isTopicLink(link, nodes) { return 50 }
+        return switch link.kind {
         case .structure: nodes[link.a].kind == .me || nodes[link.b].kind == .me ? 150 : 72
         case .link: 95
         case .handoff: 60
@@ -155,6 +185,11 @@ final class GraphLayout: ObservableObject {
         guard !settled, !nodes.isEmpty else { return }
         let n = nodes.count
         var force = [CGVector](repeating: .zero, count: n)
+        // Topics push less than notes; a project pushes more for each topic it has, so two busy projects keep
+        // room for their bunches instead of overlapping.
+        let charges = nodes.map { node in
+            Self.isTopic(node.id) ? 380 : Self.charge(node.kind) + Double(topicCounts[node.id] ?? 0) * 260
+        }
         // Everything pushes everything else away, harder up close.
         for i in 0..<n {
             for j in (i + 1)..<n {
@@ -163,7 +198,7 @@ final class GraphLayout: ObservableObject {
                 if dx == 0 && dy == 0 { dx = Double(j - i) * 0.37; dy = Double(i + 1) * 0.29 }
                 let d2 = max(dx * dx + dy * dy, 36)
                 let d = sqrt(d2)
-                let push = (Self.charge(nodes[i].kind) + Self.charge(nodes[j].kind)) / 2 / d2 * alpha
+                let push = (charges[i] + charges[j]) / 2 / d2 * alpha
                 force[i].dx -= dx / d * push; force[i].dy -= dy / d * push
                 force[j].dx += dx / d * push; force[j].dy += dy / d * push
                 if d < Self.personalSpace {
@@ -178,7 +213,8 @@ final class GraphLayout: ObservableObject {
             let p = nodes[link.a].position, q = nodes[link.b].position
             let dx = q.x - p.x, dy = q.y - p.y
             let d = max(sqrt(dx * dx + dy * dy), 0.01)
-            let pull = (d - Self.rest(link, nodes)) / d * Self.stiffness(link.kind) * alpha
+            let stiffness = Self.isTopicLink(link, nodes) ? 0.16 : Self.stiffness(link.kind)
+            let pull = (d - Self.rest(link, nodes)) / d * stiffness * alpha
             force[link.a].dx += dx * pull; force[link.a].dy += dy * pull
             force[link.b].dx -= dx * pull; force[link.b].dy -= dy * pull
         }
