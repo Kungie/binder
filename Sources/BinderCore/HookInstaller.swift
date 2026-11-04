@@ -4,8 +4,9 @@ public enum HookInstallerError: Error, Equatable {
     case malformedSettings
 }
 
-/// Adds or removes Binder's two entries in Claude Code's `~/.claude/settings.json`:
-/// SessionStart runs `binder card`, Stop runs `binder capture`. Every other setting and hook is kept,
+/// Adds or removes Binder's entries in Claude Code's `~/.claude/settings.json`: SessionStart runs `binder card`,
+/// Stop runs `binder capture`, and PreCompact runs `binder capture --now` so nothing is lost when Claude Code
+/// compacts. Every other setting and hook is kept,
 /// a backup is written before the first change, and a file that isn't valid JSON is never touched.
 public struct HookInstaller: Sendable {
     public let settingsURL: URL
@@ -21,7 +22,7 @@ public struct HookInstaller: Sendable {
     }
 
     var events: [(event: String, command: String)] {
-        [("SessionStart", "\"\(binderPath)\" card"), ("Stop", "\"\(binderPath)\" capture")]
+        [("SessionStart", "\"\(binderPath)\" card"), ("Stop", "\"\(binderPath)\" capture"), ("PreCompact", "\"\(binderPath)\" capture --now")]
     }
 
     static func isOurs(_ entry: Any) -> Bool {

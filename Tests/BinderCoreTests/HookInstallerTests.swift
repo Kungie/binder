@@ -88,3 +88,36 @@ private func commands(_ json: [String: Any], _ event: String) -> [String] {
         #expect(lines.contains { !$0.ok && $0.text.contains("claude") })
     }
 }
+
+@Suite struct PreCompactHookTests {
+    let dir = makeTempDir("claude-precompact")
+    var url: URL { dir.appendingPathComponent("settings.json") }
+    var installer: HookInstaller { HookInstaller(settingsURL: url, binderPath: binderPath) }
+
+    @Test func installAddsPreCompact() throws {
+        try installer.install()
+        #expect(commands(try settings(url), "PreCompact") == ["\"\(binderPath)\" capture --now"])
+        #expect(installer.isInstalled)
+    }
+
+    @Test func anOldInstallNeedsTheNewHook() throws {
+        let old = ["hooks": ["SessionStart": [["matcher": "", "hooks": [["type": "command", "command": "\"\(binderPath)\" card"]]]],
+                             "Stop": [["matcher": "", "hooks": [["type": "command", "command": "\"\(binderPath)\" capture"]]]]]]
+        try JSONSerialization.data(withJSONObject: old).write(to: url)
+        #expect(!installer.isInstalled)
+        try installer.install()
+        let after = try settings(url)
+        #expect(installer.isInstalled)
+        #expect(commands(after, "Stop").count == 1)
+    }
+
+    @Test func uninstallRemovesAllThreeAndKeepsOthers() throws {
+        let foreign = ["hooks": ["PreCompact": [["matcher": "", "hooks": [["type": "command", "command": "other-tool save"]]]]]]
+        try JSONSerialization.data(withJSONObject: foreign).write(to: url)
+        try installer.install()
+        #expect(commands(try settings(url), "PreCompact").count == 2)
+        try installer.uninstall()
+        #expect(commands(try settings(url), "PreCompact") == ["other-tool save"])
+        #expect(commands(try settings(url), "Stop").isEmpty)
+    }
+}

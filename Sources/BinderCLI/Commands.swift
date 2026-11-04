@@ -38,13 +38,14 @@ enum Commands {
 
     /// Stop: catch commands right away. If the user agreed, and enough talk has piled up (or long enough has
     /// passed), hand that stretch to the summarizer in a detached process.
-    static func capture(_ paths: Paths, stdin: Data) {
+    /// `now` is the PreCompact hook: the talk waiting goes to the summarizer at once, before compaction squeezes it.
+    static func capture(_ paths: Paths, stdin: Data, now: Bool = false) {
         guard paths.vaultExists, let input = HookIO.readInput(stdin) else { return }
         do {
             let result = try Capture.run(input: input, vault: paths.vault, runner: SystemRunner(), summarizer: nil)
             if BinderState.load(paths.vault).summarizerConsent, let transcript = input.transcriptPath,
                let range = SummarizeQueue(vault: paths.vault).claim(session: input.sessionID, transcript: URL(fileURLWithPath: transcript),
-                                                                    startingAt: result.startOffset, now: Date()) {
+                                                                    startingAt: result.startOffset, now: Date(), force: now) {
                 HookIO.spawnDetached(paths.binder, ["summarize", input.sessionID, transcript,
                                                     String(range.lowerBound), String(range.upperBound), input.cwd])
             }

@@ -8,7 +8,7 @@ A memory for your AI agents.
 Usage:
   binder observe [--lan]  Look around this Mac and update your binder
   binder card             Print the context card (called by the SessionStart hook)
-  binder capture          Catch what a session decided (called by the Stop hook)
+  binder capture          Catch what a session decided (called by the Stop and PreCompact hooks)
   binder handoff [--cwd <dir>]
                           Write a handoff card for a fresh session
   binder search <words>   Find what the binder says (--project <name>, --all, --limit <n>)
@@ -39,7 +39,7 @@ switch command {
 case "card":
     runHook { Commands.card(paths, stdin: $0) }
 case "capture":
-    runHook { Commands.capture(paths, stdin: $0) }
+    runHook { Commands.capture(paths, stdin: $0, now: args.contains("--now")) }
 case "summarize":
     Commands.summarize(paths, Array(args.dropFirst()))
     exit(0)
