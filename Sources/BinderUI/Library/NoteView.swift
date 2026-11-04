@@ -9,6 +9,7 @@ struct NoteView: View {
     @StateObject private var refused = Local(false)
     @StateObject private var splitting = Local(false)
     @StateObject private var splitMessage = Local<String?>(nil)
+    @StateObject private var summarizing = Local(false)
     /// The text being edited, while the editor is open.
     @StateObject private var editing = Local<String?>(nil)
     @StateObject private var editOpened = Local(Date.distantPast)
@@ -140,6 +141,8 @@ struct NoteView: View {
             if LibraryModel.overviewProject(detail.ref) != nil {
                 Button(splitting.value ? "Sorting…" : "Split by topic", action: split)
                     .buttonStyle(GhostButtonStyle(height: 26)).disabled(splitting.value)
+                Button(summarizing.value ? "Reading the code…" : "Summarize code", action: summarize)
+                    .buttonStyle(GhostButtonStyle(height: 26)).disabled(summarizing.value)
             }
             if detail.ref.path != "me.md" {
                 Button("Delete note") { confirmNoteDelete.value = true }.buttonStyle(QuietButtonStyle())
@@ -208,6 +211,23 @@ struct NoteView: View {
         guard !parts.isEmpty else { return nil }
         let line = parts.joined(separator: " · ")
         return line.prefix(1).uppercased() + line.dropFirst()
+    }
+
+    func summarize() {
+        summarizing.value = true
+        splitMessage.value = nil
+        let ref = detail.ref
+        Task {
+            let added = await model.summarizeCode(ref)
+            summarizing.value = false
+            splitMessage.value = Self.summaryMessage(added, consent: model.state.summarizerConsent)
+        }
+    }
+
+    static func summaryMessage(_ added: Int?, consent: Bool) -> String {
+        guard consent else { return "Needs Read sessions with your Claude plan, in Settings." }
+        guard let added else { return "Couldn't find this project's folder, or the model didn't answer. Try again in a bit." }
+        return added == 0 ? "Nothing new about the code." : "\(added) \(added == 1 ? "catch" : "catches") about the code waiting in the menu bar."
     }
 
     static func splitMessage(_ result: TopicSplit.Result?) -> String {

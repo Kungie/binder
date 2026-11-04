@@ -111,6 +111,21 @@ enum Commands {
         return 0
     }
 
+    /// `binder index [folder]`: the repo's architecture as catches, for its project's architecture note. Needs consent.
+    static func index(_ paths: Paths, folder: String) -> Int32 {
+        guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }
+        guard BinderState.load(paths.vault).summarizerConsent else {
+            print("Summarizing reads the code with your Claude plan. Turn on Read sessions with your Claude plan in Settings first.")
+            return 1
+        }
+        let root = paths.expand(folder).standardizedFileURL
+        guard let repo = GitRepo.locate(from: root) else { print("\(root.path) isn't in a git repo."); return 1 }
+        let added = CodeSummary.run(project: repo.name, repo: repo.root, vault: paths.vault, runner: SystemRunner(),
+                                    summarizer: ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil))
+        print(added.map { "\($0) \($0 == 1 ? "catch" : "catches") about \(repo.name) waiting in the menu bar." } ?? "Couldn't summarize \(repo.name) this time.")
+        return added == nil ? 1 : 0
+    }
+
     /// `binder search <words> [--project p] [--all] [--limit n]`: what the binder says, best first.
     static func search(_ paths: Paths, _ args: [String]) -> Int32 {
         guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }

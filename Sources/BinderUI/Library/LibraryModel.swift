@@ -238,6 +238,21 @@ public final class LibraryModel: ObservableObject {
         return added
     }
 
+    /// The project's architecture, summarized from its code with the user's own Claude plan, as catches.
+    /// Nil without consent or when the project's folder can't be found.
+    public func summarizeCode(_ ref: NoteRef) async -> Int? {
+        guard state.summarizerConsent, let project = Self.overviewProject(ref) else { return nil }
+        let roots = state.projectRoots.map { $0.hasPrefix("~/") ? home.appendingPathComponent(String($0.dropFirst(2))) : URL(fileURLWithPath: $0) }
+        guard let repo = CodeDigest.folder(for: project, roots: roots) else { return nil }
+        let vault = vault
+        let added = await Task.detached {
+            CodeSummary.run(project: project, repo: repo, vault: vault, runner: SystemRunner(),
+                            summarizer: ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil))
+        }.value
+        objectWillChange.send()
+        return added
+    }
+
     /// The project an overview note is for: `projects/dawn.md` → `dawn`. Nil for anything else, topic notes included.
     static func overviewProject(_ ref: NoteRef) -> String? {
         let parts = ref.path.split(separator: "/")

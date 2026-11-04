@@ -230,6 +230,36 @@ public struct ClaudeCLISummarizer: Summarizer {
         return review
     }
 
+    // MARK: Code: a repo's architecture as memory lines
+
+    public static let codeSystem = """
+    You summarize a software project for a developer's binder, so a coding agent starting fresh knows how it fits \
+    together. You get what the memory already says, and the repo's file list, README and build and deploy files.
+
+    Reply with only this JSON and nothing else:
+    {"new":[{"kind":"fact","scope":"project","text":"one short sentence","confidence":"high|medium|low",\
+    "detail":"one or two sentences","topic":"architecture"}]}
+
+    Write every field in English. At most 15 items: the main parts and what each does, how they talk, where things \
+    live, how it builds, tests and deploys. Be specific, with names and paths. Use the topic "architecture" unless a \
+    line is clearly about hosting, release, api or another part. Skip anything the memory already says. \
+    Never include secrets, tokens or passwords.
+    """
+
+    /// Architecture lines as catches, or nil when the model can't run or answers with something unreadable.
+    public func codeLines(digest: String, project: String, known: Known = Known(project: [], me: [])) -> [Proposal]? {
+        let input = Self.context(project: project, known: known) + "\n\nREPO:\n" + digest
+        guard let result = runner.run("claude", Self.arguments(system: Self.codeSystem), input: input, timeout: 120),
+              result.status == 0, !result.timedOut, let json = Self.object(in: result.stdout) else { return nil }
+        let items = (json["new"] as? [[String: Any]] ?? []).prefix(15).map { item -> [String: Any] in
+            var item = item
+            item["scope"] = "project"
+            if (item["topic"] as? String).flatMap(Topic.slug) == nil { item["topic"] = "architecture" }
+            return item
+        }
+        return parseNew(Array(items), project: project, evidence: "summarized from the code", source: .observed)
+    }
+
     // MARK: Import: an agent rules file split into memory lines
 
     public static let importSystem = """
