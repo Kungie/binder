@@ -11,13 +11,13 @@ public struct AppIcon: View {
             RoundedRectangle(cornerRadius: 185, style: .continuous)
                 .fill(Phosphor.black)
                 .overlay(
-                    RadialGradient(colors: [Phosphor.amber.opacity(0.42), .clear], center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 420)
+                    RadialGradient(colors: [Phosphor.amber.opacity(0.42), .clear], center: UnitPoint(x: 0.5, y: 0.36), startRadius: 0, endRadius: 420)
                         .clipShape(RoundedRectangle(cornerRadius: 185, style: .continuous))
                 )
                 .overlay(Scanlines(opacity: 0.3).clipShape(RoundedRectangle(cornerRadius: 185, style: .continuous)))
                 .overlay(RoundedRectangle(cornerRadius: 185, style: .continuous).strokeBorder(Phosphor.line, lineWidth: 6))
                 .frame(width: 824, height: 824)
-            Mascot(mood: .idle, size: 560).offset(y: 24)
+            Mascot(mood: .idle, size: 560).offset(y: -40)
         }
         .frame(width: 1024, height: 1024)
     }
