@@ -195,7 +195,7 @@ public final class OnboardingModel: ObservableObject {
         let ctx = ObserverContext(home: home, projectRoots: projectRoots, runner: runner)
         _ = try ObserveRun.run(vault: vault, ctx: ctx, observers: replay)
         let store = ProposalStore(vault: vault)
-        for p in store.pending() where p.agent == "binder" && p.target.hasPrefix("machines/") {
+        for p in store.pending() where p.agent == "binder" && (p.target.hasPrefix("servers/") || p.target.hasPrefix("machines/")) {
             switch homelabAnswer {
             case true?: try store.keep(p.id)
             case false?: try store.drop(p.id)

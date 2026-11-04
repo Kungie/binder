@@ -45,19 +45,34 @@ public struct ClaudeCLISummarizer: Summarizer {
         public var me: [String]
         /// The project's topic notes, so the model reuses one instead of inventing a near twin.
         public var topics: [String]
+        /// Which note each project line is in: the overview or a topic note. Empty means the overview.
+        public var projectPaths: [String]
 
-        public init(project: [String], me: [String], topics: [String] = []) {
+        public init(project: [String], me: [String], topics: [String] = [], projectPaths: [String] = []) {
             self.project = project
             self.me = me
             self.topics = topics
+            self.projectPaths = projectPaths
         }
 
-        /// The project's note and me.md, newest first.
+        /// The project's overview and topic notes, and me.md, newest first.
         public static func load(vault: Vault, project: String?) -> Known {
-            let projectLines = project.flatMap { NoteIO.read(vault.url("projects/\($0).md"))?.decisions } ?? []
+            var lines: [(line: String, path: String)] = []
+            var topics: [String] = []
+            if let project {
+                topics = Topic.topics(of: project, vault: vault)
+                for path in ["projects/\(project).md"] + topics.map({ Topic.path(project: project, topic: $0) }) {
+                    lines += (NoteIO.read(vault.url(path))?.decisions ?? []).map { ($0, path) }
+                }
+            }
+            // Lines start with their day, so sorting them sorts by date; equal days keep note order.
+            let newest = lines.enumerated().sorted { a, b in
+                let (da, db) = (a.element.line.prefix(10), b.element.line.prefix(10))
+                return da != db ? da > db : a.offset > b.offset
+            }.map(\.element).prefix(knownLimit)
             let meLines = NoteIO.read(vault.url("me.md"))?.decisions ?? []
-            return Known(project: Array(projectLines.reversed().prefix(knownLimit)), me: Array(meLines.reversed().prefix(knownLimit)),
-                         topics: project.map { Topic.topics(of: $0, vault: vault) } ?? [])
+            return Known(project: newest.map(\.line), me: Array(meLines.reversed().prefix(knownLimit)), topics: topics,
+                         projectPaths: newest.map(\.path))
         }
     }
 
@@ -172,7 +187,8 @@ public struct ClaudeCLISummarizer: Summarizer {
         for id in json["outdated"] as? [String] ?? [] {
             guard let n = Int(id.dropFirst()), n >= 1 else { continue }
             if id.hasPrefix("P"), n <= known.project.count, let project {
-                review.outdated.append(Outdated(target: "projects/\(project).md", line: known.project[n - 1]))
+                let target = n <= known.projectPaths.count ? known.projectPaths[n - 1] : "projects/\(project).md"
+                review.outdated.append(Outdated(target: target, line: known.project[n - 1]))
             } else if id.hasPrefix("M"), n <= known.me.count {
                 review.outdated.append(Outdated(target: "me.md", line: known.me[n - 1]))
             }

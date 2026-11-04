@@ -62,9 +62,9 @@ import Testing
         }
         let card = CardBuilder.build(vault: vault, repo: GitRepo(root: URL(fileURLWithPath: "/x/dawn"), remote: nil))
         let block = try #require(card.components(separatedBy: "FILES:\n").last)
-        let lines = block.components(separatedBy: "\n").filter { $0.hasPrefix("- files/") }
+        let lines = block.components(separatedBy: "\n").filter { $0.contains("files/dawn/") }
         #expect(lines.count == 5)
-        #expect(lines.first == "- files/dawn/2026-11-10-shot-6.png: Shot 6")
+        #expect(lines.first?.hasSuffix("files/dawn/2026-11-10-shot-6.png: Shot 6") == true)
     }
 
     @Test func captionsReplaceFileNameWhenModelAnswers() throws {

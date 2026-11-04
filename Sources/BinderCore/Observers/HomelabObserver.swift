@@ -36,7 +36,7 @@ public struct HomelabObserver: Observer {
             let address = host.hostName ?? host.alias
             known.insert(address)
             guard Self.isPrivate(address) else { continue }
-            obs.proposals.append(proposal("\(host.alias) at \(address) is part of your homelab.", target: "machines/\(host.alias).md", evidence: "~/.ssh/config"))
+            obs.proposals.append(proposal("\(host.alias) at \(address) is part of your homelab.", target: "servers/\(host.alias).md", evidence: "~/.ssh/config"))
         }
         guard ctx.allowLAN else { return obs }
         for found in probe.scan(ports: Self.ports) where !known.contains(found.ip) {

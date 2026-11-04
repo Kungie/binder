@@ -64,25 +64,32 @@ public enum TopicSplit {
     /// Moves only the lines the model names, each with its detail. Topic links stay in the overview.
     public static func run(project: String, vault: Vault, summarizer: ClaudeCLISummarizer, now: Date = .now) throws -> Result {
         let url = vault.url("projects/\(project).md")
-        guard var note = NoteIO.read(url) else { return Result(lines: 0, topics: 0) }
-        let candidates = note.decisions.reversed().filter { !CardBuilder.decisionText($0).hasPrefix("Topic: [[") }
+        guard let before = NoteIO.read(url) else { return Result(lines: 0, topics: 0) }
+        let candidates = before.decisions.reversed().filter { !CardBuilder.decisionText($0).hasPrefix("Topic: [[") }
         let sorted = summarizer.topicsFor(lines: Array(candidates), existing: Topic.topics(of: project, vault: vault))
-        var result = Result(lines: 0, topics: 0)
-        var used: [String] = []
-        for (topic, lines) in sorted.sorted(by: { $0.key < $1.key }) {
-            let (rest, taken) = note.takingDecisions(Set(lines))
-            guard !taken.isEmpty else { continue }
-            note = rest
-            try NoteIO.update(vault.url(Topic.path(project: project, topic: topic)), title: topic) { topicNote in
-                taken.reduce(topicNote) { $0.appendingDecisionItem($1) }
+        guard !sorted.isEmpty else { return Result(lines: 0, topics: 0) }
+        // The model can take a minute: take the lines from the note as it is now, so a Keep made meanwhile stays.
+        var moving: [(topic: String, items: [[String]])] = []
+        try NoteIO.update(url, title: project) { current in
+            var note = current
+            moving = []
+            for (topic, lines) in sorted.sorted(by: { $0.key < $1.key }) {
+                let (rest, taken) = note.takingDecisions(Set(lines))
+                guard !taken.isEmpty else { continue }
+                note = rest
+                moving.append((topic, taken))
             }
-            result.lines += taken.count
-            result.topics += 1
-            used.append(topic)
+            return note
         }
-        guard result.lines > 0 else { return result }
-        try NoteIO.write(note, to: url)
-        for topic in used { try Topic.link(project: project, topic: topic, vault: vault, now: now) }
+        var result = Result(lines: 0, topics: 0)
+        for (topic, items) in moving {
+            try NoteIO.update(vault.url(Topic.path(project: project, topic: topic)), title: topic) { topicNote in
+                items.reduce(topicNote) { $0.appendingDecisionItem($1) }
+            }
+            try Topic.link(project: project, topic: topic, vault: vault, now: now)
+            result.lines += items.count
+            result.topics += 1
+        }
         return result
     }
 }

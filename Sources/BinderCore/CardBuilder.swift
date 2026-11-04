@@ -38,7 +38,7 @@ public enum CardBuilder {
                 projectLines = note.observedLines + freeLines(note)
                 // Kept files go in their own block, as paths an agent can open.
                 decisions = note.decisions.reversed().filter { fileLine($0) == nil }
-                files = Array(note.decisions.reversed().compactMap(fileLine).prefix(5))
+                files = Array(note.decisions.reversed().compactMap { fileLine($0, vault: vault) }.prefix(5))
             } else {
                 projectLines = ["- nothing in the binder yet"]
             }
@@ -185,6 +185,15 @@ public enum CardBuilder {
     static func fileLine(_ decision: String) -> String? {
         guard let m = decisionText(decision).firstMatch(of: #/^!\[\[(files/[^\]]+)\]\]\s*(.*)$/#) else { return nil }
         return m.2.isEmpty ? "- \(m.1)" : "- \(m.1): \(m.2)"
+    }
+
+    /// The same, with the full path, so an agent in any folder can open the file.
+    static func fileLine(_ decision: String, vault: Vault) -> String? {
+        fileLine(decision).map { line in
+            let rest = line.dropFirst(2)
+            let end = rest.range(of: ": ")?.lowerBound ?? rest.endIndex
+            return "- " + vault.url(String(rest[..<end])).path + rest[end...]
+        }
     }
 
     /// Every file and folder a project's card reads, for cache freshness.

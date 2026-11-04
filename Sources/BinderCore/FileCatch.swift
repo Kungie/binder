@@ -46,7 +46,7 @@ public enum FileCatch {
     /// Writes the waiting copies and returns their proposals, at most `perSession - offeredSoFar` of them.
     public static func stage(_ candidates: [Candidate], vault: Vault, project: String?, session: String, offeredSoFar: Int) throws -> [Proposal] {
         var room = perSession - offeredSoFar
-        guard room > 0 else { return [] }
+        guard room > 0, !candidates.isEmpty else { return [] }
         let store = ProposalStore(vault: vault)
         var known = Set(store.pending().compactMap(\.fileHash)).union(keptHashes(vault))
         let target = project.map { "projects/\($0).md" } ?? "me.md"
@@ -122,13 +122,23 @@ public enum FileCatch {
 
     public static func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
-    /// Hashes of the files already kept under `files/`.
+    /// `.binder/kept-files.txt`: one SHA-256 per kept file, written at Keep, so a capture never rereads `files/`.
+    static func keptIndex(_ vault: Vault) -> URL { vault.url(".binder/kept-files.txt") }
+
     static func keptHashes(_ vault: Vault) -> Set<String> {
-        guard let walker = FileManager.default.enumerator(at: vault.url("files"), includingPropertiesForKeys: nil) else { return [] }
-        var hashes = Set<String>()
-        for case let url as URL in walker where extensions.contains(url.pathExtension.lowercased()) {
-            if let data = try? Data(contentsOf: url) { hashes.insert(sha256(data)) }
+        guard let text = try? String(contentsOf: keptIndex(vault), encoding: .utf8) else { return [] }
+        return Set(text.split(separator: "\n").map(String.init))
+    }
+
+    static func recordKept(_ hash: String, vault: Vault) {
+        let line = Data((hash + "\n").utf8)
+        if let handle = try? FileHandle(forWritingTo: keptIndex(vault)) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: line)
+        } else {
+            try? FileManager.default.createDirectory(at: vault.internalDir, withIntermediateDirectories: true)
+            try? line.write(to: keptIndex(vault))
         }
-        return hashes
     }
 }

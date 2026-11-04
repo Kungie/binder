@@ -87,7 +87,7 @@ private let runner = FakeRunner(results: [
         #expect(VaultLocation.load(home: home)?.path == m.vaultRoot.path)
         #expect(NoteIO.read(vault.url("me.md")).map(MeNote.profile)?.name == "Eren")
         #expect(NoteIO.read(vault.url("projects/dawn.md"))?.observedLines.contains("- repo: github.com/kungie/dawn") == true)
-        #expect(NoteIO.read(vault.url("machines/proxmox.md"))?.decisions.first?.contains("part of your homelab") == true)
+        #expect(NoteIO.read(vault.url("servers/proxmox.md"))?.decisions.first?.contains("part of your homelab") == true)
         #expect(m.writtenFiles.contains("projects/dawn.md") && m.writtenFiles.contains("me.md"))
         #expect(ProposalStore(vault: vault).pending().isEmpty)
     }

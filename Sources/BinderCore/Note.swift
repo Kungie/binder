@@ -136,7 +136,8 @@ public struct Note: Equatable {
         while i < section.end {
             guard lines[i].hasPrefix("- ") else { i += 1; continue }
             var end = i + 1
-            while end < section.end, lines[end].hasPrefix("  "), !lines[end].trimmingCharacters(in: .whitespaces).isEmpty { end += 1 }
+            while end < section.end, lines[end].hasPrefix("  ") || lines[end].hasPrefix("\t"),
+                  !lines[end].trimmingCharacters(in: .whitespaces).isEmpty { end += 1 }
             ranges.append(i..<end)
             i = end
         }
@@ -192,10 +193,12 @@ public struct Note: Equatable {
     }
 
     /// Takes these items (by their `- ` line) out of a section, returning the note without them and what was taken.
-    private func taking(_ targets: Set<String>, from heading: String) -> (note: Note, taken: [[String]]) {
+    /// With `firstOnly`, only the first copy of a line goes, so two identical lines stay two lines.
+    private func taking(_ targets: Set<String>, from heading: String, firstOnly: Bool = false) -> (note: Note, taken: [[String]]) {
         var all = lines
         guard let section = Self.section(heading, in: all) else { return (self, []) }
-        let ranges = Self.itemRanges(in: all, section: section).filter { targets.contains(String(all[$0.lowerBound].dropFirst(2))) }
+        var ranges = Self.itemRanges(in: all, section: section).filter { targets.contains(String(all[$0.lowerBound].dropFirst(2))) }
+        if firstOnly { ranges = Array(ranges.prefix(1)) }
         guard !ranges.isEmpty else { return (self, []) }
         let taken = ranges.map { Array(all[$0]) }
         for r in ranges.reversed() { all.removeSubrange(r) }
@@ -211,7 +214,7 @@ public struct Note: Equatable {
     func appendingDecisionItem(_ item: [String]) -> Note { appending(item, to: Self.decisionsHeading) }
 
     /// Takes a decision and its detail out of the note.
-    public func removingDecision(_ line: String) -> Note { taking([line], from: Self.decisionsHeading).note }
+    public func removingDecision(_ line: String) -> Note { taking([line], from: Self.decisionsHeading, firstOnly: true).note }
 
     /// Moves these decision lines (exactly as `decisions` lists them) to `## Superseded`, marked with `day`.
     /// Lines that aren't decisions here are ignored, so a stale list can't touch anything else.
@@ -223,7 +226,7 @@ public struct Note: Equatable {
 
     /// Puts a superseded line back among the decisions, with its detail.
     public func restoring(_ supersededLine: String) -> Note {
-        var (note, taken) = taking([supersededLine], from: Self.supersededHeading)
+        var (note, taken) = taking([supersededLine], from: Self.supersededHeading, firstOnly: true)
         guard let item = taken.first else { return self }
         let original = item[0].replacingOccurrences(of: #" · superseded \d{4}-\d{2}-\d{2}$"#, with: "", options: .regularExpression)
         note = note.appending([original] + item.dropFirst(), to: Self.decisionsHeading)

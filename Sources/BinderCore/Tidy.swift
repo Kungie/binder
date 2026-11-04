@@ -14,14 +14,9 @@ public enum Tidy {
         return repeats
     }
 
-    /// The notes worth tidying: you, your projects and your servers.
+    /// The notes worth tidying: you, your projects and their topics, your servers, machines and hosting.
     static func notes(in vault: Vault) -> [String] {
-        var paths = ["me.md"]
-        for folder in ["projects", "servers", "machines"] {
-            let names = (try? FileManager.default.contentsOfDirectory(atPath: vault.url(folder).path)) ?? []
-            paths += names.filter { $0.hasSuffix(".md") }.sorted().map { "\(folder)/\($0)" }
-        }
-        return paths.filter { FileManager.default.fileExists(atPath: vault.url($0).path) }
+        UsageHandles.notes(vault: vault).filter { !$0.hasPrefix("access/") }
     }
 
     /// Tidies every note changed since its last tidy (all of them with `everything`). Duplicates always go;

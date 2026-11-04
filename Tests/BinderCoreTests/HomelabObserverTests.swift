@@ -30,7 +30,7 @@ private func homeWithSSHConfig() throws -> URL {
         #expect(obs.notes.isEmpty)
         #expect(obs.proposals.map(\.text) == ["proxmox at 10.0.7.20 is part of your homelab."])
         let p = try #require(obs.proposals.first)
-        #expect(p.kind == .fact && p.source == .observed && p.target == "machines/proxmox.md" && p.agent == "binder")
+        #expect(p.kind == .fact && p.source == .observed && p.target == "servers/proxmox.md" && p.agent == "binder")
     }
 
     @Test func lanProbeOnlyWhenAllowed() throws {

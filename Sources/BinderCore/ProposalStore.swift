@@ -50,13 +50,18 @@ public struct ProposalStore: Sendable {
         let text = editedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? p.text
         let day = Self.day.string(from: now)
         if p.kind == .file { return try keepFile(p, caption: text, day: day) }
+        // A note that already has the line keeps its one copy: Keep can be offered again for the other targets.
+        let normalized = Self.normalize(text)
+        func has(_ note: Note) -> Bool { note.decisions.contains { Self.normalize($0).contains(normalized) } }
         try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) {
-            $0.appendingDecision("\(day) · \(text) · \(p.provenance)", detail: p.detail)
+            has($0) ? $0 : $0.appendingDecision("\(day) · \(text) · \(p.provenance)", detail: p.detail)
         }
         if let (project, topic) = Self.topic(of: p.target) { try Topic.link(project: project, topic: topic, vault: vault, now: now) }
         let forProject = p.project.map { " · for [[\($0)]]" } ?? ""
         for path in p.also {
-            try NoteIO.update(vault.url(path), title: Self.title(for: path)) { $0.appendingDecision("\(day) · \(text)\(forProject) · \(p.provenance)") }
+            try NoteIO.update(vault.url(path), title: Self.title(for: path)) {
+                has($0) ? $0 : $0.appendingDecision("\(day) · \(text)\(forProject) · \(p.provenance)")
+            }
         }
         try FileManager.default.removeItem(at: file(id))
     }
@@ -74,6 +79,7 @@ public struct ProposalStore: Sendable {
         }
         try fm.createDirectory(at: vault.url(folder), withIntermediateDirectories: true)
         try fm.moveItem(at: vault.inboxFiles.appendingPathComponent(name), to: vault.url(path))
+        if let hash = p.fileHash { FileCatch.recordKept(hash, vault: vault) }
         let provenance = p.source == .command ? "made in a session" : "kept from the chat"
         try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) { $0.appendingDecision("\(day) · ![[\(path)]] \(caption) · \(provenance)") }
         try fm.removeItem(at: file(p.id))
