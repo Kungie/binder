@@ -36,6 +36,12 @@ It writes all of that down, so agents stop guessing.
 
 **Catches what sessions decide.** When a Claude Code session ends, Binder notes what the agent actually did. For example, `wrangler pages deploy` becomes "the site deploys to Cloudflare Pages". It shows each catch in the menu bar for you to keep or drop. Keep sends it into Binder's brain, Drop shreds it. If you say yes, it also reads the session with your own Claude plan to catch decisions that were only said out loud.
 
+**Sorts what it knows.** A project grows topic notes as the work does: hosting, api, auth, whatever it's about. A fact about a server or a hosting account also goes into that server's or provider's own note, so the graph shows what runs where. Split by topic sorts an older project's lines once. Every catch card says which note it goes to, and in detailed mode why.
+
+**Keeps the files that matter.** Images and PDFs you attach to a session, and the ones the agent makes, show up as catch cards with a preview. Keep files them under `files/` in your binder and links them from the note. Nothing gets in without Keep.
+
+**Shows what sessions used.** Each note says how many session cards it was on and roughly how often an agent acted on it. You can edit any note, or delete a line or a whole note, inside Binder.
+
 **Briefs every new session.** At session start Claude Code gets a short card: who you are, how you like to work, this project, its servers and keys, and where the last session stopped. The main window shows exactly what the agent sees.
 
 **Hands off long sessions.** When a session is getting long, Binder says so. One click writes a handoff card and opens a fresh session in the same folder, which starts with the card.

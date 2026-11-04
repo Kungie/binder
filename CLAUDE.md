@@ -86,14 +86,19 @@ A plain Markdown folder. The default is `~/Binder`, and first launch also offers
   access/ssh.md
   access/accounts.md
   servers/<host>.md
+  hosting/<provider>.md
   projects/<name>.md
+  projects/<name>/<topic>.md
+  files/<project or me>/<yyyy-mm-dd>-<caption>.<ext>
   handoffs/<project>/<yyyy-mm-dd-hhmm>.md
-  .binder/            # inbox, cached cards, transcript cursors, state, log (managed)
+  .binder/            # inbox (and inbox/files), cached cards, usage counts, transcript cursors, state, log (managed)
 ```
 
 Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - An **observed block** between `<!-- binder:observed start -->` and `<!-- binder:observed end -->`. The observers rewrite it from scratch every time, so it always shows the real state of the machine.
-- **`## Decisions`** and everything else. Only approved proposals and the user's own edits go here.
+- **`## Decisions`** and everything else. Only approved proposals and the user's own edits go here. A decision's detail is an indented line under it (`  - …`) and moves with it.
+
+Topic notes (`projects/<name>/<topic>.md`) are linked from the overview as `[[<name>/<topic>]]`. A fact about a server or a hosting provider is also written to that note, ending `· for [[<project>]]`. Kept images and PDFs are embedded as `![[files/…]]`, which is not a note link.
 
 ## Build and test
 
@@ -132,6 +137,9 @@ Each note has frontmatter (`verified`, `source`) and two kinds of content:
 - Local only. No telemetry, no account, no cloud. The one network call of its own is the daily update check to GitHub's releases API (on by default, off in Settings › Updates), and it sends nothing but the request itself.
 - Never store secrets (private keys, tokens, passwords). Store pointers instead, for example "the token is in 1Password, item Hetzner API".
 - Personal details only ever come from the user.
+- `.binder/usage.json` holds counts only: lines are keyed by a hash, never their text.
+- Images and PDFs wait in `.binder/inbox/files` and reach the binder only on Keep. Drop deletes the waiting copy.
+- Everything Binder writes is English, whatever language a session is in.
 
 ## Mascot and voice
 
