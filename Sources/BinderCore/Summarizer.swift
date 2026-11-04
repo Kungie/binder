@@ -223,6 +223,35 @@ public struct ClaudeCLISummarizer: Summarizer {
         }
     }
 
+    // MARK: Topics: a project's lines sorted into topic notes
+
+    public static let topicSystem = """
+    You sort the memory lines of one software project, numbered L1, L2 and so on, into topics: the part of the project \
+    each line is about, such as hosting, api, auth, payments or design. Reuse one of TOPICS when it fits. Topic names are \
+    English, one or two words. Leave out lines about the whole project, and lines you are unsure about.
+    Reply with only this JSON and nothing else: {"topics":{"hosting":["L2","L5"],"api":["L3"]}}
+    """
+
+    /// Topic slug → the lines (exactly as given) the model put under it. Each line goes to one topic at most.
+    public func topicsFor(lines: [String], existing: [String]) -> [String: [String]] {
+        guard !lines.isEmpty else { return [:] }
+        let numbered = lines.enumerated().map { "L\($0.offset + 1). \(CardBuilder.decisionText($0.element))" }.joined(separator: "\n")
+        let input = (existing.isEmpty ? "" : "TOPICS: \(existing.joined(separator: ", "))\n\n") + numbered
+        guard let result = runner.run("claude", Self.arguments(system: Self.topicSystem), input: input, timeout: 90),
+              result.status == 0, !result.timedOut, let json = Self.object(in: result.stdout),
+              let topics = json["topics"] as? [String: Any] else { return [:] }
+        var sorted: [String: [String]] = [:], taken = Set<String>()
+        for (name, ids) in topics.sorted(by: { $0.key < $1.key }) {
+            guard let slug = Topic.slug(name) else { continue }
+            for case let id as String in ids as? [Any] ?? [] {
+                guard id.hasPrefix("L"), let n = Int(id.dropFirst()), n >= 1, n <= lines.count, !taken.contains(lines[n - 1]) else { continue }
+                taken.insert(lines[n - 1])
+                sorted[slug, default: []].append(lines[n - 1])
+            }
+        }
+        return sorted
+    }
+
     // MARK: Handoff
 
     static let handoffSystem = """

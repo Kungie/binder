@@ -204,6 +204,12 @@ public struct Note: Equatable {
         return (note, taken)
     }
 
+    /// Takes these decisions, each with its detail lines (raw, `- ` included), out of the note.
+    func takingDecisions(_ lines: Set<String>) -> (note: Note, taken: [[String]]) { taking(lines, from: Self.decisionsHeading) }
+
+    /// Adds a decision taken from another note, detail lines and all.
+    func appendingDecisionItem(_ item: [String]) -> Note { appending(item, to: Self.decisionsHeading) }
+
     /// Takes a decision and its detail out of the note.
     public func removingDecision(_ line: String) -> Note { taking([line], from: Self.decisionsHeading).note }
 

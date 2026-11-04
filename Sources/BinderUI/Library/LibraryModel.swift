@@ -142,6 +142,26 @@ public final class LibraryModel: ObservableObject {
         return added
     }
 
+    /// The project an overview note is for: `projects/dawn.md` → `dawn`. Nil for anything else, topic notes included.
+    static func overviewProject(_ ref: NoteRef) -> String? {
+        let parts = ref.path.split(separator: "/")
+        guard parts.count == 2, parts[0] == "projects", parts[1].hasSuffix(".md") else { return nil }
+        return String(parts[1].dropLast(3))
+    }
+
+    /// Sorts a project overview's decisions into topic notes with the user's own Claude plan.
+    /// Nil when the user hasn't agreed to Binder reading with their plan.
+    public func splitByTopic(_ ref: NoteRef) async -> TopicSplit.Result? {
+        guard state.summarizerConsent, let project = Self.overviewProject(ref) else { return nil }
+        let vault = vault
+        let result = await Task.detached {
+            try? TopicSplit.run(project: project, vault: vault, summarizer: ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil))
+        }.value
+        reload()
+        objectWillChange.send()
+        return result ?? TopicSplit.Result(lines: 0, topics: 0)
+    }
+
     /// Puts a superseded line back among the note's decisions.
     public func restore(_ supersededLine: String, in ref: NoteRef) {
         try? Memory.restore(supersededLine, in: ref.path, vault: vault)

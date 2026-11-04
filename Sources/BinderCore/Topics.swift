@@ -17,6 +17,17 @@ public enum Topic {
 
     public static func path(project: String, topic: String) -> String { "projects/\(project)/\(topic).md" }
 
+    /// Links a topic from the project's overview the first time, so Obsidian and the graph see it.
+    public static func link(project: String, topic: String, vault: Vault, now: Date = .now) throws {
+        let link = "[[\(project)/\(topic)]]"
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        try NoteIO.update(vault.url("projects/\(project).md"), title: project) {
+            $0.render().contains(link) ? $0 : $0.appendingDecision("\(f.string(from: now)) · Topic: \(link) · written by Binder")
+        }
+    }
+
     /// The project's topics, A to Z, by file name.
     public static func topics(of project: String, vault: Vault) -> [String] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: vault.url("projects/\(project)").path)) ?? []
@@ -35,5 +46,43 @@ public enum Destination {
         default: return nil
         }
         return Topic.slug(String(tag[tag.index(after: colon)...])).map { "\(folder)/\($0).md" }
+    }
+}
+
+/// Sorts a project overview's decisions into topic notes, once, when the user asks.
+public enum TopicSplit {
+    public struct Result: Equatable, Sendable {
+        public var lines: Int
+        public var topics: Int
+
+        public init(lines: Int, topics: Int) {
+            self.lines = lines
+            self.topics = topics
+        }
+    }
+
+    /// Moves only the lines the model names, each with its detail. Topic links stay in the overview.
+    public static func run(project: String, vault: Vault, summarizer: ClaudeCLISummarizer, now: Date = .now) throws -> Result {
+        let url = vault.url("projects/\(project).md")
+        guard var note = NoteIO.read(url) else { return Result(lines: 0, topics: 0) }
+        let candidates = note.decisions.reversed().filter { !CardBuilder.decisionText($0).hasPrefix("Topic: [[") }
+        let sorted = summarizer.topicsFor(lines: Array(candidates), existing: Topic.topics(of: project, vault: vault))
+        var result = Result(lines: 0, topics: 0)
+        var used: [String] = []
+        for (topic, lines) in sorted.sorted(by: { $0.key < $1.key }) {
+            let (rest, taken) = note.takingDecisions(Set(lines))
+            guard !taken.isEmpty else { continue }
+            note = rest
+            try NoteIO.update(vault.url(Topic.path(project: project, topic: topic)), title: topic) { topicNote in
+                taken.reduce(topicNote) { $0.appendingDecisionItem($1) }
+            }
+            result.lines += taken.count
+            result.topics += 1
+            used.append(topic)
+        }
+        guard result.lines > 0 else { return result }
+        try NoteIO.write(note, to: url)
+        for topic in used { try Topic.link(project: project, topic: topic, vault: vault, now: now) }
+        return result
     }
 }

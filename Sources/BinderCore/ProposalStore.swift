@@ -45,12 +45,7 @@ public struct ProposalStore: Sendable {
         try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) {
             $0.appendingDecision("\(day) · \(text) · \(p.provenance)", detail: p.detail)
         }
-        if let (project, topic) = Self.topic(of: p.target) {
-            let overview = "projects/\(project).md", link = "[[\(project)/\(topic)]]"
-            try NoteIO.update(vault.url(overview), title: project) {
-                $0.render().contains(link) ? $0 : $0.appendingDecision("\(day) · Topic: \(link) · written by Binder")
-            }
-        }
+        if let (project, topic) = Self.topic(of: p.target) { try Topic.link(project: project, topic: topic, vault: vault, now: now) }
         let forProject = p.project.map { " · for [[\($0)]]" } ?? ""
         for path in p.also {
             try NoteIO.update(vault.url(path), title: Self.title(for: path)) { $0.appendingDecision("\(day) · \(text)\(forProject) · \(p.provenance)") }

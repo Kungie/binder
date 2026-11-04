@@ -7,6 +7,8 @@ struct NoteView: View {
     var detail: NoteDetail
     @StateObject private var draft = Local("")
     @StateObject private var refused = Local(false)
+    @StateObject private var splitting = Local(false)
+    @StateObject private var splitMessage = Local<String?>(nil)
     @Environment(\.isSnapshot) private var isSnapshot
 
     var body: some View {
@@ -26,9 +28,14 @@ struct NoteView: View {
                         if !detail.decisions.isEmpty { chip("\(detail.decisions.count) DECISION\(detail.decisions.count == 1 ? "" : "S")") }
                     }
                     if !detail.topics.isEmpty { topics }
+                    if let message = splitMessage.value { Text(message).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.cream2) }
                 }
                 Spacer()
                 HStack(spacing: 8) {
+                    if LibraryModel.overviewProject(detail.ref) != nil {
+                        Button(splitting.value ? "Sorting…" : "Split by topic", action: split)
+                            .buttonStyle(GhostButtonStyle(height: 32)).disabled(splitting.value)
+                    }
                     if LibraryModel.obsidianInstalled { Button("Open in Obsidian") { model.openInObsidian(detail.ref) }.buttonStyle(GhostButtonStyle(height: 32)) }
                     Button("Edit") { model.openInEditor(detail.ref) }.buttonStyle(CreamButtonStyle())
                 }
@@ -71,6 +78,23 @@ struct NoteView: View {
             }
         }
         .padding(.top, 4)
+    }
+
+    func split() {
+        splitting.value = true
+        splitMessage.value = nil
+        let ref = detail.ref
+        Task {
+            let result = await model.splitByTopic(ref)
+            splitting.value = false
+            splitMessage.value = Self.splitMessage(result)
+        }
+    }
+
+    static func splitMessage(_ result: TopicSplit.Result?) -> String {
+        guard let result else { return "Needs Read sessions with your Claude plan, in Settings." }
+        guard result.lines > 0 else { return "Nothing to sort. Everything here is about the whole project." }
+        return "Moved \(result.lines) line\(result.lines == 1 ? "" : "s") into \(result.topics) topic\(result.topics == 1 ? "" : "s")."
     }
 
     func chip(_ text: String, amber: Bool = false) -> some View {
