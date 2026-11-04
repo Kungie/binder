@@ -22,19 +22,20 @@ public enum CardBuilder {
         var decisions: [String] = []
         var access: [String] = []
         var handoff: [String] = []
+        var topics: [(name: String, lines: [String])] = []
 
         if let repo {
             let note = NoteIO.read(vault.url("projects/\(repo.name).md"))
             if let note {
                 projectLines = note.observedLines + freeLines(note)
                 // Date and text only: where a line came from matters in the note, not to the agent.
-                decisions = note.decisions.reversed().map { line in
-                    let date = line.components(separatedBy: " · ").first ?? ""
-                    let text = decisionText(line)
-                    return text == line ? "- \(line)" : "- \(date) · \(text)"
-                }
+                decisions = note.decisions.reversed().map(cardLine)
             } else {
                 projectLines = ["- nothing in the binder yet"]
+            }
+            topics = Topic.topics(of: repo.name, vault: vault).compactMap { name in
+                let lines = NoteIO.read(vault.url(Topic.path(project: repo.name, topic: name)))?.decisions.reversed().map(cardLine) ?? []
+                return lines.isEmpty ? nil : (name, Array(lines))
             }
             access = accessLines(vault, linkedFrom: note)
             if let card = Handoff.pending(project: repo.name, vault: vault) {
@@ -51,6 +52,9 @@ public enum CardBuilder {
                 var block = "PROJECT \(repo.name):\n" + projectLines.joined(separator: "\n")
                 if !decisions.isEmpty { block += "\nDecisions, newest first:\n" + decisions.joined(separator: "\n") }
                 parts.append(block)
+                for topic in topics where !topic.lines.isEmpty {
+                    parts.append("\(topic.name.uppercased()):\n" + topic.lines.joined(separator: "\n"))
+                }
             }
             if !access.isEmpty { parts.append("SERVERS AND ACCESS:\n" + access.joined(separator: "\n")) }
             if !handoff.isEmpty { parts.append("PICK UP FROM LAST TIME:\n" + handoff.joined(separator: "\n")) }
@@ -59,13 +63,26 @@ public enum CardBuilder {
 
         var card = render()
         while card.count > budget {
-            if decisions.count > 1 { decisions.removeLast() }
+            if let oldest = oldestTopicLine(topics) { topics[oldest].lines.removeLast() }
+            else if decisions.count > 1 { decisions.removeLast() }
             else if !access.isEmpty { access.removeLast() }
             else if me.count > 3 { me.removeLast() }
             else { return String(card.prefix(budget)) }
             card = render()
         }
         return card
+    }
+
+    /// A decision as the card shows it: date and text, without where it came from.
+    static func cardLine(_ line: String) -> String {
+        let date = line.components(separatedBy: " · ").first ?? ""
+        let text = decisionText(line)
+        return text == line ? "- \(line)" : "- \(date) · \(text)"
+    }
+
+    /// The topic whose last (oldest) line is the oldest of all, so trimming takes the oldest topic line first.
+    static func oldestTopicLine(_ topics: [(name: String, lines: [String])]) -> Int? {
+        topics.indices.filter { !topics[$0].lines.isEmpty }.min { topics[$0].lines.last! < topics[$1].lines.last! }
     }
 
     static func meLines(_ vault: Vault) -> [String] {
@@ -129,9 +146,9 @@ public enum CardBuilder {
 
     /// Every file and folder a project's card reads, for cache freshness.
     static func sources(vault: Vault, repo: GitRepo) -> [URL] {
-        var urls = [vault.url("me.md"), vault.url("projects/\(repo.name).md"), vault.url("servers"), vault.url("access"),
-                    vault.url("handoffs/\(repo.name)")]
-        for dir in ["servers", "access", "handoffs/\(repo.name)"] {
+        var urls = [vault.url("me.md"), vault.url("projects/\(repo.name).md"), vault.url("projects/\(repo.name)"), vault.url("servers"),
+                    vault.url("access"), vault.url("handoffs/\(repo.name)")]
+        for dir in ["servers", "access", "handoffs/\(repo.name)", "projects/\(repo.name)"] {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: vault.url(dir).path)) ?? []
             urls += names.map { vault.url("\(dir)/\($0)") }
         }
