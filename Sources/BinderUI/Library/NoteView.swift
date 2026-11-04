@@ -9,6 +9,13 @@ struct NoteView: View {
     @StateObject private var refused = Local(false)
     @StateObject private var splitting = Local(false)
     @StateObject private var splitMessage = Local<String?>(nil)
+    /// The text being edited, while the editor is open.
+    @StateObject private var editing = Local<String?>(nil)
+    @StateObject private var editOpened = Local(Date.distantPast)
+    @StateObject private var conflict = Local(false)
+    @StateObject private var hovered = Local<String?>(nil)
+    @StateObject private var lineToDelete = Local<String?>(nil)
+    @StateObject private var confirmNoteDelete = Local(false)
     @Environment(\.isSnapshot) private var isSnapshot
 
     var body: some View {
@@ -28,18 +35,75 @@ struct NoteView: View {
                         if !detail.decisions.isEmpty { chip("\(detail.decisions.count) DECISION\(detail.decisions.count == 1 ? "" : "S")") }
                     }
                     if !detail.topics.isEmpty { topics }
+                    if editing.value == nil { noteActions }
                     if let message = splitMessage.value { Text(message).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.cream2) }
                 }
                 Spacer()
                 HStack(spacing: 8) {
-                    if LibraryModel.overviewProject(detail.ref) != nil {
-                        Button(splitting.value ? "Sorting…" : "Split by topic", action: split)
-                            .buttonStyle(GhostButtonStyle(height: 32)).disabled(splitting.value)
+                    if editing.value != nil {
+                        Button("Cancel") { editing.value = nil }.buttonStyle(GhostButtonStyle(height: 32))
+                        Button("Save") { save(force: false) }.buttonStyle(CreamButtonStyle())
+                    } else {
+                        if LibraryModel.obsidianInstalled { Button("Open in Obsidian") { model.openInObsidian(detail.ref) }.buttonStyle(GhostButtonStyle(height: 32)) }
+                        Button("Edit") {
+                            let (text, opened) = model.beginEdit(detail.ref)
+                            editOpened.value = opened
+                            editing.value = text
+                        }
+                        .buttonStyle(CreamButtonStyle())
                     }
-                    if LibraryModel.obsidianInstalled { Button("Open in Obsidian") { model.openInObsidian(detail.ref) }.buttonStyle(GhostButtonStyle(height: 32)) }
-                    Button("Edit") { model.openInEditor(detail.ref) }.buttonStyle(CreamButtonStyle())
                 }
+                .fixedSize()
             }
+            if editing.value != nil { editor } else { content; addMemory }
+        }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onChange(of: detail.ref) { _, _ in editing.value = nil }
+        .alert("Changed outside Binder", isPresented: Binding(get: { conflict.value }, set: { conflict.value = $0 })) {
+            Button("Overwrite") { save(force: true) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This note changed while you were editing. Overwrite it with your version?")
+        }
+        .confirmationDialog("Delete this line?", isPresented: Binding(get: { lineToDelete.value != nil }, set: { if !$0 { lineToDelete.value = nil } })) {
+            Button("Delete", role: .destructive) {
+                if let line = lineToDelete.value { model.delete(line: line, in: detail.ref) }
+                lineToDelete.value = nil
+            }
+        }
+        .confirmationDialog("Move \(detail.title) to the Trash?", isPresented: Binding(get: { confirmNoteDelete.value }, set: { confirmNoteDelete.value = $0 })) {
+            Button("Move to Trash", role: .destructive) { try? model.deleteNote(detail.ref) }
+        }
+    }
+
+    /// Everything outside the observed block, as Markdown. The observed part sits above it, read-only.
+    var editor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !detail.facts.isEmpty { observed }
+            SectionLabel("Your note · Markdown")
+            TextEditor(text: Binding(get: { editing.value ?? "" }, set: { editing.value = $0 }))
+                .font(Fonts.grotesk(13.5))
+                .foregroundColor(Phosphor.cream)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(Phosphor.black)
+                .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
+                .frame(maxHeight: .infinity)
+                .accessibilityLabel("Edit \(detail.title)")
+        }
+    }
+
+    func save(force: Bool) {
+        guard let text = editing.value else { return }
+        switch model.save(text, to: detail.ref, opened: editOpened.value, force: force) {
+        case .saved: editing.value = nil
+        case .changedOnDisk: conflict.value = true
+        }
+    }
+
+    var content: some View {
             Scroll {
                 VStack(alignment: .leading, spacing: 18) {
                     if !detail.facts.isEmpty { observed }
@@ -55,11 +119,6 @@ struct NoteView: View {
                     }
                 }
             }
-            addMemory
-        }
-        .padding(.horizontal, 32)
-        .padding(.vertical, 26)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     static func short(_ iso: String) -> String {
@@ -67,6 +126,20 @@ struct NoteView: View {
         let f = DateFormatter()
         f.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm 'TODAY'" : "d MMM HH:mm"
         return f.string(from: date).uppercased()
+    }
+
+    /// Less frequent actions, kept out of the header.
+    var noteActions: some View {
+        HStack(spacing: 8) {
+            if LibraryModel.overviewProject(detail.ref) != nil {
+                Button(splitting.value ? "Sorting…" : "Split by topic", action: split)
+                    .buttonStyle(GhostButtonStyle(height: 26)).disabled(splitting.value)
+            }
+            if detail.ref.path != "me.md" {
+                Button("Delete note") { confirmNoteDelete.value = true }.buttonStyle(QuietButtonStyle())
+            }
+        }
+        .padding(.top, 4)
     }
 
     /// The project's topic notes; one click opens a topic.
@@ -134,10 +207,23 @@ struct NoteView: View {
             ForEach(Array(detail.decisions.enumerated()), id: \.offset) { _, d in
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(Self.day(d.date)).font(Fonts.vt(18)).foregroundColor(Phosphor.amber).frame(width: 70, alignment: .leading)
-                    Text(d.text).font(Fonts.grotesk(13.5)).foregroundColor(Phosphor.cream).frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(d.text).font(Fonts.grotesk(13.5)).foregroundColor(Phosphor.cream)
+                        ForEach(Array(d.details.enumerated()), id: \.offset) { _, line in
+                            Text(line).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if hovered.value == d.line {
+                        Button("Delete") { lineToDelete.value = d.line }.buttonStyle(QuietButtonStyle())
+                    }
                     Text(d.provenance.uppercased()).font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim).frame(width: 150, alignment: .trailing)
                 }
                 .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .onHover { inside in
+                    if inside { hovered.value = d.line } else if hovered.value == d.line { hovered.value = nil }
+                }
                 .overlay(alignment: .top) { Rectangle().fill(Phosphor.line).frame(height: 1) }
             }
         }

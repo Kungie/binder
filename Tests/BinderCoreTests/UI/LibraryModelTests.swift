@@ -37,7 +37,8 @@ import Testing
         #expect(d.title == "dawn")
         #expect(d.verified == "2026-10-26T09:14:00Z")
         #expect(d.facts.first == Fact(key: "repo", value: "github.com/kungie/dawn"))
-        #expect(d.decisions.first == Decision(date: "2026-10-26", text: "The dawn site deploys to Cloudflare Pages.", provenance: "kept from a command"))
+        #expect(d.decisions.first == Decision(date: "2026-10-26", text: "The dawn site deploys to Cloudflare Pages.", provenance: "kept from a command",
+                                             line: "2026-10-26 · The dawn site deploys to Cloudflare Pages. · kept from a command"))
         #expect(d.freeText == ["- site: Cloudflare Pages, see [[site]]", "- server: [[hetzner-1]]"])
         #expect(d.links == ["site", "hetzner-1"])
     }

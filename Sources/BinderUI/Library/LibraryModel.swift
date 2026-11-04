@@ -34,6 +34,10 @@ public struct Decision: Equatable, Sendable {
     public var date: String
     public var text: String
     public var provenance: String
+    /// The line exactly as the note has it, for Delete.
+    public var line: String = ""
+    /// What's written under it.
+    public var details: [String] = []
 }
 
 public struct NoteDetail: Sendable {
@@ -63,6 +67,8 @@ public final class LibraryModel: ObservableObject {
     @Published public private(set) var state: BinderState
     @Published public private(set) var vault: Vault
     public let home: URL
+    /// Where Delete note sends a file: the macOS Trash, so it can be recovered. Tests swap it out.
+    var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
 
     public init(vault: Vault, home: URL) {
         self.vault = vault
@@ -112,10 +118,11 @@ public final class LibraryModel: ObservableObject {
             guard line.hasPrefix("- "), let colon = line.range(of: ": ") else { return nil }
             return Fact(key: String(line[line.index(line.startIndex, offsetBy: 2)..<colon.lowerBound]), value: String(line[colon.upperBound...]))
         }
-        let decisions = note.decisions.reversed().map { line -> Decision in
-            let parts = line.components(separatedBy: " · ")
-            guard parts.count >= 3 else { return Decision(date: "", text: line, provenance: "") }
-            return Decision(date: parts[0], text: parts[1..<(parts.count - 1)].joined(separator: " · "), provenance: parts.last!)
+        let decisions = note.decisionItems.reversed().map { item -> Decision in
+            let line = item.line, parts = line.components(separatedBy: " · ")
+            guard parts.count >= 3 else { return Decision(date: "", text: line, provenance: "", line: line, details: item.details) }
+            return Decision(date: parts[0], text: parts[1..<(parts.count - 1)].joined(separator: " · "), provenance: parts.last!,
+                            line: line, details: item.details)
         }
         var detail = NoteDetail(ref: ref, title: title(of: ref.path) ?? ref.title, verified: note.value("verified"), source: note.value("source"),
                                 facts: facts, decisions: decisions, freeText: CardBuilder.freeLines(note),
@@ -140,6 +147,49 @@ public final class LibraryModel: ObservableObject {
         let added = (try? Memory.add(text, to: ref.path, vault: vault)) ?? false
         if added { objectWillChange.send() }
         return added
+    }
+
+    // MARK: Editing
+
+    public enum SaveResult: Equatable, Sendable { case saved, changedOnDisk }
+    public enum DeleteError: Error { case meStays }
+
+    /// The note's editable text, and its file date, so Save can tell whether something else changed it since.
+    public func beginEdit(_ ref: NoteRef) -> (text: String, opened: Date) {
+        let note = NoteIO.read(vault.url(ref.path)) ?? Note.new(title: ref.title)
+        return (note.editableText, Self.modified(vault.url(ref.path)) ?? .distantPast)
+    }
+
+    /// Writes the edit around the note's current observed block. Refuses when the file changed after `opened`, unless forced.
+    public func save(_ text: String, to ref: NoteRef, opened: Date, force: Bool = false) -> SaveResult {
+        let url = vault.url(ref.path)
+        if !force, let now = Self.modified(url), now > opened { return .changedOnDisk }
+        let current = NoteIO.read(url) ?? Note.new(title: ref.title)
+        try? NoteIO.write(current.replacingEditable(text), to: url)
+        reload()
+        objectWillChange.send()
+        return .saved
+    }
+
+    /// Takes one decision, and what's written under it, out of the note.
+    public func delete(line: String, in ref: NoteRef) {
+        let url = vault.url(ref.path)
+        guard let note = NoteIO.read(url) else { return }
+        let next = note.removingDecision(line)
+        if next != note { try? NoteIO.write(next, to: url) }
+        objectWillChange.send()
+    }
+
+    /// Moves the note to the Trash. me.md stays: it's who you are.
+    public func deleteNote(_ ref: NoteRef) throws {
+        guard ref.path != "me.md" else { throw DeleteError.meStays }
+        try trash(vault.url(ref.path))
+        if selected == ref { selected = nil }
+        reload()
+    }
+
+    static func modified(_ url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }
 
     /// The project an overview note is for: `projects/dawn.md` → `dawn`. Nil for anything else, topic notes included.
