@@ -129,61 +129,109 @@ public struct Note: Equatable {
 
     private static func decisionsSection(in lines: [String]) -> (heading: Int, end: Int)? { section(decisionsHeading, in: lines) }
 
-    private func items(in heading: String) -> [String] {
-        let all = lines
-        guard let section = Self.section(heading, in: all) else { return [] }
-        return all[(section.heading + 1)..<section.end].filter { $0.hasPrefix("- ") }.map { String($0.dropFirst(2)) }
+    /// One `- ` line of a section and the indented lines right under it (its detail), as line indexes.
+    private static func itemRanges(in lines: [String], section: (heading: Int, end: Int)) -> [Range<Int>] {
+        var ranges: [Range<Int>] = []
+        var i = section.heading + 1
+        while i < section.end {
+            guard lines[i].hasPrefix("- ") else { i += 1; continue }
+            var end = i + 1
+            while end < section.end, lines[end].hasPrefix("  "), !lines[end].trimmingCharacters(in: .whitespaces).isEmpty { end += 1 }
+            ranges.append(i..<end)
+            i = end
+        }
+        return ranges
     }
 
+    /// A section's items with their raw detail lines.
+    private func rawItems(in heading: String) -> [(line: String, details: [String])] {
+        let all = lines
+        guard let section = Self.section(heading, in: all) else { return [] }
+        return Self.itemRanges(in: all, section: section).map { r in (String(all[r.lowerBound].dropFirst(2)), Array(all[(r.lowerBound + 1)..<r.upperBound])) }
+    }
+
+    private func items(in heading: String) -> [String] { rawItems(in: heading).map(\.line) }
+
     public var decisions: [String] { items(in: Self.decisionsHeading) }
+
+    /// Decisions with the detail written under each, without its indent or bullet.
+    public var decisionItems: [DecisionItem] {
+        rawItems(in: Self.decisionsHeading).map { item in
+            DecisionItem(line: item.line, details: item.details.map { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return trimmed.hasPrefix("- ") ? String(trimmed.dropFirst(2)) : trimmed
+            })
+        }
+    }
 
     /// What was superseded, each line ending in `· superseded <day>`.
     public var superseded: [String] { items(in: Self.supersededHeading) }
 
-    public func appendingDecision(_ line: String) -> Note { appending(line, to: Self.decisionsHeading) }
+    public func appendingDecision(_ line: String) -> Note { appendingDecision(line, detail: nil) }
 
-    private func appending(_ line: String, to heading: String) -> Note {
+    /// A decision, with an optional detail on an indented line under it.
+    public func appendingDecision(_ line: String, detail: String?) -> Note {
+        let detailLines = detail.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : ["  - \($0)"] } ?? []
+        return appending(["- \(line)"] + detailLines, to: Self.decisionsHeading)
+    }
+
+    /// Adds an item (its `- ` line and any detail lines) after the section's last item and that item's detail.
+    private func appending(_ item: [String], to heading: String) -> Note {
         var note = self
         var all = lines
         if let section = Self.section(heading, in: all) {
-            let lastItem = all[(section.heading + 1)..<section.end].lastIndex(where: { $0.hasPrefix("- ") }) ?? section.heading
-            all.insert("- \(line)", at: lastItem + 1)
+            let after = Self.itemRanges(in: all, section: section).last?.upperBound ?? section.heading + 1
+            all.insert(contentsOf: item, at: after)
             note.body = all.joined(separator: "\n")
         } else {
             var text = body
             if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
-            note.body = text + "\n\(heading)\n- \(line)\n"
+            note.body = text + "\n\(heading)\n" + item.joined(separator: "\n") + "\n"
         }
         return note
     }
+
+    /// Takes these items (by their `- ` line) out of a section, returning the note without them and what was taken.
+    private func taking(_ targets: Set<String>, from heading: String) -> (note: Note, taken: [[String]]) {
+        var all = lines
+        guard let section = Self.section(heading, in: all) else { return (self, []) }
+        let ranges = Self.itemRanges(in: all, section: section).filter { targets.contains(String(all[$0.lowerBound].dropFirst(2))) }
+        guard !ranges.isEmpty else { return (self, []) }
+        let taken = ranges.map { Array(all[$0]) }
+        for r in ranges.reversed() { all.removeSubrange(r) }
+        var note = self
+        note.body = all.joined(separator: "\n")
+        return (note, taken)
+    }
+
+    /// Takes a decision and its detail out of the note.
+    public func removingDecision(_ line: String) -> Note { taking([line], from: Self.decisionsHeading).note }
 
     /// Moves these decision lines (exactly as `decisions` lists them) to `## Superseded`, marked with `day`.
     /// Lines that aren't decisions here are ignored, so a stale list can't touch anything else.
     public func superseding(_ lines: [String], on day: String) -> Note {
-        let targets = Set(lines)
-        var all = self.lines
-        guard let section = Self.decisionsSection(in: all) else { return self }
-        var moved: [String] = [], kept: [String] = []
-        for line in all[(section.heading + 1)..<section.end] {
-            if line.hasPrefix("- "), targets.contains(String(line.dropFirst(2))) { moved.append(String(line.dropFirst(2))) } else { kept.append(line) }
-        }
-        guard !moved.isEmpty else { return self }
-        all.replaceSubrange((section.heading + 1)..<section.end, with: kept)
-        var note = self
-        note.body = all.joined(separator: "\n")
-        for line in moved { note = note.appending("\(line) · superseded \(day)", to: Self.supersededHeading) }
+        var (note, taken) = taking(Set(lines), from: Self.decisionsHeading)
+        for item in taken { note = note.appending(["\(item[0]) · superseded \(day)"] + item.dropFirst(), to: Self.supersededHeading) }
         return note
     }
 
-    /// Puts a superseded line back among the decisions.
+    /// Puts a superseded line back among the decisions, with its detail.
     public func restoring(_ supersededLine: String) -> Note {
-        var all = lines
-        guard let section = Self.section(Self.supersededHeading, in: all),
-              let index = all[(section.heading + 1)..<section.end].firstIndex(of: "- \(supersededLine)") else { return self }
-        all.remove(at: index)
-        var note = self
-        note.body = all.joined(separator: "\n")
-        let original = supersededLine.replacingOccurrences(of: #" · superseded \d{4}-\d{2}-\d{2}$"#, with: "", options: .regularExpression)
-        return note.appendingDecision(original)
+        var (note, taken) = taking([supersededLine], from: Self.supersededHeading)
+        guard let item = taken.first else { return self }
+        let original = item[0].replacingOccurrences(of: #" · superseded \d{4}-\d{2}-\d{2}$"#, with: "", options: .regularExpression)
+        note = note.appending([original] + item.dropFirst(), to: Self.decisionsHeading)
+        return note
+    }
+}
+
+/// A decision line and what's written under it.
+public struct DecisionItem: Equatable, Sendable {
+    public var line: String
+    public var details: [String]
+
+    public init(line: String, details: [String]) {
+        self.line = line
+        self.details = details
     }
 }
