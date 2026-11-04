@@ -16,7 +16,7 @@ public protocol LANProbe: Sendable {
     func scan(ports: [Int]) -> [LANHost]
 }
 
-/// The homelab. Everything here becomes a proposal, never a note: Binder guesses, the user confirms.
+/// The homelab. Everything here becomes a proposal for a machine note, never a note: Binder guesses, the user confirms.
 public struct HomelabObserver: Observer {
     public let name = "homelab"
     let probe: LANProbe
@@ -36,14 +36,14 @@ public struct HomelabObserver: Observer {
             let address = host.hostName ?? host.alias
             known.insert(address)
             guard Self.isPrivate(address) else { continue }
-            obs.proposals.append(proposal("\(host.alias) at \(address) is part of your homelab.", target: "servers/\(host.alias).md", evidence: "~/.ssh/config"))
+            obs.proposals.append(proposal("\(host.alias) at \(address) is part of your homelab.", target: "machines/\(host.alias).md", evidence: "~/.ssh/config"))
         }
         guard ctx.allowLAN else { return obs }
         for found in probe.scan(ports: Self.ports) where !known.contains(found.ip) {
             let names = Self.portNames.filter { found.ports.contains($0.port) }.map(\.name)
             guard !names.isEmpty else { continue }
             let text = names == ["SSH"] ? "Something answers SSH on \(found.ip)." : "Something answers on \(found.ip): \(names.joined(separator: ", "))."
-            obs.proposals.append(proposal(text, target: "servers/homelab.md", evidence: "local network, ports \(found.ports.map(String.init).joined(separator: ", "))"))
+            obs.proposals.append(proposal(text, target: "machines/\(found.ip.replacingOccurrences(of: ".", with: "-")).md", evidence: "local network, ports \(found.ports.map(String.init).joined(separator: ", "))"))
         }
         return obs
     }

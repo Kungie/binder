@@ -30,7 +30,7 @@ private func homeWithSSHConfig() throws -> URL {
         #expect(obs.notes.isEmpty)
         #expect(obs.proposals.map(\.text) == ["proxmox at 10.0.7.20 is part of your homelab."])
         let p = try #require(obs.proposals.first)
-        #expect(p.kind == .fact && p.source == .observed && p.target == "servers/proxmox.md" && p.agent == "binder")
+        #expect(p.kind == .fact && p.source == .observed && p.target == "machines/proxmox.md" && p.agent == "binder")
     }
 
     @Test func lanProbeOnlyWhenAllowed() throws {
@@ -45,6 +45,7 @@ private func homeWithSSHConfig() throws -> URL {
         #expect(texts.contains("Something answers SSH on 10.0.7.50."))
         #expect(texts.contains("Something answers on 10.0.7.60: SSH, Home Assistant."))
         #expect(!texts.contains { $0.contains("on 10.0.7.20") })
+        #expect(obs.proposals.first { $0.text.contains("10.0.7.50") }?.target == "machines/10-0-7-50.md")
     }
 
     @Test func privateAddressRanges() {

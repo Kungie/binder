@@ -18,8 +18,10 @@ public struct ProposalStore: Sendable {
         let text = Self.normalize(p.text)
         guard !text.isEmpty else { return false }
         if pending().contains(where: { $0.target == p.target && Self.normalize($0.text) == text }) { return false }
-        if let note = NoteIO.read(vault.url(p.target)),
-           note.decisions.contains(where: { Self.normalize($0).contains(text) }) { return false }
+        let kept = ([p.target] + p.also).allSatisfy { path in
+            NoteIO.read(vault.url(path))?.decisions.contains { Self.normalize($0).contains(text) } == true
+        }
+        if kept { return false }
         if droppedHashes().contains(Self.hash(p)) { return false }
         try FileManager.default.createDirectory(at: vault.inbox, withIntermediateDirectories: true)
         try Self.encoder.encode(p).write(to: file(p.id), options: .atomic)
@@ -33,14 +35,40 @@ public struct ProposalStore: Sendable {
             .sorted { $0.createdAt < $1.createdAt }
     }
 
-    /// Appends `<yyyy-MM-dd> · <text> · <provenance>` to the target note's Decisions and clears the inbox entry.
+    /// Appends `<yyyy-MM-dd> · <text> · <provenance>` (and the detail under it) to the target note's Decisions,
+    /// and `… · for [[<project>]] · …` to each extra note, then clears the inbox entry. A first line in a topic note
+    /// also links the topic from the project's overview.
     public func keep(_ id: String, editedText: String? = nil, now: Date = .now) throws {
         let p = try load(id)
         let text = editedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? p.text
-        let line = "\(Self.day.string(from: now)) · \(text) · \(p.provenance)"
-        let title = (p.target as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
-        try NoteIO.update(vault.url(p.target), title: title) { $0.appendingDecision(line) }
+        let day = Self.day.string(from: now)
+        try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) {
+            $0.appendingDecision("\(day) · \(text) · \(p.provenance)", detail: p.detail)
+        }
+        if let (project, topic) = Self.topic(of: p.target) {
+            let overview = "projects/\(project).md", link = "[[\(project)/\(topic)]]"
+            try NoteIO.update(vault.url(overview), title: project) {
+                $0.render().contains(link) ? $0 : $0.appendingDecision("\(day) · Topic: \(link) · written by Binder")
+            }
+        }
+        let forProject = p.project.map { " · for [[\($0)]]" } ?? ""
+        for path in p.also {
+            try NoteIO.update(vault.url(path), title: Self.title(for: path)) { $0.appendingDecision("\(day) · \(text)\(forProject) · \(p.provenance)") }
+        }
         try FileManager.default.removeItem(at: file(id))
+    }
+
+    /// A new note's title: its file name, or for a machine named after its address (`10-0-7-50`), the address.
+    static func title(for path: String) -> String {
+        let stem = (path as NSString).lastPathComponent.replacingOccurrences(of: ".md", with: "")
+        return stem.wholeMatch(of: #/\d{1,3}(-\d{1,3}){3}/#) != nil ? stem.replacingOccurrences(of: "-", with: ".") : stem
+    }
+
+    /// `projects/<project>/<topic>.md` → (project, topic).
+    static func topic(of path: String) -> (String, String)? {
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "projects", parts[2].hasSuffix(".md") else { return nil }
+        return (String(parts[1]), String(parts[2].dropLast(3)))
     }
 
     /// Deletes the entry and remembers it, so the same thing is never offered again.

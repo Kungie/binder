@@ -7,29 +7,34 @@ public enum CommandRules {
         let kind: Proposal.Kind
         let projectBound: Bool
         let text: (_ project: String, _ capture: String?) -> String
+        /// Other notes the fact also belongs in: the hosting provider, or the server.
+        let also: (_ capture: String?) -> [String]
 
-        init(_ pattern: String, kind: Proposal.Kind = .decision, projectBound: Bool = true, text: @escaping (String, String?) -> String) {
+        init(_ pattern: String, kind: Proposal.Kind = .decision, projectBound: Bool = true,
+             also: @escaping (String?) -> [String] = { _ in [] }, text: @escaping (String, String?) -> String) {
             self.regex = try! NSRegularExpression(pattern: pattern)
             self.kind = kind
             self.projectBound = projectBound
+            self.also = also
             self.text = text
         }
     }
 
     /// Checked per command segment (split on `&&`, `||`, `;` and `|`); the first rule that matches a segment wins.
     static let rules: [Rule] = [
-        Rule(#"\bwrangler\s+pages\s+deploy\b"#) { p, _ in "\(p) deploys to Cloudflare Pages." },
-        Rule(#"\bwrangler\s+deploy\b"#) { p, _ in "\(p) deploys to Cloudflare Workers." },
-        Rule(#"\bvercel\b.*(?:\bdeploy\b|--prod\b)"#) { p, _ in "\(p) deploys to Vercel." },
-        Rule(#"\bnetlify\s+deploy\b"#) { p, _ in "\(p) deploys to Netlify." },
-        Rule(#"\b(?:fly|flyctl)\s+(?:deploy|launch)\b"#) { p, _ in "\(p) deploys to Fly.io." },
+        Rule(#"\bwrangler\s+pages\s+deploy\b"#, also: { _ in ["hosting/cloudflare.md"] }) { p, _ in "\(p) deploys to Cloudflare Pages." },
+        Rule(#"\bwrangler\s+deploy\b"#, also: { _ in ["hosting/cloudflare.md"] }) { p, _ in "\(p) deploys to Cloudflare Workers." },
+        Rule(#"\bvercel\b.*(?:\bdeploy\b|--prod\b)"#, also: { _ in ["hosting/vercel.md"] }) { p, _ in "\(p) deploys to Vercel." },
+        Rule(#"\bnetlify\s+deploy\b"#, also: { _ in ["hosting/netlify.md"] }) { p, _ in "\(p) deploys to Netlify." },
+        Rule(#"\b(?:fly|flyctl)\s+(?:deploy|launch)\b"#, also: { _ in ["hosting/fly.md"] }) { p, _ in "\(p) deploys to Fly.io." },
         Rule(#"\bgh\s+repo\s+create\s+([^\s-][^\s]*)"#) { p, name in "\(p) has a GitHub repo, \(name ?? "")." },
         Rule(#"\bgit\s+remote\s+add\s+origin\s+(\S+)"#) { p, url in "\(p)'s remote is \(GitRepo.normalize(remote: url ?? ""))." },
         Rule(#"\bssh-keygen\b.*\s-f\s+(\S+)"#, kind: .access, projectBound: false) { _, path in
             "Key \(((path ?? "") as NSString).lastPathComponent) was created."
         },
-        Rule(#"\bssh-copy-id\b.*\s(\S+)\s*$"#, kind: .access, projectBound: false) { _, target in
-            "Your key was copied to \((target ?? "").split(separator: "@").last.map(String.init) ?? "")."
+        Rule(#"\bssh-copy-id\b.*\s(\S+)\s*$"#, kind: .access, projectBound: false,
+             also: { target in Self.host(target).flatMap { Destination.path(for: "server:\($0)") }.map { [$0] } ?? [] }) { _, target in
+            "Your key was copied to \(Self.host(target) ?? "")."
         }
     ]
 
@@ -46,12 +51,17 @@ public enum CommandRules {
                 if !result.contains(where: { $0.text == text }) {
                     result.append(Proposal.make(kind: rule.kind, source: .command, text: text, evidence: segment,
                                                 target: rule.projectBound ? "projects/\(project!).md" : "access/ssh.md",
-                                                project: project, session: session, confidence: .high))
+                                                project: project, session: session, confidence: .high, also: rule.also(capture)))
                 }
                 break
             }
         }
         return result
+    }
+
+    /// `root@hetzner-1` → `hetzner-1`.
+    static func host(_ target: String?) -> String? {
+        target?.split(separator: "@").last.map(String.init).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     static func segments(_ command: String) -> [String] {
