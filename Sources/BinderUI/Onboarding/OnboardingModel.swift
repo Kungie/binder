@@ -261,6 +261,14 @@ public final class OnboardingModel: ObservableObject {
         state.onboarded = true
         try state.save(vault)
         try? FileManager.default.removeItem(at: Self.progressURL(home: home))
+        // With consent, what CLAUDE.md and AGENTS.md already say arrives as catches a minute later.
+        if state.summarizerConsent {
+            let home = home, roots = projectRoots
+            Task.detached {
+                _ = try? Importer.run(vault: vault, sources: Importer.sources(home: home, projectRoots: roots),
+                                      summarizer: ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil))
+            }
+        }
     }
 
     public static func isOnboarded(home: URL) -> Bool {

@@ -225,6 +225,19 @@ public final class LibraryModel: ObservableObject {
         return best
     }
 
+    /// Offers what CLAUDE.md and AGENTS.md say as catches, with the user's own Claude plan. Nil without consent.
+    public func importFiles() async -> Int? {
+        guard state.summarizerConsent else { return nil }
+        let vault = vault, home = home
+        let roots = state.projectRoots.map { $0.hasPrefix("~/") ? home.appendingPathComponent(String($0.dropFirst(2))) : URL(fileURLWithPath: $0) }
+        let added = await Task.detached {
+            (try? Importer.run(vault: vault, sources: Importer.sources(home: home, projectRoots: roots),
+                               summarizer: ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil))) ?? 0
+        }.value
+        objectWillChange.send()
+        return added
+    }
+
     /// The project an overview note is for: `projects/dawn.md` → `dawn`. Nil for anything else, topic notes included.
     static func overviewProject(_ ref: NoteRef) -> String? {
         let parts = ref.path.split(separator: "/")

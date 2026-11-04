@@ -96,6 +96,21 @@ enum Commands {
 
     // MARK: Commands people run
 
+    /// `binder import`: `~/.claude/CLAUDE.md` and each project's CLAUDE.md and AGENTS.md, as catches. Needs consent.
+    static func importFiles(_ paths: Paths) -> Int32 {
+        guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }
+        let state = BinderState.load(paths.vault)
+        guard state.summarizerConsent else {
+            print("Importing reads the files with your Claude plan. Turn on Read sessions with your Claude plan in Settings first.")
+            return 1
+        }
+        let sources = Importer.sources(home: paths.home, projectRoots: state.projectRoots.map(paths.expand))
+        let added = (try? Importer.run(vault: paths.vault, sources: sources,
+                                       summarizer: ClaudeCLISummarizer(runner: ClaudeCLISummarizer.runner(), session: nil))) ?? 0
+        print("Read \(sources.count) \(plural(sources.count, "file")). \(added) \(added == 1 ? "catch" : "catches") waiting in the menu bar.")
+        return 0
+    }
+
     /// `binder search <words> [--project p] [--all] [--limit n]`: what the binder says, best first.
     static func search(_ paths: Paths, _ args: [String]) -> Int32 {
         guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }

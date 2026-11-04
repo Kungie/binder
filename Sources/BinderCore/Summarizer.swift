@@ -162,29 +162,25 @@ public struct ClaudeCLISummarizer: Summarizer {
         return Array(windows.suffix(maxWindows))
     }
 
-    /// One window of talk against what the binder already says.
-    public func review(entries: [TranscriptEntry], project: String?, known: Known) -> Review {
-        let talk = entries.compactMap(Self.said).map { String($0.prefix(Self.limit)) }
-        guard !talk.isEmpty else { return Review() }
+    /// The memory block every prompt that adds things shows the model: numbered lines, topics, and what's not true.
+    static func context(project: String?, known: Known) -> String {
         var memory: [String] = []
         for (i, line) in known.project.enumerated() { memory.append("P\(i + 1). \(CardBuilder.decisionText(line))") }
         for (i, line) in known.me.enumerated() { memory.append("M\(i + 1). \(CardBuilder.decisionText(line))") }
         let topics = (known.topics.isEmpty ? "" : "\nTOPICS: \(known.topics.joined(separator: ", "))")
             + (known.wrong.isEmpty ? "" : "\n\nNOT TRUE:\n" + known.wrong.map { "- \($0)" }.joined(separator: "\n"))
-        let input = """
+        return """
         PROJECT: \(project ?? "none")\(topics)
 
         MEMORY:
         \(memory.isEmpty ? "(empty)" : memory.joined(separator: "\n"))
-
-        SESSION:
-        \(SecretFilter.redact(talk.joined(separator: "\n")).suffix(Self.limit))
         """
-        guard let result = runner.run("claude", Self.arguments(system: Self.reviewSystem), input: input, timeout: 90),
-              result.status == 0, !result.timedOut, let json = Self.object(in: result.stdout) else { return Review() }
+    }
 
-        var review = Review()
-        for item in json["new"] as? [[String: Any]] ?? [] {
+    /// The `new` items of a reply as proposals: target from scope and topic, extra notes, detail, quote and expiry.
+    func parseNew(_ items: [[String: Any]], project: String?, evidence: String, source: Proposal.Source) -> [Proposal] {
+        var out: [Proposal] = []
+        for item in items {
             guard let text = (item["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { continue }
             let kind = Proposal.Kind(rawValue: item["kind"] as? String ?? "") ?? .fact
             let confidence = Proposal.Confidence(rawValue: item["confidence"] as? String ?? "") ?? .medium
@@ -194,16 +190,34 @@ public struct ClaudeCLISummarizer: Summarizer {
             } else if let project {
                 target = (item["topic"] as? String).flatMap(Topic.slug).map { Topic.path(project: project, topic: $0) } ?? "projects/\(project).md"
             } else {
-                continue // about a project, but this session isn't in one
+                continue // about a project, but there's no project here
             }
             let also = (item["also"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(Destination.path) }
                 .reduce(into: [String]()) { if !$0.contains($1) && $1 != target && $0.count < 2 { $0.append($1) } }
-            var proposal = Proposal.make(kind: kind, source: .chat, text: SecretFilter.redact(text), evidence: "said in session \(session ?? "?")",
+            var proposal = Proposal.make(kind: kind, source: source, text: SecretFilter.redact(text), evidence: evidence,
                                          target: target, project: project, session: session, confidence: confidence,
                                          detail: Self.field(item["detail"], limit: 600), quote: Self.field(item["quote"], limit: 200), also: also)
             proposal.until = Self.until(item["until"])
-            review.proposals.append(proposal)
+            out.append(proposal)
         }
+        return out
+    }
+
+    /// One window of talk against what the binder already says.
+    public func review(entries: [TranscriptEntry], project: String?, known: Known) -> Review {
+        let talk = entries.compactMap(Self.said).map { String($0.prefix(Self.limit)) }
+        guard !talk.isEmpty else { return Review() }
+        let input = Self.context(project: project, known: known) + """
+
+
+        SESSION:
+        \(SecretFilter.redact(talk.joined(separator: "\n")).suffix(Self.limit))
+        """
+        guard let result = runner.run("claude", Self.arguments(system: Self.reviewSystem), input: input, timeout: 90),
+              result.status == 0, !result.timedOut, let json = Self.object(in: result.stdout) else { return Review() }
+
+        var review = Review()
+        review.proposals = parseNew(json["new"] as? [[String: Any]] ?? [], project: project, evidence: "said in session \(session ?? "?")", source: .chat)
         for id in json["outdated"] as? [String] ?? [] {
             guard let n = Int(id.dropFirst()), n >= 1 else { continue }
             if id.hasPrefix("P"), n <= known.project.count, let project {
@@ -214,6 +228,32 @@ public struct ClaudeCLISummarizer: Summarizer {
             }
         }
         return review
+    }
+
+    // MARK: Import: an agent rules file split into memory lines
+
+    public static let importSystem = """
+    You turn a developer's agent instructions file (CLAUDE.md or AGENTS.md) into memory lines for their binder. You get \
+    what the memory already says, as numbered lines, and the file.
+
+    Reply with only this JSON and nothing else:
+    {"new":[{"kind":"decision|fact|preference|access","scope":"me|project","text":"one short sentence","confidence":"high|medium|low",\
+    "detail":"why, if the file says","topic":"one or two words"}]}
+
+    Write every field in English, whatever language the file is in. At most 40 items. One durable rule or fact per \
+    item: working style, conventions, stack, hosting, deploy, where things live. Skip anything the memory already says, \
+    generic advice, and anything that only explains the file itself. scope "me" is for how the developer works across \
+    all projects; anything about this project is "project", with a topic such as hosting, api or release. \
+    Never include secrets, tokens or passwords. With nothing to add, reply {"new":[]}.
+    """
+
+    /// The file's lines as catches, or nil when the model can't run or answers with something unreadable.
+    public func importLines(text: String, fileName: String, project: String?, known: Known) -> [Proposal]? {
+        let input = Self.context(project: project, known: known) + "\n\nFILE: \(fileName)\n" + SecretFilter.redact(String(text.prefix(Self.limit)))
+        guard let result = runner.run("claude", Self.arguments(system: Self.importSystem), input: input, timeout: 120),
+              result.status == 0, !result.timedOut, let json = Self.object(in: result.stdout) else { return nil }
+        let items = Array((json["new"] as? [[String: Any]] ?? []).prefix(40))
+        return parseNew(items, project: project, evidence: "from \(fileName)", source: .observed)
     }
 
     /// The `Summarizer` protocol's view: just the new things, without the memory to compare against.

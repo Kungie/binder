@@ -12,6 +12,7 @@ Usage:
   binder handoff [--cwd <dir>]
                           Write a handoff card for a fresh session
   binder search <words>   Find what the binder says (--project <name>, --all, --limit <n>)
+  binder import           Offer what CLAUDE.md and AGENTS.md say, as catches to keep or drop
   binder tidy [--all]     Move stale and repeated lines to Superseded
   binder install          Add Binder's hooks to Claude Code
   binder uninstall        Take them out again
@@ -48,6 +49,8 @@ case "observe":
 case "handoff":
     let cwd = args.firstIndex(of: "--cwd").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
     exit(Commands.handoff(paths, cwd: cwd ?? FileManager.default.currentDirectoryPath))
+case "import":
+    exit(Commands.importFiles(paths))
 case "search":
     exit(Commands.search(paths, Array(args.dropFirst())))
 case "tidy":

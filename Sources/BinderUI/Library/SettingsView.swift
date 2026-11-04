@@ -9,6 +9,7 @@ struct SettingsView: View {
     var updater: Updater?
     @StateObject private var doctor = Local<[DoctorLine]>([])
     @StateObject private var message = Local<String?>(nil)
+    @StateObject private var importing = Local(false)
     @StateObject private var hooks = Local<Bool?>(nil)
 
     var body: some View {
@@ -66,6 +67,23 @@ struct SettingsView: View {
                     Text(NoteView.usageLine(totals, now: Date())?.uppercased() ?? "NOTHING YET")
                         .font(Fonts.vt(20)).foregroundColor(Phosphor.amber)
                     Text("Session cards are counted exactly. Used is an estimate from the commands and replies in your sessions. Only counts are kept.")
+                        .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                group("Import CLAUDE.md and AGENTS.md") {
+                    HStack(spacing: 10) {
+                        Button(importing.value ? "Reading…" : "Import") {
+                            importing.value = true
+                            Task {
+                                let added = await model.importFiles()
+                                importing.value = false
+                                message.value = added.map { "\($0) \($0 == 1 ? "catch" : "catches") waiting in the menu bar." }
+                                    ?? "Importing needs Read sessions with your Claude plan, below."
+                            }
+                        }
+                        .buttonStyle(GhostButtonStyle(height: 30)).disabled(importing.value)
+                    }
+                    Text("Reads ~/.claude/CLAUDE.md and each project's CLAUDE.md and AGENTS.md with your Claude plan. Every line comes to the menu bar to keep or drop. A file is read again only when it changes.")
                         .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
