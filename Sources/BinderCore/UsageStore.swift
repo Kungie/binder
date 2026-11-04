@@ -124,6 +124,15 @@ public struct UsageStore: Sendable {
         }
     }
 
+    /// Lines `binder search` handed to an agent count as used.
+    public func recordSearch(hits: [SearchHit], now: Date = .now) {
+        guard !hits.isEmpty else { return }
+        change { file in
+            for note in Set(hits.map(\.path)) { file.notes[note, default: UseCounts()].use(now) }
+            for hit in hits { file.lines[hit.path, default: [:]][Self.key(hit.line), default: UseCounts()].use(now) }
+        }
+    }
+
     // MARK: Reading
 
     public func counts(note: String) -> UseCounts { load().notes[note] ?? UseCounts() }

@@ -95,6 +95,29 @@ enum Commands {
 
     // MARK: Commands people run
 
+    /// `binder search <words> [--project p] [--all] [--limit n]`: what the binder says, best first.
+    static func search(_ paths: Paths, _ args: [String]) -> Int32 {
+        guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }
+        var words: [String] = [], project: String?, all = false, limit = 12
+        var i = 0
+        while i < args.count {
+            switch args[i] {
+            case "--all": all = true
+            case "--project" where i + 1 < args.count: project = args[i + 1]; i += 1
+            case "--limit" where i + 1 < args.count: limit = Int(args[i + 1]) ?? limit; i += 1
+            default: words.append(args[i])
+            }
+            i += 1
+        }
+        guard !words.isEmpty else { print("Usage: binder search <words> [--project <name>] [--all] [--limit <n>]"); return 2 }
+        let hits = Search.run(words.joined(separator: " "), vault: paths.vault,
+                              project: project ?? projectName(cwd: FileManager.default.currentDirectoryPath, paths: paths),
+                              includeSuperseded: all, limit: limit)
+        print(Search.render(hits))
+        UsageStore(vault: paths.vault).recordSearch(hits: hits)
+        return 0
+    }
+
     /// Moves stale and repeated lines to Superseded: notes changed since the last tidy, or all with --all.
     static func tidy(_ paths: Paths, everything: Bool) -> Int32 {
         guard paths.vaultExists else { print("No binder at \(paths.vault.root.path) yet."); return 1 }
