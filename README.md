@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="docs/icon.png" width="104" alt="Binder icon: a glass dome with an amber brain inside, on black CRT glass"><br>
+  <img src="docs/icon.png" width="104" alt="Binder icon: the mascot, a small ring binder with a glass dome for a head and an amber brain inside, on black CRT glass"><br>
   Binder
 </h1>
 
@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f2a60c?labelColor=2a1b19&style=flat-square" alt="Licence: AGPL-3.0"></a>
 </p>
 
-<p align="center"><img src="docs/readme.png" width="400" alt="Binder in a Mac menu bar: a dome icon with 4 next to it, and Binder's panel hanging under it. This session in dawn is at 71% of its context, with Hand off now and Not yet. Below, four things it caught: the dawn site deploys to Cloudflare Pages, hetzner-1 opens with id_ed25519_hetzner, release notes live in docs/releases, and a one-off about Tailwind, each with Keep, Edit and Drop."></p>
+<p align="center"><img src="docs/readme.png" width="400" alt="Binder in a Mac menu bar: a dome icon with 4 next to it, and Binder's panel hanging under it. This session in dawn is at 71% of its context, with Hand off now and Not yet. Below, four things it caught: the dawn site deploys to Cloudflare Pages, hetzner-1 opens with id_ed25519_hetzner, release notes live in docs/releases, and a one-off about Tailwind, each with where it goes and Keep, Edit and Drop."></p>
 
 <p align="center"><a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKungie%2Fbinder%2Fbadges%2Fdownloads.json" alt="Download for Mac (total downloads)"></a></p>
 

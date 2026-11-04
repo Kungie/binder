@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// The app icon: Binder's dome and brain on black CRT glass with an amber glow, on the macOS icon grid
-/// (an 824 pt rounded square inside 1024, corner radius 185).
+/// The app icon: Binder himself, the whole mascot, on black CRT glass with an amber glow behind his brain,
+/// on the macOS icon grid (an 824 pt rounded square inside 1024, corner radius 185).
 public struct AppIcon: View {
     public init() {}
 
@@ -11,13 +11,13 @@ public struct AppIcon: View {
             RoundedRectangle(cornerRadius: 185, style: .continuous)
                 .fill(Phosphor.black)
                 .overlay(
-                    RadialGradient(colors: [Phosphor.amber.opacity(0.42), .clear], center: UnitPoint(x: 0.5, y: 0.42), startRadius: 0, endRadius: 420)
+                    RadialGradient(colors: [Phosphor.amber.opacity(0.42), .clear], center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 420)
                         .clipShape(RoundedRectangle(cornerRadius: 185, style: .continuous))
                 )
                 .overlay(Scanlines(opacity: 0.3).clipShape(RoundedRectangle(cornerRadius: 185, style: .continuous)))
                 .overlay(RoundedRectangle(cornerRadius: 185, style: .continuous).strokeBorder(Phosphor.line, lineWidth: 6))
                 .frame(width: 824, height: 824)
-            MascotHead(size: 600, rimWidth: 7).offset(y: 20)
+            Mascot(mood: .idle, size: 560).offset(y: 24)
         }
         .frame(width: 1024, height: 1024)
     }
