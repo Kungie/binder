@@ -19,7 +19,8 @@ public enum CardBuilder {
     public static func build(vault: Vault, repo: GitRepo?) -> String { buildIncluded(vault: vault, repo: repo).card }
 
     /// The card, and which notes and decision lines made it onto the card after trimming, for the usage counts.
-    public static func buildIncluded(vault: Vault, repo: GitRepo?) -> (card: String, notes: [String], lines: [String: [String]]) {
+    /// With `helper`, the card says how to run `binder search` for anything it leaves out.
+    public static func buildIncluded(vault: Vault, repo: GitRepo?, helper: String? = nil) -> (card: String, notes: [String], lines: [String: [String]]) {
         var me = meLines(vault)
         var projectLines: [String] = []
         // Raw decision lines, newest first; the card shows them through `cardLine`.
@@ -55,7 +56,7 @@ public enum CardBuilder {
         }
 
         func render() -> String {
-            var parts = [header]
+            var parts = [helper.map { "\(header)\nMissing something? Run \"\($0)\" search <words>." } ?? header]
             if !me.isEmpty { parts.append("ME:\n" + me.joined(separator: "\n")) }
             if let repo {
                 var block = "PROJECT \(repo.name):\n" + projectLines.joined(separator: "\n")

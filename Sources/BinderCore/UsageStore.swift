@@ -211,7 +211,7 @@ public enum UsageHandles {
 
 /// The SessionStart card for a folder: cached when nothing changed, and counted once per session either way.
 public enum SessionCard {
-    public static func make(vault: Vault, cwd: String, session: String, now: Date = .now) -> String {
+    public static func make(vault: Vault, cwd: String, session: String, helper: String? = nil, now: Date = .now) -> String {
         let repo = CardBuilder.project(for: URL(fileURLWithPath: cwd), vault: vault)
         let built: (card: String, notes: [String], lines: [String: [String]])
         if let repo {
@@ -219,12 +219,12 @@ public enum SessionCard {
             if let cached = cache.cachedIncluded(for: repo) {
                 built = cached
             } else {
-                built = CardBuilder.buildIncluded(vault: vault, repo: repo)
+                built = CardBuilder.buildIncluded(vault: vault, repo: repo, helper: helper)
                 try? cache.store(built.card, included: (built.notes, built.lines), for: repo)
             }
             if Handoff.pending(project: repo.name, vault: vault) != nil { try? Handoff.markConsumed(project: repo.name, vault: vault) }
         } else {
-            built = CardBuilder.buildIncluded(vault: vault, repo: nil)
+            built = CardBuilder.buildIncluded(vault: vault, repo: nil, helper: helper)
         }
         UsageStore(vault: vault).recordCard(session: session, notes: built.notes, lines: built.lines, now: now)
         return built.card

@@ -201,6 +201,19 @@ public final class LibraryModel: ObservableObject {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }
 
+    /// Notes whose content matches, by the sidebar path they show under (a topic's hit shows on its project),
+    /// with the best line for each.
+    public func matches(_ query: String) -> [String: String] {
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [:] }
+        var best: [String: String] = [:]
+        for hit in Search.run(query, vault: vault, limit: 50) {
+            let parts = hit.path.split(separator: "/")
+            let row = parts.count == 3 && parts[0] == "projects" ? "projects/\(parts[1]).md" : hit.path
+            if best[row] == nil { best[row] = hit.text }
+        }
+        return best
+    }
+
     /// The project an overview note is for: `projects/dawn.md` → `dawn`. Nil for anything else, topic notes included.
     static func overviewProject(_ ref: NoteRef) -> String? {
         let parts = ref.path.split(separator: "/")

@@ -32,7 +32,7 @@ enum Commands {
     /// SessionStart: print the context card for the folder the session started in.
     static func card(_ paths: Paths, stdin: Data) {
         guard paths.vaultExists, let input = HookIO.readInput(stdin) else { return }
-        let card = SessionCard.make(vault: paths.vault, cwd: input.cwd, session: input.sessionID)
+        let card = SessionCard.make(vault: paths.vault, cwd: input.cwd, session: input.sessionID, helper: paths.binder)
         FileHandle.standardOutput.write(HookIO.sessionStartOutput(card))
     }
 

@@ -74,14 +74,19 @@ public struct LibraryView: View {
         VStack(alignment: .leading, spacing: 14) {
             BinderSearchField(text: Binding(get: { search.value }, set: { search.value = $0 }))
             Scroll {
+                let hits = model.matches(search.value)
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(model.sections.filter { $0.kind != .settings }) { section in
                         sidebarRow(section)
                         if model.selectedKind == section.kind || !search.value.isEmpty {
-                            ForEach(filtered(section.items)) { item in
+                            ForEach(filtered(section.items, hits: hits)) { item in
                                 Button { model.selected = item; model.selectedKind = section.kind } label: {
-                                    Text((model.selected == item ? "▸ " : "") + item.title.uppercased())
-                                        .lineLimit(1)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text((model.selected == item ? "▸ " : "") + item.title.uppercased()).lineLimit(1)
+                                        if let line = hits[item.path] {
+                                            Text(line).font(Fonts.grotesk(11.5)).tracking(0).foregroundColor(Phosphor.dim).lineLimit(1)
+                                        }
+                                    }
                                         .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
                                         .padding(.leading, 20)
                                         .background(model.selected == item ? Phosphor.line : .clear)
@@ -170,9 +175,10 @@ public struct LibraryView: View {
         }
     }
 
-    func filtered(_ items: [NoteRef]) -> [NoteRef] {
+    /// Notes whose title or path matches, or whose content does.
+    func filtered(_ items: [NoteRef], hits: [String: String]) -> [NoteRef] {
         let q = search.value.trimmingCharacters(in: .whitespaces).lowercased()
-        return q.isEmpty ? items : items.filter { $0.title.lowercased().contains(q) || $0.path.lowercased().contains(q) }
+        return q.isEmpty ? items : items.filter { $0.title.lowercased().contains(q) || $0.path.lowercased().contains(q) || hits[$0.path] != nil }
     }
 
     var lastLook: String {
