@@ -97,7 +97,7 @@ public struct ClaudeCLISummarizer: Summarizer {
     Reply with only this JSON and nothing else:
     {"new":[{"kind":"decision|fact|preference|access","scope":"me|project","text":"one short sentence","confidence":"high|medium|low",\
     "detail":"2-3 sentences: why, and what it touches","quote":"what was said, rendered in English, at most 200 characters",\
-    "topic":"one or two words","also":["server:<name>","hosting:<provider>"]}],"outdated":["P2","M1"]}
+    "topic":"one or two words","also":["server:<name>","hosting:<provider>"],"until":"YYYY-MM-DD"}],"outdated":["P2","M1"]}
 
     Write every field in English, whatever language the session is in.
 
@@ -111,11 +111,23 @@ public struct ClaudeCLISummarizer: Summarizer {
     when it fits. Leave it out for something about the whole project.
     also: up to two other notes it belongs in: a server or machine it is about ("server:hetzner-1"), or a hosting \
     provider or service account ("hosting:cloudflare"). Leave it out otherwise.
+    until: only for a fact that stops being true on a known day ("down until Friday"): that day. Leave it out otherwise.
     NOT TRUE lists things the developer marked wrong. Never propose them again, in any wording.
     outdated: ids of memory lines this session makes untrue: replaced, reversed, a plan now finished, a question now \
     decided. Also M lines that are about one project rather than the developer. When unsure, leave a line out.
     Never include secrets, tokens or passwords. With nothing to report, reply {"new":[],"outdated":[]}.
     """
+
+    /// A temporary fact's last day, `YYYY-MM-DD`: kept only when it's after today and within a year.
+    static func until(_ value: Any?, now: Date = .now) -> Date? {
+        guard let text = value as? String else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let day = f.date(from: text), day > now, day <= now.addingTimeInterval(365 * 86_400) else { return nil }
+        return day
+    }
 
     /// A model-written field: trimmed, redacted, cut to `limit` characters; nil when missing or empty.
     static func field(_ value: Any?, limit: Int) -> String? {
@@ -186,9 +198,11 @@ public struct ClaudeCLISummarizer: Summarizer {
             }
             let also = (item["also"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(Destination.path) }
                 .reduce(into: [String]()) { if !$0.contains($1) && $1 != target && $0.count < 2 { $0.append($1) } }
-            review.proposals.append(Proposal.make(kind: kind, source: .chat, text: SecretFilter.redact(text), evidence: "said in session \(session ?? "?")",
-                                                  target: target, project: project, session: session, confidence: confidence,
-                                                  detail: Self.field(item["detail"], limit: 600), quote: Self.field(item["quote"], limit: 200), also: also))
+            var proposal = Proposal.make(kind: kind, source: .chat, text: SecretFilter.redact(text), evidence: "said in session \(session ?? "?")",
+                                         target: target, project: project, session: session, confidence: confidence,
+                                         detail: Self.field(item["detail"], limit: 600), quote: Self.field(item["quote"], limit: 200), also: also)
+            proposal.until = Self.until(item["until"])
+            review.proposals.append(proposal)
         }
         for id in json["outdated"] as? [String] ?? [] {
             guard let n = Int(id.dropFirst()), n >= 1 else { continue }

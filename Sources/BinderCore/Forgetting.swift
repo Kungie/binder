@@ -61,3 +61,73 @@ public enum Forgetting {
         return line.count >= 10 ? f.date(from: String(line.prefix(10))) : nil
     }
 }
+
+/// `.binder/expiry.json`: the last day of temporary facts, by note and line hash. The note lines stay as they are.
+public struct ExpiryStore: Sendable {
+    public let vault: Vault
+
+    public init(vault: Vault) { self.vault = vault }
+
+    var url: URL { vault.url(".binder/expiry.json") }
+
+    static let format: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    func load() -> [String: [String: String]] {
+        (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode([String: [String: String]].self, from: $0) } ?? [:]
+    }
+
+    func save(_ map: [String: [String: String]]) {
+        try? FileManager.default.createDirectory(at: vault.internalDir, withIntermediateDirectories: true)
+        try? JSONEncoder().encode(map).write(to: url, options: .atomic)
+    }
+
+    public func set(_ date: Date, line: String, in note: String) {
+        var map = load()
+        map[note, default: [:]][UsageStore.key(line)] = Self.format.string(from: date)
+        save(map)
+    }
+
+    public func remove(line: String, in note: String) {
+        var map = load()
+        map[note]?[UsageStore.key(line)] = nil
+        if map[note]?.isEmpty == true { map[note] = nil }
+        save(map)
+    }
+
+    public func until(line: String, in note: String) -> Date? {
+        load()[note]?[UsageStore.key(line)].flatMap(Self.format.date)
+    }
+
+    /// Lines whose last day has passed, as the notes have them now.
+    public func expired(now: Date = .now) -> [(note: String, line: String)] {
+        var out: [(String, String)] = []
+        for (note, keys) in load() {
+            let due = Set(keys.filter { (Self.format.date(from: $0.value) ?? .distantFuture) <= now }.keys)
+            guard !due.isEmpty else { continue }
+            for line in NoteIO.read(vault.url(note))?.decisions ?? [] where due.contains(UsageStore.key(line)) { out.append((note, line)) }
+        }
+        return out
+    }
+
+    /// A quick check for the card, with the file read once.
+    public struct Checker {
+        let map: [String: [String: String]]
+        let now: Date
+
+        public init(store: ExpiryStore, now: Date) {
+            map = store.load()
+            self.now = now
+        }
+
+        public func expired(_ line: String, in note: String) -> Bool {
+            guard let text = map[note]?[UsageStore.key(line)], let day = ExpiryStore.format.date(from: text) else { return false }
+            return day <= now
+        }
+    }
+}

@@ -29,6 +29,8 @@ public struct Proposal: Codable, Equatable, Identifiable, Sendable {
     public var fileHash: String? = nil
     /// What the user wrote with an attached file, never shown: only the English caption made from it is.
     public var context: String? = nil
+    /// A temporary fact's last day: Tidy moves the kept line to Superseded after it.
+    public var until: Date? = nil
 
     public static func make(kind: Kind, source: Source, text: String, evidence: String, target: String,
                             project: String?, session: String?, confidence: Confidence = .medium,
@@ -77,5 +79,6 @@ extension Proposal {
         file = try c.decodeIfPresent(String.self, forKey: .file)
         fileHash = try c.decodeIfPresent(String.self, forKey: .fileHash)
         context = try c.decodeIfPresent(String.self, forKey: .context)
+        until = try c.decodeIfPresent(Date.self, forKey: .until)
     }
 }

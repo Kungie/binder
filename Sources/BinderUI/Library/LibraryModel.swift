@@ -39,6 +39,8 @@ public struct Decision: Equatable, Sendable {
     /// What's written under it.
     public var details: [String] = []
     public var usage = UseCounts()
+    /// A temporary fact's last day.
+    public var until: Date?
 }
 
 public struct NoteDetail: Sendable {
@@ -135,7 +137,11 @@ public final class LibraryModel: ObservableObject {
         detail.superseded = note.superseded.reversed()
         let usage = UsageStore(vault: vault)
         detail.usage = usage.counts(note: ref.path)
-        for i in detail.decisions.indices { detail.decisions[i].usage = usage.counts(line: detail.decisions[i].line, in: ref.path) }
+        let expiry = ExpiryStore(vault: vault)
+        for i in detail.decisions.indices {
+            detail.decisions[i].usage = usage.counts(line: detail.decisions[i].line, in: ref.path)
+            detail.decisions[i].until = expiry.until(line: detail.decisions[i].line, in: ref.path)
+        }
         let fading = Forgetting.Checker(usage: usage, now: Date())
         detail.fading = detail.decisions.filter { fading.fades($0.line, in: ref.path) }.reversed()
         detail.decisions.removeAll { fading.fades($0.line, in: ref.path) }

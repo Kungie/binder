@@ -172,6 +172,14 @@ struct NoteView: View {
         }
     }
 
+    /// `UNTIL 8 NOV`: when a temporary fact stops being true.
+    static func untilLabel(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "d MMM"
+        return "UNTIL \(f.string(from: date).uppercased())"
+    }
+
     /// `On 40 session cards · used 12 times · last today`, or nil when nothing used it yet.
     static func usageLine(_ c: UseCounts, now: Date) -> String? {
         var parts: [String] = []
@@ -246,7 +254,10 @@ struct NoteView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(Self.day(d.date)).font(Fonts.vt(18)).foregroundColor(Phosphor.amber).frame(width: 70, alignment: .leading)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(Self.withoutEmbed(d.text)).font(Fonts.grotesk(13.5)).foregroundColor(Phosphor.cream)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(Self.withoutEmbed(d.text)).font(Fonts.grotesk(13.5)).foregroundColor(Phosphor.cream)
+                            if let until = d.until { Text(Self.untilLabel(until)).font(Fonts.mono(10.5)).foregroundColor(Phosphor.amber) }
+                        }
                         ForEach(Array(d.details.enumerated()), id: \.offset) { _, line in
                             Text(line).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim).fixedSize(horizontal: false, vertical: true)
                         }

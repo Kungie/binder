@@ -53,15 +53,17 @@ public struct ProposalStore: Sendable {
         // A note that already has the line keeps its one copy: Keep can be offered again for the other targets.
         let normalized = Self.normalize(text)
         func has(_ note: Note) -> Bool { note.decisions.contains { Self.normalize($0).contains(normalized) } }
+        let mainLine = "\(day) · \(text) · \(p.provenance)"
         try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) {
-            has($0) ? $0 : $0.appendingDecision("\(day) · \(text) · \(p.provenance)", detail: p.detail)
+            has($0) ? $0 : $0.appendingDecision(mainLine, detail: p.detail)
         }
+        if let until = p.until { ExpiryStore(vault: vault).set(until, line: mainLine, in: p.target) }
         if let (project, topic) = Self.topic(of: p.target) { try Topic.link(project: project, topic: topic, vault: vault, now: now) }
         let forProject = p.project.map { " · for [[\($0)]]" } ?? ""
         for path in p.also {
-            try NoteIO.update(vault.url(path), title: Self.title(for: path)) {
-                has($0) ? $0 : $0.appendingDecision("\(day) · \(text)\(forProject) · \(p.provenance)")
-            }
+            let line = "\(day) · \(text)\(forProject) · \(p.provenance)"
+            try NoteIO.update(vault.url(path), title: Self.title(for: path)) { has($0) ? $0 : $0.appendingDecision(line) }
+            if let until = p.until { ExpiryStore(vault: vault).set(until, line: line, in: path) }
         }
         try FileManager.default.removeItem(at: file(id))
     }

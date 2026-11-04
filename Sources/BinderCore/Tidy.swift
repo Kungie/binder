@@ -26,6 +26,18 @@ public enum Tidy {
     public static func run(vault: Vault, summarizer: ClaudeCLISummarizer?, everything: Bool = false, now: Date = .now) -> [String: Int] {
         var record = TidyRecord.load(vault)
         var moved: [String: Int] = [:]
+        // Temporary facts past their last day go first, marked expired.
+        let expiry = ExpiryStore(vault: vault)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        for (note, group) in Dictionary(grouping: expiry.expired(now: now), by: \.note) {
+            let url = vault.url(note)
+            guard let current = NoteIO.read(url) else { continue }
+            let next = current.superseding(group.map(\.line), on: f.string(from: now), marker: "expired")
+            if next != current { try? NoteIO.write(next, to: url); moved[note, default: 0] += group.count }
+            for item in group { expiry.remove(line: item.line, in: note) }
+        }
         for path in notes(in: vault) {
             let url = vault.url(path)
             let modified = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? now
