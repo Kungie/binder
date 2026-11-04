@@ -57,7 +57,8 @@ public enum Snapshot {
             ("mascot", AnyView(Mascot(mood: .idle, size: 240)), CGSize(width: 240, height: 280)),
             ("library", AnyView(demoLibrary(.projects)), CGSize(width: 1240, height: 820)),
             ("library-settings", AnyView(demoLibrary(.settings)), CGSize(width: 1240, height: 820)),
-            ("library-graph", AnyView(demoLibrary(.graph)), CGSize(width: 1240, height: 820))
+            ("library-graph", AnyView(demoLibrary(.graph)), CGSize(width: 1240, height: 820)),
+            ("readme-graph", AnyView(demoGraph()), CGSize(width: 1240, height: 820))
         ]
     }
 }
@@ -85,6 +86,17 @@ func demoLibrary(_ kind: SectionKind) -> some View {
     try? NoteIO.write(Note.new(title: "Me").replacingObserved([]), to: vault.url("me.md"))
     let library = LibraryModel(vault: vault, home: FileManager.default.temporaryDirectory)
     library.selectedKind = kind
+    return LibraryView(model: library, app: app)
+}
+
+/// The README's graph: the main window on a made-up developer's binder.
+@MainActor
+func demoGraph() -> some View {
+    let vault = DemoVault.graph()
+    let app = AppModel(vault: vault, home: FileManager.default.temporaryDirectory)
+    app.refresh()
+    let library = LibraryModel(vault: vault, home: FileManager.default.temporaryDirectory)
+    library.selectedKind = .graph
     return LibraryView(model: library, app: app)
 }
 

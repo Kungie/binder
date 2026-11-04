@@ -32,6 +32,43 @@ public enum DemoVault {
         return vault
     }
 
+    /// A made-up developer's binder, full enough to show what the graph looks like after a few weeks:
+    /// projects, servers and keys tied together by wikilinks and shared stacks.
+    public static func graph() -> Vault {
+        let vault = Vault(root: FileManager.default.temporaryDirectory.appendingPathComponent("binder-demo-graph-\(UUID().uuidString)"))
+        try? vault.ensureLayout()
+        let notes: [(String, String, [String])] = [
+            ("me.md", "Me", ["- git: Sam <sam@example.com>", "- editor: Zed"]),
+            ("machines/this-mac.md", "this-mac", ["- macOS 15.4 · arm64", "- shell: zsh", "- Docker Desktop, Homebrew"]),
+            ("machines/homelab-pi.md", "homelab-pi", ["- Raspberry Pi 5 · 192.168.1.20", "- runs: [[pi-hole]], [[homelab-dash]]"]),
+            ("access/ssh.md", "ssh", ["- hetzner-1 opens with id_ed25519_hetzner, see [[hetzner-1]]", "- homelab-pi opens with id_ed25519, see [[homelab-pi]]",
+                                      "- nas opens with id_ed25519, see [[nas]]"]),
+            ("access/accounts.md", "accounts", ["- Fly.io token: 1Password, item Fly", "- Cloudflare token: 1Password, item Cloudflare"]),
+            ("servers/hetzner-1.md", "hetzner-1", ["- Ubuntu 24.04 · Docker", "- key: [[ssh]]", "- hosts: [[recipes-api]]"]),
+            ("servers/nas.md", "nas", ["- Synology DS923+ · 192.168.1.30", "- backups for [[homelab-pi]]", "- key: [[ssh]]"]),
+            ("servers/pi-hole.md", "pi-hole", ["- DNS for the home network", "- on [[homelab-pi]]"]),
+            ("projects/recipes-api.md", "recipes-api", ["- repo: github.com/sam/recipes-api · main", "- languages: Go", "- deploy: Fly.io",
+                                                        "- database: Postgres on [[hetzner-1]]", "- staging: [[staging]]"]),
+            ("projects/portfolio.md", "portfolio", ["- repo: github.com/sam/portfolio · main", "- languages: TypeScript", "- deploy: Cloudflare Pages",
+                                                    "- domains: sam.example"]),
+            ("projects/weather-bot.md", "weather-bot", ["- repo: github.com/sam/weather-bot · main", "- languages: Python", "- deploy: Fly.io"]),
+            ("projects/homelab-dash.md", "homelab-dash", ["- repo: github.com/sam/homelab-dash · main", "- languages: TypeScript, Python",
+                                                          "- runs on [[homelab-pi]]", "- domains: sam.example"])
+        ]
+        for (path, title, observed) in notes {
+            try? NoteIO.update(vault.url(path), title: title) {
+                $0.replacingObserved(observed).setting("verified", ISO8601DateFormatter().string(from: Date())).setting("source", "observed, you")
+            }
+        }
+        try? Memory.add("Commit often, ask before pushing.", to: "me.md", vault: vault)
+        try? Memory.add("The API deploys with fly deploy from main.", to: "projects/recipes-api.md", vault: vault)
+        try? Memory.add("The site deploys to Cloudflare Pages.", to: "projects/portfolio.md", vault: vault)
+        var state = BinderState.load(vault)
+        state.lastObserve = Date().addingTimeInterval(-40 * 60)
+        try? state.save(vault)
+        return vault
+    }
+
     public static func model(_ kind: Kind) -> AppModel {
         let model = AppModel(vault: vault(kind), home: FileManager.default.temporaryDirectory)
         model.refresh()

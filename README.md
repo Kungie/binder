@@ -30,6 +30,8 @@ Long AI sessions get worse the longer they run. Fresh ones don't know the topic.
 
 It writes all of that down, so agents stop guessing.
 
+<p align="center"><img src="docs/graph.png" width="760" alt="Binder's main window on the Graph page, with demo data: you in the middle, folders for machines, access, servers and projects around you, and notes such as this-mac, homelab-pi, ssh, hetzner-1, nas, weather-bot, homelab-dash and portfolio tied together by links, shared stacks like Python, TypeScript and Fly.io, and a missing note, staging."></p>
+
 **Keeps itself fresh.** When a later decision makes an older one untrue, the older one moves to the note's `## Superseded` section: still in the file, off the card, one click to restore. The card stays under about a thousand tokens.
 
 **Catches what sessions decide.** When a Claude Code session ends, Binder notes what the agent actually did. For example, `wrangler pages deploy` becomes "the site deploys to Cloudflare Pages". It shows each catch in the menu bar for you to keep or drop. Keep sends it into Binder's brain, Drop shreds it. If you say yes, it also reads the session with your own Claude plan to catch decisions that were only said out loud.
