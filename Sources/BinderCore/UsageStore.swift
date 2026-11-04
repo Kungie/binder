@@ -43,6 +43,8 @@ public struct UsageStore: Sendable {
         var notes: [String: UseCounts] = [:]
         var lines: [String: [String: UseCounts]] = [:]
         var cardSessions: [String] = []
+        /// Lines kept on the card by hand (Keep on card), by note: they never fade.
+        var pins: [String: [String]] = [:]
 
         init() {}
 
@@ -51,6 +53,7 @@ public struct UsageStore: Sendable {
             notes = try c.decodeIfPresent([String: UseCounts].self, forKey: .notes) ?? [:]
             lines = try c.decodeIfPresent([String: [String: UseCounts]].self, forKey: .lines) ?? [:]
             cardSessions = try c.decodeIfPresent([String].self, forKey: .cardSessions) ?? []
+            pins = try c.decodeIfPresent([String: [String]].self, forKey: .pins) ?? [:]
         }
     }
 
@@ -132,6 +135,21 @@ public struct UsageStore: Sendable {
             for hit in hits { file.lines[hit.path, default: [:]][Self.key(hit.line), default: UseCounts()].use(now) }
         }
     }
+
+    // MARK: Pins
+
+    public func pin(line: String, in note: String) {
+        change { file in
+            let key = Self.key(line)
+            if !(file.pins[note] ?? []).contains(key) { file.pins[note, default: []].append(key) }
+        }
+    }
+
+    public func unpin(line: String, in note: String) {
+        change { file in file.pins[note]?.removeAll { $0 == Self.key(line) } }
+    }
+
+    public func isPinned(line: String, in note: String) -> Bool { load().pins[note]?.contains(Self.key(line)) == true }
 
     // MARK: Reading
 

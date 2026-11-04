@@ -20,7 +20,8 @@ public enum CardBuilder {
 
     /// The card, and which notes and decision lines made it onto the card after trimming, for the usage counts.
     /// With `helper`, the card says how to run `binder search` for anything it leaves out.
-    public static func buildIncluded(vault: Vault, repo: GitRepo?, helper: String? = nil) -> (card: String, notes: [String], lines: [String: [String]]) {
+    public static func buildIncluded(vault: Vault, repo: GitRepo?, helper: String? = nil, now: Date = .now) -> (card: String, notes: [String], lines: [String: [String]]) {
+        let fading = Forgetting.Checker(usage: UsageStore(vault: vault), now: now)
         var me = meLines(vault)
         var projectLines: [String] = []
         // Raw decision lines, newest first; the card shows them through `cardLine`.
@@ -38,13 +39,14 @@ public enum CardBuilder {
                 overview = path
                 projectLines = note.observedLines + freeLines(note)
                 // Kept files go in their own block, as paths an agent can open.
-                decisions = note.decisions.reversed().filter { fileLine($0) == nil }
+                decisions = note.decisions.reversed().filter { fileLine($0) == nil && !fading.fades($0, in: path) }
                 files = Array(note.decisions.reversed().compactMap { fileLine($0, vault: vault) }.prefix(5))
             } else {
                 projectLines = ["- nothing in the binder yet"]
             }
             topics = Topic.topics(of: repo.name, vault: vault).compactMap { name in
-                let lines = NoteIO.read(vault.url(Topic.path(project: repo.name, topic: name)))?.decisions.reversed() ?? []
+                let topicPath = Topic.path(project: repo.name, topic: name)
+                let lines = (NoteIO.read(vault.url(topicPath))?.decisions.reversed() ?? []).filter { !fading.fades($0, in: topicPath) }
                 return lines.isEmpty ? nil : (name, Array(lines))
             }
             access = accessLines(vault, linkedFrom: note)

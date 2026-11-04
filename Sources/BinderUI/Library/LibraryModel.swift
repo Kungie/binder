@@ -54,6 +54,8 @@ public struct NoteDetail: Sendable {
     public var superseded: [String] = []
     /// How often sessions used this note.
     public var usage = UseCounts()
+    /// Old lines no agent used, off the card, oldest first.
+    public var fading: [Decision] = []
     /// A project overview's topic notes, A to Z.
     public var topics: [NoteRef] = []
     public var lastHandoff: HandoffCard?
@@ -134,6 +136,9 @@ public final class LibraryModel: ObservableObject {
         let usage = UsageStore(vault: vault)
         detail.usage = usage.counts(note: ref.path)
         for i in detail.decisions.indices { detail.decisions[i].usage = usage.counts(line: detail.decisions[i].line, in: ref.path) }
+        let fading = Forgetting.Checker(usage: usage, now: Date())
+        detail.fading = detail.decisions.filter { fading.fades($0.line, in: ref.path) }.reversed()
+        detail.decisions.removeAll { fading.fades($0.line, in: ref.path) }
         if ref.path.hasPrefix("projects/"), ref.path.split(separator: "/").count == 2 {
             let name = String(ref.path.dropFirst("projects/".count).dropLast(3))
             detail.topics = Topic.topics(of: name, vault: vault).map { topic in
@@ -232,6 +237,12 @@ public final class LibraryModel: ObservableObject {
         reload()
         objectWillChange.send()
         return result ?? TopicSplit.Result(lines: 0, topics: 0)
+    }
+
+    /// Keeps a fading line on the card for good.
+    public func pin(_ line: String, in ref: NoteRef) {
+        UsageStore(vault: vault).pin(line: line, in: ref.path)
+        objectWillChange.send()
     }
 
     /// Puts a superseded line back among the note's decisions.

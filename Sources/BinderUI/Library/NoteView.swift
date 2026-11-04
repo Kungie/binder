@@ -113,6 +113,7 @@ struct NoteView: View {
                     if !detail.facts.isEmpty { observed }
                     if !detail.decisions.isEmpty { decisions }
                     if !keptFiles.isEmpty { files }
+                    if !detail.fading.isEmpty { fading }
                     if !detail.superseded.isEmpty { superseded }
                     if !detail.freeText.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
@@ -266,6 +267,22 @@ struct NoteView: View {
                     if inside { hovered.value = d.line } else if hovered.value == d.line { hovered.value = nil }
                 }
                 .overlay(alignment: .top) { Rectangle().fill(Phosphor.line).frame(height: 1) }
+            }
+        }
+    }
+
+    /// Old lines no agent used: off the card, still here, one click to keep them on it.
+    var fading: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Fading · not on the card").padding(.bottom, 6)
+            ForEach(Array(detail.fading.enumerated()), id: \.offset) { _, d in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(Self.day(d.date)).font(Fonts.vt(18)).foregroundColor(Phosphor.dim).frame(width: 70, alignment: .leading)
+                    Text(Self.withoutEmbed(d.text)).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Keep on card") { model.pin(d.line, in: detail.ref) }.buttonStyle(QuietButtonStyle())
+                }
+                .padding(.vertical, 4)
             }
         }
     }
