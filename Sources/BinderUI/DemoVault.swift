@@ -20,8 +20,12 @@ public enum DemoVault {
         ]
         let count = kind == .empty ? 0 : (kind == .handoff ? 1 : items.count)
         for (i, item) in items.prefix(count).enumerated() {
-            try? store.add(Proposal.make(kind: .decision, source: item.0, text: item.2, evidence: item.1, target: item.3,
-                                         project: "dawn", session: "demo", confidence: item.4, now: start.addingTimeInterval(Double(i))))
+            // The first one shows a topic note and an extra note, as the summarizer files them.
+            let first = i == 0
+            try? store.add(Proposal.make(kind: .decision, source: item.0, text: item.2, evidence: item.1,
+                                         target: first ? "projects/dawn/hosting.md" : item.3,
+                                         project: "dawn", session: "demo", confidence: item.4, now: start.addingTimeInterval(Double(i)),
+                                         also: first ? ["hosting/cloudflare.md"] : []))
         }
         for decision in ["Licence is AGPL-3.0, not MIT.", "Ships as a free app.", "The panel stays 340 pt wide."] {
             try? Memory.add(decision, to: "projects/dawn.md", vault: vault)

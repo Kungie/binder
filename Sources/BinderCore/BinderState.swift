@@ -11,11 +11,13 @@ public struct BinderState: Codable, Equatable, Sendable {
     /// Ask GitHub once a day whether there's a newer Binder.
     public var checkForUpdates = true
     public var lastUpdateCheck: Date?
+    /// Catch cards show the model's explanation and what was said, not just the line.
+    public var detailedCatches = false
 
     public init() {}
 
     enum CodingKeys: String, CodingKey {
-        case summarizerConsent, handoffThreshold, projectRoots, lastObserve, onboarded, observeIntervalHours, checkForUpdates, lastUpdateCheck
+        case summarizerConsent, handoffThreshold, projectRoots, lastObserve, onboarded, observeIntervalHours, checkForUpdates, lastUpdateCheck, detailedCatches
     }
 
     /// Every key is optional, so a file written by an older version keeps the settings it has.
@@ -30,6 +32,7 @@ public struct BinderState: Codable, Equatable, Sendable {
         observeIntervalHours = try c.decodeIfPresent(Int.self, forKey: .observeIntervalHours) ?? d.observeIntervalHours
         checkForUpdates = try c.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? d.checkForUpdates
         lastUpdateCheck = try c.decodeIfPresent(Date.self, forKey: .lastUpdateCheck)
+        detailedCatches = try c.decodeIfPresent(Bool.self, forKey: .detailedCatches) ?? d.detailedCatches
     }
 
     public var clampedThreshold: Double { min(max(handoffThreshold, 0.50), 0.90) }

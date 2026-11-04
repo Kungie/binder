@@ -18,6 +18,19 @@ public struct ProposalCard: View {
         return tag
     }
 
+    /// Where Keep files it: `→ dawn · hosting + hetzner-1`.
+    public static func destination(for p: Proposal) -> String {
+        "→ " + ([p.target] + p.also).map(noteName).joined(separator: " + ")
+    }
+
+    /// `projects/dawn/hosting.md` → `dawn · hosting`, `servers/hetzner-1.md` → `hetzner-1`, `me.md` → `me`.
+    static func noteName(_ path: String) -> String {
+        let parts = path.split(separator: "/").map(String.init)
+        let stem = { (s: String) in s.hasSuffix(".md") ? String(s.dropLast(3)) : s }
+        if parts.count == 3, parts[0] == "projects" { return "\(parts[1]) · \(stem(parts[2]))" }
+        return stem(parts.last ?? path)
+    }
+
     var editing: Binding<String>? {
         guard case let .editing(text)? = model.phases[proposal.id] else { return nil }
         return Binding(get: {
@@ -33,6 +46,11 @@ public struct ProposalCard: View {
                 .foregroundColor(Phosphor.amber)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            Text(Self.destination(for: proposal))
+                .font(Fonts.mono(10.5))
+                .foregroundColor(Phosphor.dim)
+                .lineLimit(1)
+                .truncationMode(.tail)
             if let editing, isSnapshot {
                 Text(editing.wrappedValue)
                     .font(Fonts.grotesk(13.5))
@@ -56,6 +74,7 @@ public struct ProposalCard: View {
                     .font(Fonts.grotesk(13.5))
                     .foregroundColor(Phosphor.cream)
                     .fixedSize(horizontal: false, vertical: true)
+                if model.state.detailedCatches { details }
             }
             HStack(spacing: 6) {
                 Button("Keep") { model.keep(proposal.id) }.buttonStyle(CreamButtonStyle())
@@ -72,5 +91,22 @@ public struct ProposalCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Phosphor.black2)
         .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
+    }
+
+    /// Detailed mode: why, in a few sentences, and what was said.
+    @ViewBuilder
+    var details: some View {
+        if let detail = proposal.detailText {
+            Text(detail)
+                .font(Fonts.grotesk(12.5))
+                .foregroundColor(Phosphor.cream2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let quote = proposal.quote {
+            Text("SAID IN THE SESSION · \(quote)")
+                .font(Fonts.mono(10.5))
+                .foregroundColor(Phosphor.dim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

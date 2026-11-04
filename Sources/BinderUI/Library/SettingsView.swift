@@ -52,6 +52,15 @@ struct SettingsView: View {
                         Text("\(Int((model.state.clampedThreshold * 100).rounded()))% OF CONTEXT").font(Fonts.vt(20)).foregroundColor(Phosphor.amber)
                     }
                 }
+                group("Catch cards") {
+                    HStack(spacing: 8) {
+                        Chip("Summary", on: !model.state.detailedCatches) { model.update { $0.detailedCatches = false } }
+                        Chip("Detailed", on: model.state.detailedCatches) { model.update { $0.detailedCatches = true } }
+                    }
+                    Text("Detailed adds why, in a few sentences, and what was said in the session.")
+                        .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 group("Read sessions with your Claude plan") {
                     HStack(spacing: 8) {
                         Chip("On", on: model.state.summarizerConsent) { model.update { $0.summarizerConsent = true } }
