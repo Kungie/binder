@@ -3,7 +3,7 @@ import Foundation
 /// Something Binder caught and wants to remember, waiting for the user's Keep or Drop.
 public struct Proposal: Codable, Equatable, Identifiable, Sendable {
     public enum Kind: String, Codable, Sendable { case decision, fact, preference, access, file }
-    public enum Source: String, Codable, Sendable { case command, observed, chat }
+    public enum Source: String, Codable, Sendable { case command, observed, chat, failure }
     public enum Confidence: String, Codable, Sendable { case high, medium, low }
 
     public var id: String
@@ -54,6 +54,7 @@ public struct Proposal: Codable, Equatable, Identifiable, Sendable {
         case .command: "kept from a command"
         case .chat: "kept from the chat"
         case .observed: "seen on this Mac"
+        case .failure: "learned from a failure"
         }
     }
 }

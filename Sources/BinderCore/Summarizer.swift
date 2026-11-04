@@ -111,6 +111,8 @@ public struct ClaudeCLISummarizer: Summarizer {
     when it fits. Leave it out for something about the whole project.
     also: up to two other notes it belongs in: a server or machine it is about ("server:hetzner-1"), or a hosting \
     provider or service account ("hosting:cloudflare"). Leave it out otherwise.
+    FAILED lines are commands that failed. When a failure teaches something lasting (a host needs sudo, a tool needs a \
+    flag, a path is wrong), add it as a fact with "source":"failure". Skip one-off typos.
     until: only for a fact that stops being true on a known day ("down until Friday"): that day. Leave it out otherwise.
     NOT TRUE lists things the developer marked wrong. Never propose them again, in any wording.
     outdated: ids of memory lines this session makes untrue: replaced, reversed, a plan now finished, a question now \
@@ -139,6 +141,7 @@ public struct ClaudeCLISummarizer: Summarizer {
         switch entry {
         case let .user(text): "USER: \(text)"
         case let .assistant(text): "ASSISTANT: \(text)"
+        case let .failed(command, error): "FAILED: \(command) · \(error)"
         default: nil
         }
     }
@@ -194,7 +197,8 @@ public struct ClaudeCLISummarizer: Summarizer {
             }
             let also = (item["also"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(Destination.path) }
                 .reduce(into: [String]()) { if !$0.contains($1) && $1 != target && $0.count < 2 { $0.append($1) } }
-            var proposal = Proposal.make(kind: kind, source: source, text: SecretFilter.redact(text), evidence: evidence,
+            let from: Proposal.Source = item["source"] as? String == "failure" ? .failure : source
+            var proposal = Proposal.make(kind: kind, source: from, text: SecretFilter.redact(text), evidence: evidence,
                                          target: target, project: project, session: session, confidence: confidence,
                                          detail: Self.field(item["detail"], limit: 600), quote: Self.field(item["quote"], limit: 200), also: also)
             proposal.until = Self.until(item["until"])

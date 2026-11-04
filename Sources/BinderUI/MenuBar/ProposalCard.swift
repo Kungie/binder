@@ -16,6 +16,7 @@ public struct ProposalCard: View {
         case .command: tag = "FROM A COMMAND · \(p.evidence)"
         case .observed: tag = "SEEN ON THIS MAC · \(p.evidence)"
         case .chat: tag = "FROM THE CHAT"
+        case .failure: tag = "FROM A FAILED COMMAND"
         }
         if p.confidence == .low { tag += " · PROBABLY A ONE-OFF" }
         return tag

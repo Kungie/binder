@@ -25,6 +25,8 @@ public enum TranscriptEntry: Equatable, Sendable {
     case usage(Usage, model: String?)
     /// An image or PDF the user attached, base64 as the transcript has it, with the text sent alongside.
     case attachment(mediaType: String, base64: String, near: String)
+    /// A Bash command whose result was an error, with the start of that error.
+    case failed(command: String, error: String)
 }
 
 public struct TranscriptChunk: Sendable {
@@ -56,17 +58,24 @@ public enum Transcript {
         }
         let complete = data[data.startIndex...lastNewline]
         var chunk = TranscriptChunk(entries: [], endOffset: offset + UInt64(complete.count), sessionID: nil, cwd: nil)
+        var commands: [String: String] = [:]
         for line in complete.split(separator: UInt8(ascii: "\n")) {
             guard let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else { continue }
             if chunk.sessionID == nil { chunk.sessionID = object["sessionId"] as? String }
             if chunk.cwd == nil { chunk.cwd = object["cwd"] as? String }
             if chunk.firstTimestamp == nil, let stamp = object["timestamp"] as? String { chunk.firstTimestamp = Self.stamp(stamp) }
-            chunk.entries += entries(from: object)
+            chunk.entries += entries(from: object, commands: &commands)
         }
         return chunk
     }
 
     static func entries(from line: [String: Any]) -> [TranscriptEntry] {
+        var commands: [String: String] = [:]
+        return entries(from: line, commands: &commands)
+    }
+
+    /// `commands` remembers Bash commands by tool id, so a failed result later in the chunk can name its command.
+    static func entries(from line: [String: Any], commands: inout [String: String]) -> [TranscriptEntry] {
         guard let type = line["type"] as? String, type == "user" || type == "assistant",
               (line["isSidechain"] as? Bool) != true, (line["isMeta"] as? Bool) != true,
               let message = line["message"] as? [String: Any] else { return [] }
@@ -81,7 +90,16 @@ public enum Transcript {
                 case "text":
                     if let text = block["text"] as? String { result.append(type == "user" ? .user(text) : .assistant(text)) }
                 case "tool_use":
-                    if let entry = toolUse(block) { result.append(entry) }
+                    if let entry = toolUse(block) {
+                        result.append(entry)
+                        if case let .command(command) = entry, let id = block["id"] as? String { commands[id] = command }
+                    }
+                case "tool_result":
+                    guard type == "user", (block["is_error"] as? Bool) == true, let id = block["tool_use_id"] as? String,
+                          let command = commands[id] else { continue }
+                    let error = (block["content"] as? String)
+                        ?? (block["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: " ")
+                    result.append(.failed(command: command, error: String(SecretFilter.redact(error).prefix(300))))
                 case "image", "document":
                     // Only what the user attached: screenshots inside tool results never reach this level.
                     guard type == "user", let source = block["source"] as? [String: Any], source["type"] as? String == "base64",
