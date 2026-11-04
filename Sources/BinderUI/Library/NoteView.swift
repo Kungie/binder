@@ -42,7 +42,7 @@ struct NoteView: View {
                     if editing.value == nil { noteActions }
                     if let message = splitMessage.value { Text(message).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.cream2) }
                 }
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 8) {
                     if editing.value != nil {
                         Button("Cancel") { editing.value = nil }.buttonStyle(GhostButtonStyle(height: 32))
@@ -149,10 +149,12 @@ struct NoteView: View {
 
     /// The project's topic notes; one click opens a topic.
     var topics: some View {
-        HStack(spacing: 6) {
-            Text("TOPICS").font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim)
-            ForEach(detail.topics) { topic in
-                Button(topic.title) { model.selected = topic }.buttonStyle(GhostButtonStyle(height: 26))
+        HStack(alignment: .top, spacing: 8) {
+            Text("TOPICS").font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim).frame(height: 26)
+            FlowLayout(spacing: 6) {
+                ForEach(detail.topics) { topic in
+                    Button(topic.title) { model.selected = topic }.buttonStyle(GhostButtonStyle(height: 26)).fixedSize()
+                }
             }
         }
         .padding(.top, 4)

@@ -465,3 +465,41 @@ public struct Scroll<Content: View>: View {
         }
     }
 }
+
+/// Lays its children out left to right at their own size, wrapping to a new row when one is full.
+public struct FlowLayout: Layout {
+    var spacing: CGFloat
+
+    public init(spacing: CGFloat = 8) { self.spacing = spacing }
+
+    /// As wide as offered (600 pt when nothing is offered), as tall as the rows need.
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 600
+        return CGSize(width: width, height: Self.arrange(sizes: subviews.map { $0.sizeThatFits(.unspecified) }, width: width, spacing: spacing).size.height)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let (positions, _) = Self.arrange(sizes: sizes, width: bounds.width, spacing: spacing)
+        for (i, p) in positions.enumerated() {
+            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: ProposedViewSize(sizes[i]))
+        }
+    }
+
+    /// Where each child goes, and the size of the whole. A child wider than the row gets a row of its own.
+    static func arrange(sizes: [CGSize], width: CGFloat, spacing: CGFloat) -> (positions: [CGPoint], size: CGSize) {
+        var positions: [CGPoint] = [], x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+        for size in sizes {
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return (positions, CGSize(width: widest, height: sizes.isEmpty ? 0 : y + rowHeight))
+    }
+}
