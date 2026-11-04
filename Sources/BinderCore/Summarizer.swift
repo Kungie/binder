@@ -43,17 +43,21 @@ public struct ClaudeCLISummarizer: Summarizer {
     public struct Known: Sendable {
         public var project: [String]
         public var me: [String]
+        /// The project's topic notes, so the model reuses one instead of inventing a near twin.
+        public var topics: [String]
 
-        public init(project: [String], me: [String]) {
+        public init(project: [String], me: [String], topics: [String] = []) {
             self.project = project
             self.me = me
+            self.topics = topics
         }
 
         /// The project's note and me.md, newest first.
         public static func load(vault: Vault, project: String?) -> Known {
             let projectLines = project.flatMap { NoteIO.read(vault.url("projects/\($0).md"))?.decisions } ?? []
             let meLines = NoteIO.read(vault.url("me.md"))?.decisions ?? []
-            return Known(project: Array(projectLines.reversed().prefix(knownLimit)), me: Array(meLines.reversed().prefix(knownLimit)))
+            return Known(project: Array(projectLines.reversed().prefix(knownLimit)), me: Array(meLines.reversed().prefix(knownLimit)),
+                         topics: project.map { Topic.topics(of: $0, vault: vault) } ?? [])
         }
     }
 
@@ -72,7 +76,11 @@ public struct ClaudeCLISummarizer: Summarizer {
     coding session between the developer (USER) and their coding agent (ASSISTANT).
 
     Reply with only this JSON and nothing else:
-    {"new":[{"kind":"decision|fact|preference|access","scope":"me|project","text":"one short sentence","confidence":"high|medium|low"}],"outdated":["P2","M1"]}
+    {"new":[{"kind":"decision|fact|preference|access","scope":"me|project","text":"one short sentence","confidence":"high|medium|low",\
+    "detail":"2-3 sentences: why, and what it touches","quote":"what was said, rendered in English, at most 200 characters",\
+    "topic":"one or two words","also":["server:<name>","hosting:<provider>"]}],"outdated":["P2","M1"]}
+
+    Write every field in English, whatever language the session is in.
 
     new: durable things worth knowing in future sessions: decisions, hosting and deploy choices, conventions, \
     preferences the developer stated, access details (which host, which key, where a token is kept, never the token). \
@@ -80,10 +88,20 @@ public struct ClaudeCLISummarizer: Summarizer {
     anything obvious from the code, and anything the memory already says.
     scope: "me" only for what is true of the developer across all their projects: how they like to work, their tools \
     and taste. Anything about this project, its code, releases, design or the people on it is "project".
+    topic: for project items, the part of the project it is about (hosting, api, auth, payments). Reuse one of TOPICS \
+    when it fits. Leave it out for something about the whole project.
+    also: up to two other notes it belongs in: a server or machine it is about ("server:hetzner-1"), or a hosting \
+    provider or service account ("hosting:cloudflare"). Leave it out otherwise.
     outdated: ids of memory lines this session makes untrue: replaced, reversed, a plan now finished, a question now \
     decided. Also M lines that are about one project rather than the developer. When unsure, leave a line out.
     Never include secrets, tokens or passwords. With nothing to report, reply {"new":[],"outdated":[]}.
     """
+
+    /// A model-written field: trimmed, redacted, cut to `limit` characters; nil when missing or empty.
+    static func field(_ value: Any?, limit: Int) -> String? {
+        guard let text = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return String(SecretFilter.redact(text).prefix(limit))
+    }
 
     public static func said(_ entry: TranscriptEntry) -> String? {
         switch entry {
@@ -119,8 +137,9 @@ public struct ClaudeCLISummarizer: Summarizer {
         var memory: [String] = []
         for (i, line) in known.project.enumerated() { memory.append("P\(i + 1). \(CardBuilder.decisionText(line))") }
         for (i, line) in known.me.enumerated() { memory.append("M\(i + 1). \(CardBuilder.decisionText(line))") }
+        let topics = known.topics.isEmpty ? "" : "\nTOPICS: \(known.topics.joined(separator: ", "))"
         let input = """
-        PROJECT: \(project ?? "none")
+        PROJECT: \(project ?? "none")\(topics)
 
         MEMORY:
         \(memory.isEmpty ? "(empty)" : memory.joined(separator: "\n"))
@@ -140,12 +159,15 @@ public struct ClaudeCLISummarizer: Summarizer {
             if item["scope"] as? String == "me" {
                 target = "me.md"
             } else if let project {
-                target = "projects/\(project).md"
+                target = (item["topic"] as? String).flatMap(Topic.slug).map { Topic.path(project: project, topic: $0) } ?? "projects/\(project).md"
             } else {
                 continue // about a project, but this session isn't in one
             }
+            let also = (item["also"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(Destination.path) }
+                .reduce(into: [String]()) { if !$0.contains($1) && $1 != target && $0.count < 2 { $0.append($1) } }
             review.proposals.append(Proposal.make(kind: kind, source: .chat, text: SecretFilter.redact(text), evidence: "said in session \(session ?? "?")",
-                                                  target: target, project: project, session: session, confidence: confidence))
+                                                  target: target, project: project, session: session, confidence: confidence,
+                                                  detail: Self.field(item["detail"], limit: 600), quote: Self.field(item["quote"], limit: 200), also: also))
         }
         for id in json["outdated"] as? [String] ?? [] {
             guard let n = Int(id.dropFirst()), n >= 1 else { continue }

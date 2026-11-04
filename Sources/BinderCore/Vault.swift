@@ -24,8 +24,10 @@ public struct Vault: Sendable {
     public var stateFile: URL { url(".binder/state.json") }
     public var cursorsFile: URL { url(".binder/cursors.json") }
     public var droppedFile: URL { url(".binder/dropped.txt") }
+    /// Images and PDFs caught in a session, waiting for Keep or Drop.
+    public var inboxFiles: URL { url(".binder/inbox/files") }
 
-    static let folders = ["machines", "access", "servers", "projects", "handoffs", ".binder/inbox", ".binder/cards", ".binder/sessions"]
+    static let folders = ["machines", "access", "servers", "hosting", "projects", "handoffs", "files", ".binder/inbox", ".binder/cards", ".binder/sessions"]
 
     public func ensureLayout() throws {
         for folder in Self.folders {
