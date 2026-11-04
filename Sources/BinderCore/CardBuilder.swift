@@ -16,25 +16,31 @@ public enum CardBuilder {
         return FileManager.default.fileExists(atPath: vault.url("projects/\(name).md").path) ? GitRepo(root: folder, remote: nil) : nil
     }
 
-    public static func build(vault: Vault, repo: GitRepo?) -> String {
+    public static func build(vault: Vault, repo: GitRepo?) -> String { buildIncluded(vault: vault, repo: repo).card }
+
+    /// The card, and which notes and decision lines made it onto the card after trimming, for the usage counts.
+    public static func buildIncluded(vault: Vault, repo: GitRepo?) -> (card: String, notes: [String], lines: [String: [String]]) {
         var me = meLines(vault)
         var projectLines: [String] = []
+        // Raw decision lines, newest first; the card shows them through `cardLine`.
         var decisions: [String] = []
         var access: [String] = []
         var handoff: [String] = []
         var topics: [(name: String, lines: [String])] = []
+        var overview: String?
 
         if let repo {
-            let note = NoteIO.read(vault.url("projects/\(repo.name).md"))
+            let path = "projects/\(repo.name).md"
+            let note = NoteIO.read(vault.url(path))
             if let note {
+                overview = path
                 projectLines = note.observedLines + freeLines(note)
-                // Date and text only: where a line came from matters in the note, not to the agent.
-                decisions = note.decisions.reversed().map(cardLine)
+                decisions = note.decisions.reversed()
             } else {
                 projectLines = ["- nothing in the binder yet"]
             }
             topics = Topic.topics(of: repo.name, vault: vault).compactMap { name in
-                let lines = NoteIO.read(vault.url(Topic.path(project: repo.name, topic: name)))?.decisions.reversed().map(cardLine) ?? []
+                let lines = NoteIO.read(vault.url(Topic.path(project: repo.name, topic: name)))?.decisions.reversed() ?? []
                 return lines.isEmpty ? nil : (name, Array(lines))
             }
             access = accessLines(vault, linkedFrom: note)
@@ -50,10 +56,11 @@ public enum CardBuilder {
             if !me.isEmpty { parts.append("ME:\n" + me.joined(separator: "\n")) }
             if let repo {
                 var block = "PROJECT \(repo.name):\n" + projectLines.joined(separator: "\n")
-                if !decisions.isEmpty { block += "\nDecisions, newest first:\n" + decisions.joined(separator: "\n") }
+                // Date and text only: where a line came from matters in the note, not to the agent.
+                if !decisions.isEmpty { block += "\nDecisions, newest first:\n" + decisions.map(cardLine).joined(separator: "\n") }
                 parts.append(block)
                 for topic in topics where !topic.lines.isEmpty {
-                    parts.append("\(topic.name.uppercased()):\n" + topic.lines.joined(separator: "\n"))
+                    parts.append("\(topic.name.uppercased()):\n" + topic.lines.map(cardLine).joined(separator: "\n"))
                 }
             }
             if !access.isEmpty { parts.append("SERVERS AND ACCESS:\n" + access.joined(separator: "\n")) }
@@ -67,10 +74,34 @@ public enum CardBuilder {
             else if decisions.count > 1 { decisions.removeLast() }
             else if !access.isEmpty { access.removeLast() }
             else if me.count > 3 { me.removeLast() }
-            else { return String(card.prefix(budget)) }
+            else { card = String(card.prefix(budget)); break }
             card = render()
         }
-        return card
+
+        // What survived, by note.
+        var notes: [String] = [], lines: [String: [String]] = [:]
+        if !me.isEmpty {
+            notes.append("me.md")
+            let shown = Set(me)
+            lines["me.md"] = (NoteIO.read(vault.url("me.md"))?.decisions ?? []).filter { shown.contains("- " + decisionText($0)) }
+        }
+        if let overview {
+            notes.append(overview)
+            lines[overview] = decisions
+        }
+        if let repo {
+            for topic in topics where !topic.lines.isEmpty {
+                let path = Topic.path(project: repo.name, topic: topic.name)
+                notes.append(path)
+                lines[path] = topic.lines
+            }
+        }
+        let servers = ((try? FileManager.default.contentsOfDirectory(atPath: vault.url("servers").path)) ?? []).filter { $0.hasSuffix(".md") }
+        for file in servers where access.contains(where: { $0.hasPrefix("- \(file.dropLast(3)):") }) { notes.append("servers/\(file)") }
+        if access.contains(where: { $0.hasPrefix("- ssh hosts already set up") }) { notes.append("access/ssh.md") }
+        let accounts = Set(NoteIO.read(vault.url("access/accounts.md"))?.observedLines ?? [])
+        if access.contains(where: accounts.contains) { notes.append("access/accounts.md") }
+        return (card, notes, lines)
     }
 
     /// A decision as the card shows it: date and text, without where it came from.
@@ -175,6 +206,25 @@ public struct CardCache: Sendable {
     public func store(_ card: String, for repo: GitRepo) throws {
         try FileManager.default.createDirectory(at: vault.cards, withIntermediateDirectories: true)
         try Data(card.utf8).write(to: file(repo), options: .atomic)
+    }
+
+    struct Included: Codable {
+        var notes: [String]
+        var lines: [String: [String]]
+    }
+
+    func includedFile(_ repo: GitRepo) -> URL { vault.cards.appendingPathComponent("\(repo.projectID).used.json") }
+
+    /// Stores the card and what it was built from, so a cached card still knows which notes it shows.
+    public func store(_ card: String, included: (notes: [String], lines: [String: [String]]), for repo: GitRepo) throws {
+        try store(card, for: repo)
+        try JSONEncoder().encode(Included(notes: included.notes, lines: included.lines)).write(to: includedFile(repo), options: .atomic)
+    }
+
+    public func cachedIncluded(for repo: GitRepo) -> (card: String, notes: [String], lines: [String: [String]])? {
+        guard let card = cached(for: repo), let data = try? Data(contentsOf: includedFile(repo)),
+              let included = try? JSONDecoder().decode(Included.self, from: data) else { return nil }
+        return (card, included.notes, included.lines)
     }
 
     private func modified(_ url: URL) -> Date? {

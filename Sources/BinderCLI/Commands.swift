@@ -32,22 +32,7 @@ enum Commands {
     /// SessionStart: print the context card for the folder the session started in.
     static func card(_ paths: Paths, stdin: Data) {
         guard paths.vaultExists, let input = HookIO.readInput(stdin) else { return }
-        let repo = CardBuilder.project(for: URL(fileURLWithPath: input.cwd), vault: paths.vault)
-        let card: String
-        if let repo {
-            let cache = CardCache(vault: paths.vault)
-            if let cached = cache.cached(for: repo) {
-                card = cached
-            } else {
-                card = CardBuilder.build(vault: paths.vault, repo: repo)
-                try? cache.store(card, for: repo)
-            }
-            if Handoff.pending(project: repo.name, vault: paths.vault) != nil {
-                try? Handoff.markConsumed(project: repo.name, vault: paths.vault)
-            }
-        } else {
-            card = CardBuilder.build(vault: paths.vault, repo: nil)
-        }
+        let card = SessionCard.make(vault: paths.vault, cwd: input.cwd, session: input.sessionID)
         FileHandle.standardOutput.write(HookIO.sessionStartOutput(card))
     }
 

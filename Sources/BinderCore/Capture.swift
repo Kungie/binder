@@ -92,6 +92,9 @@ public enum Capture {
         var result = CaptureResult(startOffset: offset, endOffset: chunk.endOffset)
         for p in proposals where try store.add(p) { result.proposalsAdded += 1 }
         try cursors.set(chunk.endOffset, for: input.sessionID)
+        let commands = chunk.entries.compactMap { if case let .command(c) = $0 { c } else { nil } }
+        let replies = chunk.entries.compactMap { if case let .assistant(t) = $0 { t } else { nil } }
+        UsageStore(vault: vault).recordUse(commands: commands, replies: replies)
 
         result.reading = ContextMeter.reading(from: chunk.entries)
             ?? SessionStatus.load(session: input.sessionID, vault: vault)?.reading
