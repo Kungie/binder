@@ -278,7 +278,7 @@ struct GraphView: View {
             }
         }
 
-        // Labels by importance; one that would land on a label already drawn is left out, unless it's lit.
+        // Labels by importance; one that would land on a label already drawn, or on your head, is left out, unless it's lit.
         func rank(_ node: GraphLayout.Node) -> Int {
             if node.id == focus { return 0 }
             if focus != nil && near.contains(node.id) { return 1 }
@@ -288,7 +288,10 @@ struct GraphView: View {
             default: return 4
             }
         }
-        var placed: [CGRect] = []
+        var placed: [CGRect] = nodes.filter { $0.kind == .me }.map { node in
+            let p = screen(node.position), half = 23 * min(max(scale, 0.6), 1.5)
+            return CGRect(x: p.x - half, y: p.y - half, width: half * 2, height: half * 2)
+        }
         let ordered = nodes.sorted { (rank($0), -$0.degree) < (rank($1), -$1.degree) }
         for node in ordered {
             let p = screen(node.position)
@@ -300,7 +303,7 @@ struct GraphView: View {
             case .me, .folder: CGRect(x: p.x - width / 2, y: p.y + r + 2, width: width, height: 16)
             default: CGRect(x: p.x + r + 3, y: p.y - 8, width: width, height: 16)
             }
-            if !highlighted, placed.contains(where: { $0.intersects(box) }) { continue }
+            if !highlighted, node.kind != .me, placed.contains(where: { $0.intersects(box) }) { continue }
             placed.append(box)
             switch node.kind {
             case .me:
