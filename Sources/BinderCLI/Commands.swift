@@ -77,6 +77,7 @@ enum Commands {
                     try Memory.supersede(group.map(\.line), in: target, vault: paths.vault)
                 }
             }
+            FileCatch.captionPending(vault: paths.vault, summarizer: summarizer)
         } catch {
             paths.vault.log("summarize failed: \(error)")
         }

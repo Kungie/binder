@@ -55,3 +55,20 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: vault.url("me.md").path))
     }
 }
+
+@MainActor
+@Suite struct LibraryFileLineTests {
+    @Test func deletingAFileLineRemovesTheFile() throws {
+        let vault = try fixtureVault()
+        let m = LibraryModel(vault: vault, home: makeTempDir("home"))
+        m.trash = { try FileManager.default.removeItem(at: $0) }
+        try FileManager.default.createDirectory(at: vault.url("files/dawn"), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: vault.url("files/dawn/2026-11-04-shot.png"))
+        let line = "2026-11-04 · ![[files/dawn/2026-11-04-shot.png]] Shot · kept from the chat"
+        try NoteIO.update(vault.url("projects/dawn.md"), title: "dawn") { $0.appendingDecision(line) }
+        #expect(NoteView.embed(in: "![[files/dawn/2026-11-04-shot.png]] Shot") == "files/dawn/2026-11-04-shot.png")
+        #expect(NoteView.withoutEmbed("![[files/dawn/2026-11-04-shot.png]] Shot") == "Shot")
+        m.delete(line: line, in: NoteRef(title: "dawn", path: "projects/dawn.md"))
+        #expect(!FileManager.default.fileExists(atPath: vault.url("files/dawn/2026-11-04-shot.png").path))
+    }
+}

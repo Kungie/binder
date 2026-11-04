@@ -252,6 +252,29 @@ public struct ClaudeCLISummarizer: Summarizer {
         return sorted
     }
 
+    // MARK: Captions for caught files
+
+    public static let captionSystem = """
+    You write short captions for images and PDFs a developer kept from coding sessions. For each file you get its id, \
+    its name and what was said around it, in any language. Write each caption in English, at most 12 words, saying what \
+    the file shows. Never include secrets. Reply with only this JSON and nothing else: {"captions":{"p_1":"Caption"}}
+    """
+
+    /// File id → an English caption. Empty when the model can't run or answers with something unreadable.
+    public func captions(for files: [(id: String, near: String, name: String)]) -> [String: String] {
+        guard !files.isEmpty else { return [:] }
+        let input = files.map { "\($0.id) · \($0.name) · \(SecretFilter.redact($0.near))" }.joined(separator: "\n")
+        guard let result = runner.run("claude", Self.arguments(system: Self.captionSystem), input: input, timeout: 90),
+              result.status == 0, !result.timedOut, let json = Self.object(in: result.stdout),
+              let captions = json["captions"] as? [String: Any] else { return [:] }
+        var out: [String: String] = [:]
+        for (id, value) in captions {
+            guard let text = Self.field(value, limit: 120) else { continue }
+            out[id] = text.split(separator: " ").prefix(12).joined(separator: " ")
+        }
+        return out
+    }
+
     // MARK: Handoff
 
     static let handoffSystem = """

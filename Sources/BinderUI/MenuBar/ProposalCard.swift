@@ -1,4 +1,6 @@
+import AppKit
 import BinderCore
+import PDFKit
 import SwiftUI
 
 /// One thing Binder caught: where it came from, what it says, and Keep / Edit / Drop.
@@ -8,6 +10,7 @@ public struct ProposalCard: View {
     @Environment(\.isSnapshot) private var isSnapshot
 
     public static func tag(for p: Proposal) -> String {
+        if p.kind == .file { return "\((p.file ?? "").hasSuffix(".pdf") ? "PDF" : "IMAGE") · \(p.evidence.uppercased())" }
         var tag: String
         switch p.source {
         case .command: tag = "FROM A COMMAND · \(p.evidence)"
@@ -51,6 +54,7 @@ public struct ProposalCard: View {
                 .foregroundColor(Phosphor.dim)
                 .lineLimit(1)
                 .truncationMode(.tail)
+            if proposal.kind == .file { filePreview }
             if let editing, isSnapshot {
                 Text(editing.wrappedValue)
                     .font(Fonts.grotesk(13.5))
@@ -107,6 +111,22 @@ public struct ProposalCard: View {
                 .font(Fonts.mono(10.5))
                 .foregroundColor(Phosphor.dim)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A caught image as a thumbnail, a PDF as its page count, and a reminder to look before keeping.
+    @ViewBuilder
+    var filePreview: some View {
+        if let name = proposal.file {
+            let url = model.vault.inboxFiles.appendingPathComponent(name)
+            if url.pathExtension == "pdf" {
+                Text("PDF · \(PDFDocument(url: url)?.pageCount ?? 0) PAGES").font(Fonts.mono(10.5)).foregroundColor(Phosphor.cream2)
+            } else if let image = NSImage(contentsOf: url) {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 160)
+                    .accessibilityLabel(proposal.text)
+            }
+            Text("Check for passwords or keys before keeping.").font(Fonts.grotesk(11.5)).foregroundColor(Phosphor.dim)
         }
     }
 }

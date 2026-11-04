@@ -1,5 +1,7 @@
+import AppKit
 import BinderCore
 import Foundation
+import SwiftUI
 
 /// A throwaway vault filled with believable demo content, for snapshots and tests.
 @MainActor
@@ -26,6 +28,14 @@ public enum DemoVault {
                                          target: first ? "projects/dawn/hosting.md" : item.3,
                                          project: "dawn", session: "demo", confidence: item.4, now: start.addingTimeInterval(Double(i)),
                                          also: first ? ["hosting/cloudflare.md"] : []))
+        }
+        if kind == .handoff, let png = demoDiagram() {
+            // A file card: an image someone attached, already captioned.
+            for var p in (try? FileCatch.stage([.attached(mediaType: "image/png", base64: png.base64EncodedString(), near: "")],
+                                              vault: vault, project: "dawn", session: "demo", offeredSoFar: 0)) ?? [] {
+                p.text = "Architecture of the dawn site and its API"
+                try? store.add(p)
+            }
         }
         for decision in ["Licence is AGPL-3.0, not MIT.", "Ships as a free app.", "The panel stays 340 pt wide."] {
             try? Memory.add(decision, to: "projects/dawn.md", vault: vault)
@@ -71,6 +81,23 @@ public enum DemoVault {
         state.lastObserve = Date().addingTimeInterval(-40 * 60)
         try? state.save(vault)
         return vault
+    }
+
+    /// A small made-up architecture sketch, for the file card in the snapshots.
+    static func demoDiagram() -> Data? {
+        let view = ZStack {
+            Phosphor.black2
+            Rectangle().fill(Phosphor.amber.opacity(0.6)).frame(width: 260, height: 2)
+            HStack(spacing: 28) {
+                ForEach(["SITE", "API", "DB"], id: \.self) { label in
+                    Text(label).font(Fonts.mono(14)).foregroundColor(Phosphor.amber)
+                        .frame(width: 90, height: 56).background(Phosphor.black2)
+                        .overlay(Rectangle().strokeBorder(Phosphor.amber, lineWidth: 2))
+                }
+            }
+        }
+        guard let image = Snapshot.image(view, size: CGSize(width: 420, height: 180)), let tiff = image.tiffRepresentation else { return nil }
+        return NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
     }
 
     public static func model(_ kind: Kind) -> AppModel {

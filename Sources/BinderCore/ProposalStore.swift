@@ -49,6 +49,7 @@ public struct ProposalStore: Sendable {
         let p = try load(id)
         let text = editedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? p.text
         let day = Self.day.string(from: now)
+        if p.kind == .file { return try keepFile(p, caption: text, day: day) }
         try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) {
             $0.appendingDecision("\(day) · \(text) · \(p.provenance)", detail: p.detail)
         }
@@ -58,6 +59,30 @@ public struct ProposalStore: Sendable {
             try NoteIO.update(vault.url(path), title: Self.title(for: path)) { $0.appendingDecision("\(day) · \(text)\(forProject) · \(p.provenance)") }
         }
         try FileManager.default.removeItem(at: file(id))
+    }
+
+    /// Moves the waiting file to `files/<project or me>/<day>-<caption>.<ext>` and embeds it in the note.
+    private func keepFile(_ p: Proposal, caption: String, day: String) throws {
+        guard let name = p.file else { throw ProposalStoreError.notFound(p.id) }
+        let fm = FileManager.default
+        let folder = "files/\(p.project ?? "me")", ext = (name as NSString).pathExtension
+        let stem = "\(day)-\(Topic.slug(caption) ?? "file")"
+        var path = "\(folder)/\(stem).\(ext)", n = 2
+        while fm.fileExists(atPath: vault.url(path).path) {
+            path = "\(folder)/\(stem)-\(n).\(ext)"
+            n += 1
+        }
+        try fm.createDirectory(at: vault.url(folder), withIntermediateDirectories: true)
+        try fm.moveItem(at: vault.inboxFiles.appendingPathComponent(name), to: vault.url(path))
+        let provenance = p.source == .command ? "made in a session" : "kept from the chat"
+        try NoteIO.update(vault.url(p.target), title: Self.title(for: p.target)) { $0.appendingDecision("\(day) · ![[\(path)]] \(caption) · \(provenance)") }
+        try fm.removeItem(at: file(p.id))
+    }
+
+    /// Rewrites a waiting proposal, for a caption written later.
+    public func replace(_ p: Proposal) throws {
+        guard FileManager.default.fileExists(atPath: file(p.id).path) else { throw ProposalStoreError.notFound(p.id) }
+        try Self.encoder.encode(p).write(to: file(p.id), options: .atomic)
     }
 
     /// A new note's title: its file name, or for a machine named after its address (`10-0-7-50`), the address.
@@ -76,7 +101,8 @@ public struct ProposalStore: Sendable {
     /// Deletes the entry and remembers it, so the same thing is never offered again.
     public func drop(_ id: String) throws {
         let p = try load(id)
-        let line = Self.hash(p) + "\n"
+        if p.kind == .file, let name = p.file { try? FileManager.default.removeItem(at: vault.inboxFiles.appendingPathComponent(name)) }
+        let line = (p.kind == .file ? p.fileHash ?? Self.hash(p) : Self.hash(p)) + "\n"
         try FileManager.default.createDirectory(at: vault.internalDir, withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: vault.droppedFile) {
             defer { try? handle.close() }

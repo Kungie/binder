@@ -112,6 +112,7 @@ struct NoteView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if !detail.facts.isEmpty { observed }
                     if !detail.decisions.isEmpty { decisions }
+                    if !keptFiles.isEmpty { files }
                     if !detail.superseded.isEmpty { superseded }
                     if !detail.freeText.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
@@ -242,7 +243,7 @@ struct NoteView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(Self.day(d.date)).font(Fonts.vt(18)).foregroundColor(Phosphor.amber).frame(width: 70, alignment: .leading)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(d.text).font(Fonts.grotesk(13.5)).foregroundColor(Phosphor.cream)
+                        Text(Self.withoutEmbed(d.text)).font(Fonts.grotesk(13.5)).foregroundColor(Phosphor.cream)
                         ForEach(Array(d.details.enumerated()), id: \.offset) { _, line in
                             Text(line).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim).fixedSize(horizontal: false, vertical: true)
                         }
@@ -279,6 +280,46 @@ struct NoteView: View {
                     Button("Restore") { model.restore(line, in: detail.ref) }.buttonStyle(QuietButtonStyle())
                 }
                 .padding(.vertical, 4)
+            }
+        }
+    }
+
+    /// `![[files/dawn/x.png]] Caption` → `files/dawn/x.png`.
+    static func embed(in text: String) -> String? {
+        text.firstMatch(of: #/!\[\[(files/[^\]]+)\]\]/#).map { String($0.1) }
+    }
+
+    static func withoutEmbed(_ text: String) -> String {
+        text.replacing(#/!\[\[files/[^\]]+\]\]\s*/#, with: "")
+    }
+
+    var keptFiles: [String] { detail.decisions.compactMap { Self.embed(in: $0.text) } }
+
+    /// The note's kept images and PDFs; one click opens a file in Preview.
+    var files: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Files")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(keptFiles, id: \.self) { path in
+                        let url = model.vault.url(path)
+                        Button { NSWorkspace.shared.open(url) } label: {
+                            Group {
+                                if url.pathExtension != "pdf", let image = NSImage(contentsOf: url) {
+                                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                                } else {
+                                    Text(url.pathExtension.uppercased()).font(Fonts.vt(22)).foregroundColor(Phosphor.amber)
+                                }
+                            }
+                            .frame(width: 120, height: 80)
+                            .clipped()
+                            .overlay(Rectangle().strokeBorder(Phosphor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .help(url.lastPathComponent)
+                        .accessibilityLabel("Open \(url.lastPathComponent)")
+                    }
+                }
             }
         }
     }

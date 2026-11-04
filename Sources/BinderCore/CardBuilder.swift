@@ -27,6 +27,7 @@ public enum CardBuilder {
         var access: [String] = []
         var handoff: [String] = []
         var topics: [(name: String, lines: [String])] = []
+        var files: [String] = []
         var overview: String?
 
         if let repo {
@@ -35,7 +36,9 @@ public enum CardBuilder {
             if let note {
                 overview = path
                 projectLines = note.observedLines + freeLines(note)
-                decisions = note.decisions.reversed()
+                // Kept files go in their own block, as paths an agent can open.
+                decisions = note.decisions.reversed().filter { fileLine($0) == nil }
+                files = Array(note.decisions.reversed().compactMap(fileLine).prefix(5))
             } else {
                 projectLines = ["- nothing in the binder yet"]
             }
@@ -62,6 +65,7 @@ public enum CardBuilder {
                 for topic in topics where !topic.lines.isEmpty {
                     parts.append("\(topic.name.uppercased()):\n" + topic.lines.map(cardLine).joined(separator: "\n"))
                 }
+                if !files.isEmpty { parts.append("FILES:\n" + files.joined(separator: "\n")) }
             }
             if !access.isEmpty { parts.append("SERVERS AND ACCESS:\n" + access.joined(separator: "\n")) }
             if !handoff.isEmpty { parts.append("PICK UP FROM LAST TIME:\n" + handoff.joined(separator: "\n")) }
@@ -71,6 +75,7 @@ public enum CardBuilder {
         var card = render()
         while card.count > budget {
             if let oldest = oldestTopicLine(topics) { topics[oldest].lines.removeLast() }
+            else if !files.isEmpty { files.removeLast() }
             else if decisions.count > 1 { decisions.removeLast() }
             else if !access.isEmpty { access.removeLast() }
             else if me.count > 3 { me.removeLast() }
@@ -167,12 +172,19 @@ public enum CardBuilder {
         return lines
     }
 
+    /// Wikilinks to notes. Embedded files (`![[files/…]]`) aren't notes, so they're left out.
     public static func links(in text: String) -> [String] {
         var seen: [String] = []
-        for match in text.matches(of: #/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/#) where !seen.contains(String(match.1)) {
+        for match in text.matches(of: #/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/#) where !seen.contains(String(match.1)) && !match.1.hasPrefix("files/") {
             seen.append(String(match.1))
         }
         return seen
+    }
+
+    /// A kept file's line, `… · ![[files/dawn/x.png]] Caption · …`, as `- files/dawn/x.png: Caption`.
+    static func fileLine(_ decision: String) -> String? {
+        guard let m = decisionText(decision).firstMatch(of: #/^!\[\[(files/[^\]]+)\]\]\s*(.*)$/#) else { return nil }
+        return m.2.isEmpty ? "- \(m.1)" : "- \(m.1): \(m.2)"
     }
 
     /// Every file and folder a project's card reads, for cache freshness.

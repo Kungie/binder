@@ -183,6 +183,9 @@ public final class LibraryModel: ObservableObject {
         guard let note = NoteIO.read(url) else { return }
         let next = note.removingDecision(line)
         if next != note { try? NoteIO.write(next, to: url) }
+        // A kept file goes with its line.
+        if let file = line.firstMatch(of: #/!\[\[(files/[^\]]+)\]\]/#).map({ vault.url(String($0.1)) }),
+           FileManager.default.fileExists(atPath: file.path) { try? trash(file) }
         objectWillChange.send()
     }
 

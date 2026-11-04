@@ -103,6 +103,23 @@ public enum FileCatch {
         return words.prefix(1).uppercased() + words.dropFirst()
     }
 
+    /// Gives waiting file cards an English caption from what was said around them (only with consent: the
+    /// caller decides). Returns how many were captioned. A bad reply leaves the file-name caption as it is.
+    @discardableResult
+    public static func captionPending(vault: Vault, summarizer: ClaudeCLISummarizer) -> Int {
+        let store = ProposalStore(vault: vault)
+        let waiting = store.pending().filter { $0.kind == .file && $0.context != nil }
+        let captions = summarizer.captions(for: waiting.map { ($0.id, $0.context ?? "", $0.text) })
+        var done = 0
+        for var p in waiting {
+            guard let caption = captions[p.id], !SecretFilter.containsSecret(caption) else { continue }
+            p.text = caption
+            p.context = nil
+            if (try? store.replace(p)) != nil { done += 1 }
+        }
+        return done
+    }
+
     public static func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
     /// Hashes of the files already kept under `files/`.
