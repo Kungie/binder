@@ -43,7 +43,7 @@ public struct VaultGraph: Sendable {
     private var index: [String: Int] = [:]
     private var edgeIndex: [String: Int] = [:]
 
-    static let folders = ["machines", "access", "servers", "projects", "handoffs"]
+    static let folders = ["machines", "access", "servers", "hosting", "projects", "handoffs"]
     /// Observed facts that become shared nodes, and how their values split.
     static let facetKeys = ["languages", "deploy", "domains"]
 
@@ -98,6 +98,24 @@ public struct VaultGraph: Sendable {
             }
         }
 
+        // Topic notes, projects/<project>/<topic>.md, hang off their project's overview.
+        var topicIDs: [String: String] = [:]
+        let projectDirs = ((try? fm.contentsOfDirectory(atPath: vault.url("projects").path)) ?? []).filter { name in
+            var dir: ObjCBool = false
+            return fm.fileExists(atPath: vault.url("projects/\(name)").path, isDirectory: &dir) && dir.boolValue
+        }.sorted()
+        for project in projectDirs {
+            for file in mdFiles("projects/\(project)") {
+                let path = "projects/\(project)/\(file)"
+                let note = NoteIO.read(vault.url(path))
+                g.add(GraphNode(id: path, label: note.flatMap(title) ?? String(file.dropLast(3)), kind: .note, path: path))
+                let overview = "projects/\(project).md"
+                g.connect(g.node(overview) != nil ? overview : "folder:projects", path, .structure)
+                topicIDs["\(project)/\(file.dropLast(3))".lowercased()] = path
+                if let note { notes.append((path, note)) }
+            }
+        }
+
         let projects = ((try? fm.contentsOfDirectory(atPath: vault.url("handoffs").path)) ?? []).sorted()
         let handoffs = projects.flatMap { project in mdFiles("handoffs/\(project)").map { (project, $0) } }
         if !handoffs.isEmpty {
@@ -113,10 +131,11 @@ public struct VaultGraph: Sendable {
 
         // Wikilinks resolve by file name or title, ignoring case, like Obsidian.
         var byName: [String: String] = ["me": "me"]
-        for node in g.nodes where node.kind == .note {
+        for node in g.nodes where node.kind == .note && !topicIDs.values.contains(node.id) {
             if let path = node.path { byName[((path as NSString).lastPathComponent as NSString).deletingPathExtension.lowercased()] = node.id }
             byName[node.label.lowercased()] = byName[node.label.lowercased()] ?? node.id
         }
+        byName.merge(topicIDs) { current, _ in current }
         for (path, note) in notes {
             let from = path == "me.md" ? "me" : path
             for target in CardBuilder.links(in: note.render()) {

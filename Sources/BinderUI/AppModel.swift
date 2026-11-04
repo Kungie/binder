@@ -79,7 +79,10 @@ public final class AppModel: ObservableObject {
     /// Every decision line in the vault: what Binder remembers.
     static func countMemories(vault: Vault) -> Int {
         var count = NoteIO.read(vault.url("me.md"))?.decisions.count ?? 0
-        for folder in ["machines", "access", "servers", "projects"] {
+        var folders = ["machines", "access", "servers", "hosting", "projects"]
+        let projects = (try? FileManager.default.contentsOfDirectory(atPath: vault.url("projects").path)) ?? []
+        folders += projects.filter { !$0.hasSuffix(".md") }.map { "projects/\($0)" }
+        for folder in folders {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: vault.url(folder).path)) ?? []
             for name in names where name.hasSuffix(".md") {
                 count += NoteIO.read(vault.url("\(folder)/\(name)"))?.decisions.count ?? 0

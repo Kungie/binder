@@ -25,6 +25,7 @@ struct NoteView: View {
                         if let source = detail.source { chip(source.contains("you") ? "FROM THIS MAC + YOU" : (source == "observed" ? "FROM THIS MAC" : source.uppercased())) }
                         if !detail.decisions.isEmpty { chip("\(detail.decisions.count) DECISION\(detail.decisions.count == 1 ? "" : "S")") }
                     }
+                    if !detail.topics.isEmpty { topics }
                 }
                 Spacer()
                 HStack(spacing: 8) {
@@ -59,6 +60,17 @@ struct NoteView: View {
         let f = DateFormatter()
         f.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm 'TODAY'" : "d MMM HH:mm"
         return f.string(from: date).uppercased()
+    }
+
+    /// The project's topic notes; one click opens a topic.
+    var topics: some View {
+        HStack(spacing: 6) {
+            Text("TOPICS").font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim)
+            ForEach(detail.topics) { topic in
+                Button(topic.title) { model.selected = topic }.buttonStyle(GhostButtonStyle(height: 26))
+            }
+        }
+        .padding(.top, 4)
     }
 
     func chip(_ text: String, amber: Bool = false) -> some View {
