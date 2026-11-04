@@ -104,11 +104,14 @@ public struct ProposalStore: Sendable {
         return (String(parts[1]), String(parts[2].dropLast(3)))
     }
 
-    /// Deletes the entry and remembers it, so the same thing is never offered again.
-    public func drop(_ id: String) throws {
-        let p = try load(id)
-        if p.kind == .file, let name = p.file { try? FileManager.default.removeItem(at: vault.inboxFiles.appendingPathComponent(name)) }
-        let line = (p.kind == .file ? p.fileHash ?? Self.hash(p) : Self.hash(p)) + "\n"
+    /// Remembers a line as dropped for a note, as Drop does, without an inbox entry (Wrong in the main window).
+    public func rememberDropped(target: String, text: String) throws {
+        let digest = SHA256.hash(data: Data((target + "\n" + Self.normalize(text)).utf8))
+        try appendDropped(digest.map { String(format: "%02x", $0) }.joined())
+    }
+
+    private func appendDropped(_ hash: String) throws {
+        let line = hash + "\n"
         try FileManager.default.createDirectory(at: vault.internalDir, withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: vault.droppedFile) {
             defer { try? handle.close() }
@@ -117,6 +120,13 @@ public struct ProposalStore: Sendable {
         } else {
             try Data(line.utf8).write(to: vault.droppedFile)
         }
+    }
+
+    /// Deletes the entry and remembers it, so the same thing is never offered again.
+    public func drop(_ id: String) throws {
+        let p = try load(id)
+        if p.kind == .file, let name = p.file { try? FileManager.default.removeItem(at: vault.inboxFiles.appendingPathComponent(name)) }
+        try appendDropped(p.kind == .file ? p.fileHash ?? Self.hash(p) : Self.hash(p))
         try FileManager.default.removeItem(at: file(id))
     }
 

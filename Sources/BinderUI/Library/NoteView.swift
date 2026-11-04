@@ -253,6 +253,8 @@ struct NoteView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if hovered.value == d.line {
+                        Button("Wrong") { model.markWrong(d.line, in: detail.ref) }.buttonStyle(QuietButtonStyle())
+                            .help("Move it to Superseded and never suggest it again")
                         if let usage = Self.lineUsage(d.usage) {
                             Text(usage.uppercased()).font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim)
                                 .help("An estimate from the commands and replies in your sessions.")
@@ -293,7 +295,7 @@ struct NoteView: View {
             SectionLabel("Superseded · not on the card").padding(.bottom, 6)
             ForEach(Array(detail.superseded.prefix(12).enumerated()), id: \.offset) { _, line in
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(CardBuilder.decisionText(line.replacingOccurrences(of: #" · superseded \d{4}-\d{2}-\d{2}$"#, with: "", options: .regularExpression)))
+                    Text(CardBuilder.decisionText(line.replacingOccurrences(of: Note.supersededSuffix, with: "", options: .regularExpression)))
                         .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim).strikethrough(color: Phosphor.line)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button("Restore") { model.restore(line, in: detail.ref) }.buttonStyle(QuietButtonStyle())

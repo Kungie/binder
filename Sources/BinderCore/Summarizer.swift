@@ -47,12 +47,15 @@ public struct ClaudeCLISummarizer: Summarizer {
         public var topics: [String]
         /// Which note each project line is in: the overview or a topic note. Empty means the overview.
         public var projectPaths: [String]
+        /// Lines the developer marked wrong: never to be proposed again, in any wording.
+        public var wrong: [String]
 
-        public init(project: [String], me: [String], topics: [String] = [], projectPaths: [String] = []) {
+        public init(project: [String], me: [String], topics: [String] = [], projectPaths: [String] = [], wrong: [String] = []) {
             self.project = project
             self.me = me
             self.topics = topics
             self.projectPaths = projectPaths
+            self.wrong = wrong
         }
 
         /// The project's overview and topic notes, and me.md, newest first.
@@ -71,8 +74,9 @@ public struct ClaudeCLISummarizer: Summarizer {
                 return da != db ? da > db : a.offset > b.offset
             }.map(\.element).prefix(knownLimit)
             let meLines = NoteIO.read(vault.url("me.md"))?.decisions ?? []
+            let notes = ["me.md"] + (project.map { p in ["projects/\(p).md"] + topics.map { Topic.path(project: p, topic: $0) } } ?? [])
             return Known(project: newest.map(\.line), me: Array(meLines.reversed().prefix(knownLimit)), topics: topics,
-                         projectPaths: newest.map(\.path))
+                         projectPaths: newest.map(\.path), wrong: Forgetting.wrongLines(in: notes, vault: vault))
         }
     }
 
@@ -107,6 +111,7 @@ public struct ClaudeCLISummarizer: Summarizer {
     when it fits. Leave it out for something about the whole project.
     also: up to two other notes it belongs in: a server or machine it is about ("server:hetzner-1"), or a hosting \
     provider or service account ("hosting:cloudflare"). Leave it out otherwise.
+    NOT TRUE lists things the developer marked wrong. Never propose them again, in any wording.
     outdated: ids of memory lines this session makes untrue: replaced, reversed, a plan now finished, a question now \
     decided. Also M lines that are about one project rather than the developer. When unsure, leave a line out.
     Never include secrets, tokens or passwords. With nothing to report, reply {"new":[],"outdated":[]}.
@@ -152,7 +157,8 @@ public struct ClaudeCLISummarizer: Summarizer {
         var memory: [String] = []
         for (i, line) in known.project.enumerated() { memory.append("P\(i + 1). \(CardBuilder.decisionText(line))") }
         for (i, line) in known.me.enumerated() { memory.append("M\(i + 1). \(CardBuilder.decisionText(line))") }
-        let topics = known.topics.isEmpty ? "" : "\nTOPICS: \(known.topics.joined(separator: ", "))"
+        let topics = (known.topics.isEmpty ? "" : "\nTOPICS: \(known.topics.joined(separator: ", "))")
+            + (known.wrong.isEmpty ? "" : "\n\nNOT TRUE:\n" + known.wrong.map { "- \($0)" }.joined(separator: "\n"))
         let input = """
         PROJECT: \(project ?? "none")\(topics)
 

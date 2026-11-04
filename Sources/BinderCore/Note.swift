@@ -218,17 +218,21 @@ public struct Note: Equatable {
 
     /// Moves these decision lines (exactly as `decisions` lists them) to `## Superseded`, marked with `day`.
     /// Lines that aren't decisions here are ignored, so a stale list can't touch anything else.
-    public func superseding(_ lines: [String], on day: String) -> Note {
+    /// `marker` says why: `superseded` (a newer line), `wrong` (the user said so) or `expired`.
+    public func superseding(_ lines: [String], on day: String, marker: String = "superseded") -> Note {
         var (note, taken) = taking(Set(lines), from: Self.decisionsHeading)
-        for item in taken { note = note.appending(["\(item[0]) · superseded \(day)"] + item.dropFirst(), to: Self.supersededHeading) }
+        for item in taken { note = note.appending(["\(item[0]) · \(marker) \(day)"] + item.dropFirst(), to: Self.supersededHeading) }
         return note
     }
+
+    /// The suffix `superseding` adds, whatever its marker.
+    public static let supersededSuffix = #" · (superseded|wrong|expired) \d{4}-\d{2}-\d{2}$"#
 
     /// Puts a superseded line back among the decisions, with its detail.
     public func restoring(_ supersededLine: String) -> Note {
         var (note, taken) = taking([supersededLine], from: Self.supersededHeading, firstOnly: true)
         guard let item = taken.first else { return self }
-        let original = item[0].replacingOccurrences(of: #" · superseded \d{4}-\d{2}-\d{2}$"#, with: "", options: .regularExpression)
+        let original = item[0].replacingOccurrences(of: Self.supersededSuffix, with: "", options: .regularExpression)
         note = note.appending([original] + item.dropFirst(), to: Self.decisionsHeading)
         return note
     }

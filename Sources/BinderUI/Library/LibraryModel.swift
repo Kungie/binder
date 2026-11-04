@@ -239,6 +239,12 @@ public final class LibraryModel: ObservableObject {
         return result ?? TopicSplit.Result(lines: 0, topics: 0)
     }
 
+    /// The user says a line isn't true: it moves to Superseded and is never suggested again.
+    public func markWrong(_ line: String, in ref: NoteRef) {
+        try? Forgetting.markWrong(line, in: ref.path, vault: vault)
+        objectWillChange.send()
+    }
+
     /// Keeps a fading line on the card for good.
     public func pin(_ line: String, in ref: NoteRef) {
         UsageStore(vault: vault).pin(line: line, in: ref.path)
