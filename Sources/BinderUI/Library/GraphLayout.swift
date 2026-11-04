@@ -216,11 +216,16 @@ final class GraphLayout: ObservableObject {
     }
 
     /// How big a node draws, in world units.
+    /// How many session cards each note was on, by path: busier notes draw a little bigger.
+    var cards: [String: Int] = [:]
+
+    static func useScale(cards: Int) -> Double { 1 + min(0.35, log1p(Double(cards)) / 12) }
+
     func radius(_ node: Node) -> Double {
         switch node.kind {
         case .me: 15
         case .folder: 8
-        case .note: 3.5 + min(Double(node.degree), 8) * 0.55
+        case .note: (3.5 + min(Double(node.degree), 8) * 0.55) * Self.useScale(cards: node.path.flatMap { cards[$0] } ?? 0)
         case .facet: 3.5
         case .missing: 3
         }

@@ -128,6 +128,8 @@ public struct UsageStore: Sendable {
 
     public func counts(note: String) -> UseCounts { load().notes[note] ?? UseCounts() }
 
+    public func noteCounts() -> [String: UseCounts] { load().notes }
+
     public func counts(line: String, in note: String) -> UseCounts { load().lines[note]?[Self.key(line)] ?? UseCounts() }
 
     public func totals() -> UseCounts {

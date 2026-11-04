@@ -61,6 +61,14 @@ struct SettingsView: View {
                         .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                group("What sessions used") {
+                    let totals = UsageStore(vault: model.vault).totals()
+                    Text(NoteView.usageLine(totals, now: Date())?.uppercased() ?? "NOTHING YET")
+                        .font(Fonts.vt(20)).foregroundColor(Phosphor.amber)
+                    Text("Session cards are counted exactly. Used is an estimate from the commands and replies in your sessions. Only counts are kept.")
+                        .font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 group("Read sessions with your Claude plan") {
                     HStack(spacing: 8) {
                         Chip("On", on: model.state.summarizerConsent) { model.update { $0.summarizerConsent = true } }

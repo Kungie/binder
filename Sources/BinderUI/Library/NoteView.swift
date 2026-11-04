@@ -34,6 +34,10 @@ struct NoteView: View {
                         if let source = detail.source { chip(source.contains("you") ? "FROM THIS MAC + YOU" : (source == "observed" ? "FROM THIS MAC" : source.uppercased())) }
                         if !detail.decisions.isEmpty { chip("\(detail.decisions.count) DECISION\(detail.decisions.count == 1 ? "" : "S")") }
                     }
+                    if let usage = Self.usageLine(detail.usage, now: Date()) {
+                        Text(usage.uppercased()).font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim)
+                            .help("Session cards are counted exactly. Used is an estimate from the commands and replies in your sessions.")
+                    }
                     if !detail.topics.isEmpty { topics }
                     if editing.value == nil { noteActions }
                     if let message = splitMessage.value { Text(message).font(Fonts.grotesk(12.5)).foregroundColor(Phosphor.cream2) }
@@ -164,6 +168,36 @@ struct NoteView: View {
         }
     }
 
+    /// `On 40 session cards · used 12 times · last today`, or nil when nothing used it yet.
+    static func usageLine(_ c: UseCounts, now: Date) -> String? {
+        var parts: [String] = []
+        if c.cards > 0 { parts.append("On \(c.cards) session card\(c.cards == 1 ? "" : "s")") }
+        if c.used > 0 { parts.append(c.used == 1 ? "used once" : "used \(c.used) times") }
+        guard !parts.isEmpty else { return nil }
+        if let last = [c.lastCard, c.lastUsed].compactMap({ $0 }).max() {
+            let calendar = Calendar.current
+            if calendar.isDate(last, inSameDayAs: now) { parts.append("last today") }
+            else if calendar.isDate(last, inSameDayAs: now.addingTimeInterval(-86_400)) { parts.append("last yesterday") }
+            else {
+                let f = DateFormatter()
+                f.dateFormat = "d MMM"
+                parts.append("last \(f.string(from: last))")
+            }
+        }
+        let line = parts.joined(separator: " · ")
+        return line.prefix(1).uppercased() + line.dropFirst()
+    }
+
+    /// `On 31 cards · used 4 times`, for one line.
+    static func lineUsage(_ c: UseCounts) -> String? {
+        var parts: [String] = []
+        if c.cards > 0 { parts.append("On \(c.cards) card\(c.cards == 1 ? "" : "s")") }
+        if c.used > 0 { parts.append(c.used == 1 ? "used once" : "used \(c.used) times") }
+        guard !parts.isEmpty else { return nil }
+        let line = parts.joined(separator: " · ")
+        return line.prefix(1).uppercased() + line.dropFirst()
+    }
+
     static func splitMessage(_ result: TopicSplit.Result?) -> String {
         guard let result else { return "Needs Read sessions with your Claude plan, in Settings." }
         guard result.lines > 0 else { return "Nothing to sort. Everything here is about the whole project." }
@@ -215,6 +249,10 @@ struct NoteView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if hovered.value == d.line {
+                        if let usage = Self.lineUsage(d.usage) {
+                            Text(usage.uppercased()).font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim)
+                                .help("An estimate from the commands and replies in your sessions.")
+                        }
                         Button("Delete") { lineToDelete.value = d.line }.buttonStyle(QuietButtonStyle())
                     }
                     Text(d.provenance.uppercased()).font(Fonts.mono(10.5)).foregroundColor(Phosphor.dim).frame(width: 150, alignment: .trailing)

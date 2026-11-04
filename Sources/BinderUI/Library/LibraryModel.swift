@@ -38,6 +38,7 @@ public struct Decision: Equatable, Sendable {
     public var line: String = ""
     /// What's written under it.
     public var details: [String] = []
+    public var usage = UseCounts()
 }
 
 public struct NoteDetail: Sendable {
@@ -51,6 +52,8 @@ public struct NoteDetail: Sendable {
     public var links: [String]
     /// Lines moved out of Decisions because later ones made them untrue, newest first.
     public var superseded: [String] = []
+    /// How often sessions used this note.
+    public var usage = UseCounts()
     /// A project overview's topic notes, A to Z.
     public var topics: [NoteRef] = []
     public var lastHandoff: HandoffCard?
@@ -128,6 +131,9 @@ public final class LibraryModel: ObservableObject {
                                 facts: facts, decisions: decisions, freeText: CardBuilder.freeLines(note),
                                 links: CardBuilder.links(in: note.render()), lastHandoff: nil, cardPreview: nil, cardTokens: 0)
         detail.superseded = note.superseded.reversed()
+        let usage = UsageStore(vault: vault)
+        detail.usage = usage.counts(note: ref.path)
+        for i in detail.decisions.indices { detail.decisions[i].usage = usage.counts(line: detail.decisions[i].line, in: ref.path) }
         if ref.path.hasPrefix("projects/"), ref.path.split(separator: "/").count == 2 {
             let name = String(ref.path.dropFirst("projects/".count).dropLast(3))
             detail.topics = Topic.topics(of: name, vault: vault).map { topic in

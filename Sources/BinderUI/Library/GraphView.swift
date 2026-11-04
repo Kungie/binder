@@ -36,7 +36,9 @@ struct GraphView: View {
     init(vault: Vault, open: @escaping (GraphLayout.Node) -> Void) {
         self.vault = vault
         self.open = open
-        _layout = StateObject(wrappedValue: GraphLayout(graph: VaultGraph.build(vault: vault)))
+        let layout = GraphLayout(graph: VaultGraph.build(vault: vault))
+        layout.cards = UsageStore(vault: vault).noteCounts().mapValues(\.cards)
+        _layout = StateObject(wrappedValue: layout)
     }
 
     var body: some View {
