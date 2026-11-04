@@ -15,6 +15,13 @@ public struct ProposalStore: Sendable {
     @discardableResult
     public func add(_ p: Proposal) throws -> Bool {
         guard !SecretFilter.containsSecret(p.text), !SecretFilter.containsSecret(p.evidence) else { return false }
+        if p.kind == .file {
+            // A file is the same file by its bytes, whatever its caption says.
+            guard let hash = p.fileHash, !pending().contains(where: { $0.fileHash == hash }), !isDropped(hash) else { return false }
+            try FileManager.default.createDirectory(at: vault.inbox, withIntermediateDirectories: true)
+            try Self.encoder.encode(p).write(to: file(p.id), options: .atomic)
+            return true
+        }
         let text = Self.normalize(p.text)
         guard !text.isEmpty else { return false }
         if pending().contains(where: { $0.target == p.target && Self.normalize($0.text) == text }) { return false }
@@ -96,6 +103,8 @@ public struct ProposalStore: Sendable {
         else { throw ProposalStoreError.notFound(id) }
         return p
     }
+
+    func isDropped(_ hash: String) -> Bool { droppedHashes().contains(hash) }
 
     private func droppedHashes() -> Set<String> {
         guard let text = try? String(contentsOf: vault.droppedFile, encoding: .utf8) else { return [] }

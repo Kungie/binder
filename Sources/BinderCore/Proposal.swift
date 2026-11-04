@@ -27,6 +27,8 @@ public struct Proposal: Codable, Equatable, Identifiable, Sendable {
     /// For a `.file` catch: the waiting copy's name in `.binder/inbox/files`, and its SHA-256.
     public var file: String? = nil
     public var fileHash: String? = nil
+    /// What the user wrote with an attached file, never shown: only the English caption made from it is.
+    public var context: String? = nil
 
     public static func make(kind: Kind, source: Source, text: String, evidence: String, target: String,
                             project: String?, session: String?, confidence: Confidence = .medium,
@@ -74,5 +76,6 @@ extension Proposal {
         also = try c.decodeIfPresent([String].self, forKey: .also) ?? []
         file = try c.decodeIfPresent(String.self, forKey: .file)
         fileHash = try c.decodeIfPresent(String.self, forKey: .fileHash)
+        context = try c.decodeIfPresent(String.self, forKey: .context)
     }
 }

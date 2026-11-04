@@ -30,14 +30,18 @@ public struct SessionStatus: Codable, Equatable, Sendable {
     public var reading: ContextReading?
     public var updatedAt: Date
     public var transcriptPath: String?
+    /// File cards this session has offered so far, against `FileCatch.perSession`.
+    public var filesOffered: Int?
 
-    public init(session: String, project: String?, cwd: String, reading: ContextReading?, updatedAt: Date, transcriptPath: String? = nil) {
+    public init(session: String, project: String?, cwd: String, reading: ContextReading?, updatedAt: Date, transcriptPath: String? = nil,
+                filesOffered: Int? = nil) {
         self.session = session
         self.project = project
         self.cwd = cwd
         self.reading = reading
         self.updatedAt = updatedAt
         self.transcriptPath = transcriptPath
+        self.filesOffered = filesOffered
     }
 
     static func url(_ session: String, _ vault: Vault) -> URL {
@@ -91,15 +95,23 @@ public enum Capture {
         let store = ProposalStore(vault: vault)
         var result = CaptureResult(startOffset: offset, endOffset: chunk.endOffset)
         for p in proposals where try store.add(p) { result.proposalsAdded += 1 }
+
+        let previous = SessionStatus.load(session: input.sessionID, vault: vault)
+        var filesOffered = previous?.filesOffered ?? 0
+        let files = (try? FileCatch.stage(FileCatch.candidates(entries: chunk.entries, cwd: input.cwd, since: chunk.firstTimestamp),
+                                          vault: vault, project: project, session: input.sessionID, offeredSoFar: filesOffered)) ?? []
+        for p in files {
+            if try store.add(p) { result.proposalsAdded += 1; filesOffered += 1 }
+            else if let name = p.file { try? FileManager.default.removeItem(at: vault.inboxFiles.appendingPathComponent(name)) }
+        }
         try cursors.set(chunk.endOffset, for: input.sessionID)
         let commands = chunk.entries.compactMap { if case let .command(c) = $0 { c } else { nil } }
         let replies = chunk.entries.compactMap { if case let .assistant(t) = $0 { t } else { nil } }
         UsageStore(vault: vault).recordUse(commands: commands, replies: replies)
 
-        result.reading = ContextMeter.reading(from: chunk.entries)
-            ?? SessionStatus.load(session: input.sessionID, vault: vault)?.reading
+        result.reading = ContextMeter.reading(from: chunk.entries) ?? previous?.reading
         try SessionStatus(session: input.sessionID, project: project, cwd: input.cwd, reading: result.reading,
-                          updatedAt: Date(), transcriptPath: input.transcriptPath).save(vault)
+                          updatedAt: Date(), transcriptPath: input.transcriptPath, filesOffered: filesOffered).save(vault)
         return result
     }
 }
