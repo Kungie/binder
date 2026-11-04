@@ -21,7 +21,7 @@ import Testing
 
     @Test func followsIncludeGlob() throws {
         let proxmox = try #require(try hosts().first { $0.alias == "proxmox" })
-        #expect(proxmox.hostName == "192.168.1.20")
+        #expect(proxmox.hostName == "10.0.7.20")
         #expect(proxmox.user == "root")
         #expect(proxmox.identityFiles == ["~/.ssh/id_ed25519_homelab"])
     }

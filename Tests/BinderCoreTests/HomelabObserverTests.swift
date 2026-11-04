@@ -28,27 +28,27 @@ private func homeWithSSHConfig() throws -> URL {
         let home = try homeWithSSHConfig()
         let obs = HomelabObserver(probe: SpyProbe([])).observe(ObserverContext(home: home, projectRoots: [], runner: FakeRunner()))
         #expect(obs.notes.isEmpty)
-        #expect(obs.proposals.map(\.text) == ["proxmox at 192.168.1.20 is part of your homelab."])
+        #expect(obs.proposals.map(\.text) == ["proxmox at 10.0.7.20 is part of your homelab."])
         let p = try #require(obs.proposals.first)
         #expect(p.kind == .fact && p.source == .observed && p.target == "servers/proxmox.md" && p.agent == "binder")
     }
 
     @Test func lanProbeOnlyWhenAllowed() throws {
         let home = try homeWithSSHConfig()
-        let probe = SpyProbe([LANHost(ip: "192.168.1.20", ports: [22, 8006]), LANHost(ip: "192.168.1.50", ports: [22]),
-                              LANHost(ip: "192.168.1.60", ports: [8123, 22])])
+        let probe = SpyProbe([LANHost(ip: "10.0.7.20", ports: [22, 8006]), LANHost(ip: "10.0.7.50", ports: [22]),
+                              LANHost(ip: "10.0.7.60", ports: [8123, 22])])
         _ = HomelabObserver(probe: probe).observe(ObserverContext(home: home, projectRoots: [], runner: FakeRunner(), allowLAN: false))
         #expect(probe.calls == 0)
         let obs = HomelabObserver(probe: probe).observe(ObserverContext(home: home, projectRoots: [], runner: FakeRunner(), allowLAN: true))
         #expect(probe.calls == 1)
         let texts = obs.proposals.map(\.text)
-        #expect(texts.contains("Something answers SSH on 192.168.1.50."))
-        #expect(texts.contains("Something answers on 192.168.1.60: SSH, Home Assistant."))
-        #expect(!texts.contains { $0.contains("on 192.168.1.20") })
+        #expect(texts.contains("Something answers SSH on 10.0.7.50."))
+        #expect(texts.contains("Something answers on 10.0.7.60: SSH, Home Assistant."))
+        #expect(!texts.contains { $0.contains("on 10.0.7.20") })
     }
 
     @Test func privateAddressRanges() {
-        for yes in ["10.0.0.4", "172.16.3.1", "172.31.255.1", "192.168.1.20", "nas.local"] { #expect(HomelabObserver.isPrivate(yes), "\(yes)") }
+        for yes in ["10.0.0.4", "172.16.3.1", "172.31.255.1", "10.0.7.20", "nas.local"] { #expect(HomelabObserver.isPrivate(yes), "\(yes)") }
         for no in ["116.203.10.20", "172.32.0.1", "github.com", "8.8.8.8"] { #expect(!HomelabObserver.isPrivate(no), "\(no)") }
     }
 }

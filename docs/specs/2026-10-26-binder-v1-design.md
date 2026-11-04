@@ -73,7 +73,7 @@ Footnote: "~/.ssh, ~/.claude and ~/.codex need no permission. I read them. I nev
 
 ### 3.4 Let me look around first (artboard *LookAround*)
 
-The observers (§6) run once. Rows appear one by one with "LOOKING" in dim text, then flip to their result: FOUND in amber, HALF in cream (for example "Claude Code found · Codex not installed"), or a question. The homelab row asks "Something answers SSH on 192.168.1.20. Yours?" with Mine / Not mine. While this runs, the mascot's eyes scan left and right. A counter reads `READ 41 FILES · WROTE 0`, and nothing is written to disk until step 3.6. Buttons: "Looks right" and "Fix something", which opens that row for editing.
+The observers (§6) run once. Rows appear one by one with "LOOKING" in dim text, then flip to their result: FOUND in amber, HALF in cream (for example "Claude Code found · Codex not installed"), or a question. The homelab row asks "Something answers SSH on 10.0.7.20. Yours?" with Mine / Not mine. While this runs, the mascot's eyes scan left and right. A counter reads `READ 41 FILES · WROTE 0`, and nothing is written to disk until step 3.6. Buttons: "Looks right" and "Fix something", which opens that row for editing.
 
 ### 3.5 About you (artboard *AboutYou*)
 

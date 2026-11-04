@@ -33,7 +33,7 @@ private struct StubObserver: Observer {
     }
 
     @Test func observeRunIsIdempotent() throws {
-        let p = Proposal.make(kind: .fact, source: .observed, text: "proxmox at 192.168.1.20 is part of your homelab.",
+        let p = Proposal.make(kind: .fact, source: .observed, text: "proxmox at 10.0.7.20 is part of your homelab.",
                               evidence: "~/.ssh/config", target: "servers/proxmox.md", project: nil, session: nil, agent: "binder")
         let observers = [StubObserver(lines: ["- a"], proposal: p)]
         let one = try ObserveRun.run(vault: vault, ctx: ctx, observers: observers)

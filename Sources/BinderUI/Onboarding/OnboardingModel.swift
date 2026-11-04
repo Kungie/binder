@@ -285,19 +285,19 @@ public final class OnboardingModel: ObservableObject {
         rows = [
             LookRow(label: "THIS MAC", detail: "macOS 27.0.1 · zsh · Homebrew, 214 packages", status: .found),
             LookRow(label: "SSH", detail: "3 hosts · 4 keys · 1 key opens nothing", status: .found),
-            LookRow(label: "GITHUB", detail: "Signed in as Kungie", status: .found),
+            LookRow(label: "GITHUB", detail: "Signed in as sam", status: .found),
             LookRow(label: "HOSTING", detail: "Cloudflare and Vercel, both signed in", status: .found),
             LookRow(label: "DOMAINS", detail: "2 domains in project configs", status: .found),
             LookRow(label: "PROJECTS", detail: "6 repos found", status: .found),
             LookRow(label: "AGENTS", detail: "Claude Code found · Codex not installed", status: .half),
-            LookRow(label: "HOMELAB", detail: "Something answers SSH on 192.168.1.20. Yours?", status: .ask)
+            LookRow(label: "HOMELAB", detail: "Something answers SSH on 10.0.7.20. Yours?", status: .ask)
         ]
-        homelabQuestion = "Something answers SSH on 192.168.1.20. Yours?"
+        homelabQuestion = "Something answers SSH on 10.0.7.20. Yours?"
         filesRead = 41
         lookingDone = true
-        profile = Profile(name: "Eren", role: "One-person studio. Small instruments and Mac apps.", timeZone: "Europe/Berlin",
+        profile = Profile(name: "Sam", role: "Indie developer. Small web apps and a homelab.", timeZone: "Europe/Berlin",
                           language: "Turkish in chat, English in files", workingStyle: ["Short answers", "Ask before pushing", "Recommend, don't list"],
-                          taste: ["Swift", "SwiftUI", "HTML", "Python"], avoid: ["Electron"], nowAndNext: "Shipping Binder v1. Keeping Dawn healthy.")
+                          taste: ["Swift", "SwiftUI", "HTML", "Python"], avoid: ["Electron"], nowAndNext: "Shipping recipes-api. Keeping the homelab healthy.")
         writtenFiles = ["me.md", "machines/this-mac.md", "access/ssh.md", "access/accounts.md", "servers/hetzner-1.md",
                         "servers/homelab.md", "projects/dawn.md", "projects/site.md", "projects/binder.md"]
         permissionStatus[.folders] = .granted

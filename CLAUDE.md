@@ -64,7 +64,7 @@ Individual developers and hobbyists first, on macOS.
 
 ## First launch
 
-Binder looks around first and fills in everything it can detect: this Mac, SSH, GitHub, hosting, projects and the homelab ("something answers SSH on 192.168.1.20, yours?"). It only asks for what it can't guess: identity and role, working style, technical taste, and projects and goals.
+Binder looks around first and fills in everything it can detect: this Mac, SSH, GitHub, hosting, projects and the homelab ("something answers SSH on 10.0.7.20, yours?"). It only asks for what it can't guess: identity and role, working style, technical taste, and projects and goals.
 
 ## Architecture (agreed: approach A)
 

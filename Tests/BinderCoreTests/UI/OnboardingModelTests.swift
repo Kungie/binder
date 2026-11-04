@@ -66,7 +66,7 @@ private let runner = FakeRunner(results: [
         #expect(rows["AGENTS"]?.status == .half)
         #expect(rows["AGENTS"]?.detail == "Claude Code found · Codex not installed")
         #expect(rows["HOMELAB"]?.status == .ask)
-        #expect(m.homelabQuestion == "proxmox at 192.168.1.20 looks like your homelab. Yours?")
+        #expect(m.homelabQuestion == "proxmox at 10.0.7.20 looks like your homelab. Yours?")
         #expect(m.rows.map(\.label) == ["THIS MAC", "SSH", "GITHUB", "HOSTING", "DOMAINS", "PROJECTS", "AGENTS", "HOMELAB"])
         #expect(m.filesRead > 0)
         #expect(m.profile.taste == ["Swift"])
