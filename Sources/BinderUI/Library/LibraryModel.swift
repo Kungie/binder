@@ -73,6 +73,9 @@ public final class LibraryModel: ObservableObject {
     @Published public var selected: NoteRef?
     @Published public private(set) var state: BinderState
     @Published public private(set) var vault: Vault
+    /// The sidebar's content matches for the current query, filled in off the main thread.
+    @Published public private(set) var searchHits: [String: String] = [:]
+    private var searchTask: Task<Void, Never>?
     public let home: URL
     /// Where Delete note sends a file: the macOS Trash, so it can be recovered. Tests swap it out.
     var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
@@ -214,7 +217,9 @@ public final class LibraryModel: ObservableObject {
 
     /// Notes whose content matches, by the sidebar path they show under (a topic's hit shows on its project),
     /// with the best line for each.
-    public func matches(_ query: String) -> [String: String] {
+    public func matches(_ query: String) -> [String: String] { Self.matches(query, vault: vault) }
+
+    nonisolated static func matches(_ query: String, vault: Vault) -> [String: String] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [:] }
         var best: [String: String] = [:]
         for hit in Search.run(query, vault: vault, limit: 50) {
@@ -251,6 +256,20 @@ public final class LibraryModel: ObservableObject {
         }.value
         objectWillChange.send()
         return added
+    }
+
+    /// Runs the sidebar's content search in the background, a moment after typing stops.
+    public func updateSearch(_ query: String) {
+        searchTask?.cancel()
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { searchHits = [:]; return }
+        let vault = vault
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }
+            let hits = await Task.detached { Self.matches(query, vault: vault) }.value
+            guard !Task.isCancelled else { return }
+            self?.searchHits = hits
+        }
     }
 
     /// The project an overview note is for: `projects/dawn.md` → `dawn`. Nil for anything else, topic notes included.

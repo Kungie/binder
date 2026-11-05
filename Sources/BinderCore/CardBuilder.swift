@@ -204,7 +204,7 @@ public enum CardBuilder {
     /// Every file and folder a project's card reads, for cache freshness.
     static func sources(vault: Vault, repo: GitRepo) -> [URL] {
         var urls = [vault.url("me.md"), vault.url("projects/\(repo.name).md"), vault.url("projects/\(repo.name)"), vault.url("servers"),
-                    vault.url("access"), vault.url("handoffs/\(repo.name)")]
+                    vault.url("access"), vault.url("handoffs/\(repo.name)"), vault.url(".binder/expiry.json")]
         for dir in ["servers", "access", "handoffs/\(repo.name)", "projects/\(repo.name)"] {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: vault.url(dir).path)) ?? []
             urls += names.map { vault.url("\(dir)/\($0)") }
@@ -223,10 +223,19 @@ public struct CardCache: Sendable {
 
     func file(_ repo: GitRepo) -> URL { vault.cards.appendingPathComponent("\(repo.projectID).md") }
 
+    /// A card from an earlier day is stale whatever changed: lines fade and expire with the date alone.
     public func cached(for repo: GitRepo) -> String? {
-        guard let cachedAt = modified(file(repo)), let text = try? String(contentsOf: file(repo), encoding: .utf8) else { return nil }
+        guard let cachedAt = modified(file(repo)), Calendar.current.isDateInToday(cachedAt),
+              let text = try? String(contentsOf: file(repo), encoding: .utf8) else { return nil }
         let newest = CardBuilder.sources(vault: vault, repo: repo).compactMap(modified).max() ?? .distantPast
         return newest <= cachedAt ? text : nil
+    }
+
+    /// Drops every cached card, for changes no note file shows (a pin).
+    public static func clear(_ vault: Vault) {
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: vault.cards.path)) ?? [] {
+            try? FileManager.default.removeItem(at: vault.cards.appendingPathComponent(name))
+        }
     }
 
     public func store(_ card: String, for repo: GitRepo) throws {

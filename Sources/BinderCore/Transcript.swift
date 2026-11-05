@@ -99,7 +99,8 @@ public enum Transcript {
                           let command = commands[id] else { continue }
                     let error = (block["content"] as? String)
                         ?? (block["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: " ")
-                    result.append(.failed(command: command, error: String(SecretFilter.redact(error).prefix(300))))
+                    // Cut before redacting: an error can be megabytes, and this runs in the Stop hook.
+                    result.append(.failed(command: command, error: String(SecretFilter.redact(String(error.prefix(1_000))).prefix(300))))
                 case "image", "document":
                     // Only what the user attached: screenshots inside tool results never reach this level.
                     guard type == "user", let source = block["source"] as? [String: Any], source["type"] as? String == "base64",

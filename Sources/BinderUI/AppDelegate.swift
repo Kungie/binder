@@ -51,6 +51,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startApp() {
+        // An update may add a hook (1.2 adds PreCompact): add it where Binder's hooks are already in.
+        try? installer.upgradeIfNeeded()
         let model = AppModel(vault: vault, home: home)
         model.refresh()
         model.startWatching()

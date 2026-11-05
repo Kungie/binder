@@ -120,14 +120,10 @@ public struct ClaudeCLISummarizer: Summarizer {
     Never include secrets, tokens or passwords. With nothing to report, reply {"new":[],"outdated":[]}.
     """
 
-    /// A temporary fact's last day, `YYYY-MM-DD`: kept only when it's after today and within a year.
+    /// A temporary fact's last day, `YYYY-MM-DD`: kept when it's today or later, within a year.
     static func until(_ value: Any?, now: Date = .now) -> Date? {
-        guard let text = value as? String else { return nil }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
-        guard let day = f.date(from: text), day > now, day <= now.addingTimeInterval(365 * 86_400) else { return nil }
+        guard let text = value as? String, let day = ExpiryStore.format.date(from: text),
+              !ExpiryStore.over(text, now: now), day <= now.addingTimeInterval(365 * 86_400) else { return nil }
         return day
     }
 
@@ -172,7 +168,11 @@ public struct ClaudeCLISummarizer: Summarizer {
         for (i, line) in known.me.enumerated() { memory.append("M\(i + 1). \(CardBuilder.decisionText(line))") }
         let topics = (known.topics.isEmpty ? "" : "\nTOPICS: \(known.topics.joined(separator: ", "))")
             + (known.wrong.isEmpty ? "" : "\n\nNOT TRUE:\n" + known.wrong.map { "- \($0)" }.joined(separator: "\n"))
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd (EEEE)"
         return """
+        TODAY: \(f.string(from: Date()))
         PROJECT: \(project ?? "none")\(topics)
 
         MEMORY:

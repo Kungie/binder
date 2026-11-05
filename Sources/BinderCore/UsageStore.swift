@@ -138,15 +138,18 @@ public struct UsageStore: Sendable {
 
     // MARK: Pins
 
+    /// Pins live here, not in a note, so the cached cards are dropped to show them.
     public func pin(line: String, in note: String) {
         change { file in
             let key = Self.key(line)
             if !(file.pins[note] ?? []).contains(key) { file.pins[note, default: []].append(key) }
         }
+        CardCache.clear(vault)
     }
 
     public func unpin(line: String, in note: String) {
         change { file in file.pins[note]?.removeAll { $0 == Self.key(line) } }
+        CardCache.clear(vault)
     }
 
     public func isPinned(line: String, in note: String) -> Bool { load().pins[note]?.contains(Self.key(line)) == true }

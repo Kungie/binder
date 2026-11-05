@@ -90,7 +90,10 @@ public struct SystemRunner: CommandRunner {
                 _ = finished.wait(timeout: .now() + 0.3)
             }
         }
-        _ = group.wait(timeout: .now() + 0.5)
+        // The readers finish at end of file once the tool exits. On a busy Mac they can start late, so a tool that
+        // finished gets a few seconds for its output to be read; one that timed out (or left a child holding the
+        // pipe) only half a second.
+        _ = group.wait(timeout: .now() + (timedOut ? 0.5 : 5))
         return CommandResult(status: process.isRunning ? -1 : process.terminationStatus,
                              stdout: String(decoding: outData, as: UTF8.self),
                              stderr: String(decoding: errData, as: UTF8.self),

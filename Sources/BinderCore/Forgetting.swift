@@ -21,7 +21,8 @@ public enum Forgetting {
         }
 
         public func fades(_ line: String, in note: String) -> Bool {
-            guard note != "me.md", !note.hasPrefix("access/"), let day = Forgetting.day(line),
+            // Kept files never fade: they'd vanish from the note's Files strip.
+            guard note != "me.md", !note.hasPrefix("access/"), CardBuilder.fileLine(line) == nil, let day = Forgetting.day(line),
                   now.timeIntervalSince(day) >= Double(fadeAfterDays) * 86_400 else { return false }
             let key = UsageStore.key(line)
             if file.pins[note]?.contains(key) == true { return false }
@@ -104,11 +105,17 @@ public struct ExpiryStore: Sendable {
         load()[note]?[UsageStore.key(line)].flatMap(Self.format.date)
     }
 
+    /// The date is the fact's last day: it's over once that day has ended.
+    static func over(_ text: String, now: Date) -> Bool {
+        guard let day = format.date(from: text) else { return false }
+        return now >= day.addingTimeInterval(86_400)
+    }
+
     /// Lines whose last day has passed, as the notes have them now.
     public func expired(now: Date = .now) -> [(note: String, line: String)] {
         var out: [(String, String)] = []
         for (note, keys) in load() {
-            let due = Set(keys.filter { (Self.format.date(from: $0.value) ?? .distantFuture) <= now }.keys)
+            let due = Set(keys.filter { Self.over($0.value, now: now) }.keys)
             guard !due.isEmpty else { continue }
             for line in NoteIO.read(vault.url(note))?.decisions ?? [] where due.contains(UsageStore.key(line)) { out.append((note, line)) }
         }
@@ -126,8 +133,7 @@ public struct ExpiryStore: Sendable {
         }
 
         public func expired(_ line: String, in note: String) -> Bool {
-            guard let text = map[note]?[UsageStore.key(line)], let day = ExpiryStore.format.date(from: text) else { return false }
-            return day <= now
+            map[note]?[UsageStore.key(line)].map { ExpiryStore.over($0, now: now) } ?? false
         }
     }
 }

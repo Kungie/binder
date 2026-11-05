@@ -16,3 +16,16 @@ import Testing
         #expect(m.matches("").isEmpty)
     }
 }
+
+@MainActor
+@Suite struct LibrarySearchAsyncTests {
+    @Test func sidebarSearchRunsOffTheMainThread() async throws {
+        let vault = try fixtureVault()
+        try Memory.add("Built with Astro.", to: "projects/dawn.md", vault: vault)
+        let m = LibraryModel(vault: vault, home: makeTempDir("home"))
+        m.updateSearch("astro")
+        #expect(await eventually { m.searchHits["projects/dawn.md"] == "Built with Astro." })
+        m.updateSearch("")
+        #expect(m.searchHits.isEmpty)
+    }
+}

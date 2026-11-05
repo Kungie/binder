@@ -72,9 +72,9 @@ public struct LibraryView: View {
 
     var sidebar: some View {
         VStack(alignment: .leading, spacing: 14) {
-            BinderSearchField(text: Binding(get: { search.value }, set: { search.value = $0 }))
+            BinderSearchField(text: Binding(get: { search.value }, set: { search.value = $0; model.updateSearch($0) }))
             Scroll {
-                let hits = model.matches(search.value)
+                let hits = model.searchHits
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(model.sections.filter { $0.kind != .settings }) { section in
                         sidebarRow(section)

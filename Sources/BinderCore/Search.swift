@@ -42,7 +42,7 @@ public enum Search {
 
     public static func run(_ query: String, vault: Vault, project: String? = nil, includeSuperseded: Bool = false, limit: Int = 12) -> [SearchHit] {
         let terms = Array(Set(tokens(query)))
-        guard !terms.isEmpty else { return [] }
+        guard !terms.isEmpty, limit > 0 else { return [] }
         let docs = docs(vault, includeSuperseded: includeSuperseded)
         guard !docs.isEmpty else { return [] }
         let n = Double(docs.count)

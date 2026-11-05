@@ -38,6 +38,16 @@ public struct HookInstaller: Sendable {
         return events.allSatisfy { ((hooks[$0.event] as? [Any]) ?? []).contains(where: Self.isOurs) }
     }
 
+    /// Some of Binder's hooks are in, not all: an install from an older version.
+    public var needsUpgrade: Bool {
+        guard let json = try? load(), let hooks = json["hooks"] as? [String: Any] else { return false }
+        let present = events.filter { ((hooks[$0.event] as? [Any]) ?? []).contains(where: Self.isOurs) }
+        return !present.isEmpty && present.count < events.count
+    }
+
+    /// Adds the hooks a newer version needs, only where the user already installed Binder's.
+    public func upgradeIfNeeded() throws { if needsUpgrade { try install() } }
+
     public func install() throws { try change(add: true) }
     public func uninstall() throws { try change(add: false) }
 
