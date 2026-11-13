@@ -1,0 +1,55 @@
+import { useEffect, useState } from "react";
+import { Panel } from "../components/Panel";
+import { Button, Field, Notice, fieldClass } from "../components/ui";
+import { pickFolder } from "../lib/pick";
+import { useStore } from "../lib/store";
+import { useVault } from "../lib/useVault";
+
+export function Settings() {
+  const { api } = useStore();
+  const vault = useVault();
+  const [path, setPath] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => setPath(vault.path), [vault.path]);
+
+  const save = async () => {
+    await api.setConfig({ vault: path.trim() });
+    setSaved(true);
+    vault.recheck();
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <header className="flex h-12 shrink-0 items-center px-5" data-tauri-drag-region>
+        <h1 className="text-[13px] font-medium">Settings</h1>
+      </header>
+      <div className="flex max-w-[640px] flex-col gap-4 px-5">
+        <Panel title="Obsidian vault">
+          <div className="flex flex-col gap-3 border-t border-line p-3">
+            <Field label="Vault folder">
+              <div className="flex gap-2">
+                <input
+                  aria-label="Vault folder"
+                  className={`${fieldClass} font-mono`}
+                  value={path}
+                  onChange={(e) => (setPath(e.target.value), setSaved(false))}
+                />
+                <Button variant="ghost" onClick={() => void pickFolder().then((f) => f && (setPath(f), setSaved(false)))}>
+                  Choose
+                </Button>
+                <Button onClick={() => void save()}>Save</Button>
+              </div>
+            </Field>
+            <div className="flex items-center gap-2 text-[12px]">
+              <span className={`h-1.5 w-1.5 rounded-full ${vault.connected ? "bg-text" : "border border-text-3"}`} aria-hidden="true" />
+              <span className="text-text-2">{vault.connected ? "Connected" : "Not connected"}</span>
+              {saved && <span className="text-text-3">Saved</span>}
+            </div>
+            <Notice>The vault lives on the home server. Connect to its share in Finder once, save the password in the Keychain and add it to Login Items so it mounts at login.</Notice>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}

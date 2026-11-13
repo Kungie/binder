@@ -3,6 +3,9 @@ import { type Screen, StoreProvider, useStore } from "./lib/store";
 import { Sidebar } from "./components/Sidebar";
 import { NewTask } from "./components/NewTask";
 import { Tasks } from "./screens/Tasks";
+import { Projects } from "./screens/Projects";
+import { Settings } from "./screens/Settings";
+import { NewProject } from "./components/NewProject";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="p-6 text-text-2">{title}</div>;
@@ -16,14 +19,14 @@ function Screens() {
     case "tasks":
       return <Tasks />;
     case "projects":
-      return <Placeholder title="Projects" />;
+      return <Projects />;
     case "settings":
-      return <Placeholder title="Settings" />;
+      return <Settings />;
   }
 }
 
 export function Shell() {
-  const { creatingTask } = useStore();
+  const { creatingTask, creatingProject } = useStore();
   return (
     <div className="flex h-full">
       <Sidebar />
@@ -32,6 +35,7 @@ export function Shell() {
         <Screens />
       </main>
       {creatingTask && <NewTask />}
+      {creatingProject && <NewProject />}
     </div>
   );
 }
