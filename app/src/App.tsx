@@ -1,51 +1,41 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import type { Api } from "./lib/api";
+import { type Screen, StoreProvider, useStore } from "./lib/store";
+import { Sidebar } from "./components/Sidebar";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+function Placeholder({ title }: { title: string }) {
+  return <div className="p-6 text-text-2">{title}</div>;
+}
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+function Screens() {
+  const { screen } = useStore();
+  switch (screen) {
+    case "overview":
+      return <Placeholder title="Overview" />;
+    case "tasks":
+      return <Placeholder title="Tasks" />;
+    case "projects":
+      return <Placeholder title="Projects" />;
+    case "settings":
+      return <Placeholder title="Settings" />;
   }
+}
 
+export function Shell() {
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="flex h-full">
+      <Sidebar />
+      <main className="relative flex min-w-0 flex-1 flex-col">
+        <div className="h-3 shrink-0" data-tauri-drag-region />
+        <Screens />
+      </main>
+    </div>
   );
 }
 
-export default App;
+export default function App({ api, initialScreen }: { api: Api; initialScreen?: Screen }) {
+  return (
+    <StoreProvider api={api} initialScreen={initialScreen}>
+      <Shell />
+    </StoreProvider>
+  );
+}
