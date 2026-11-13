@@ -1,0 +1,19 @@
+--binder:docker--
+{"Command":"\"/init\"","CreatedAt":"2026-11-01 10:00:00 +0000 UTC","ID":"a1b2c3","Image":"jellyfin/jellyfin:latest","Names":"jellyfin","State":"running","Status":"Up 3 days"}
+{"Command":"\"/bin/sh\"","CreatedAt":"2026-11-02 10:00:00 +0000 UTC","ID":"d4e5f6","Image":"pihole/pihole:2026.10","Names":"pihole","State":"exited","Status":"Exited (0) 2 hours ago"}
+--binder:services--
+cron.service           loaded active running Regular background program processing daemon
+docker.service         loaded active running Docker Application Container Engine
+ssh.service            loaded active running OpenBSD Secure Shell server
+--binder:load--
+0.42 0.37 0.30 2/412 12345
+--binder:mem--
+MemTotal:        8245760 kB
+MemFree:          512000 kB
+MemAvailable:    4122880 kB
+Buffers:          100000 kB
+--binder:disk--
+Filesystem        1B-blocks        Used   Available Use% Mounted on
+/dev/mmcblk0p2 62000000000 50840000000 8600000000  86% /
+--binder:temp--
+48312
