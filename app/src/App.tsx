@@ -8,6 +8,8 @@ import { Settings } from "./screens/Settings";
 import { NewProject } from "./components/NewProject";
 import { CommandPalette } from "./components/CommandPalette";
 import { Overview } from "./screens/Overview";
+import { Devices } from "./screens/Devices";
+import { Server } from "./screens/Server";
 
 function Screens() {
   const { screen } = useStore();
@@ -18,6 +20,10 @@ function Screens() {
       return <Tasks />;
     case "projects":
       return <Projects />;
+    case "devices":
+      return <Devices />;
+    case "server":
+      return <Server />;
     case "settings":
       return <Settings />;
   }

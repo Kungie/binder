@@ -1,24 +1,14 @@
 import { useEffect, useState } from "react";
-import { Kpi } from "../components/panelui/kpi";
+import { Dot, Metric } from "../components/Metric";
 import { Panel } from "../components/Panel";
 import { TaskBoard } from "../components/TaskBoard";
 import { Button } from "../components/ui";
 import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
 import type { DoneLine } from "../lib/types";
+import { clock, useServer } from "../lib/useServer";
 
 const WEEK = 7 * 24 * 3600;
-
-function Metric({ title, value }: { title: string; value: number }) {
-  return (
-    <Kpi surface role="group" aria-label={`${title}: ${value}`} className="!gap-1 !p-4">
-      <Kpi.Header>
-        <Kpi.Title className="!text-[12px] !font-normal">{title}</Kpi.Title>
-      </Kpi.Header>
-      <Kpi.Value className="font-mono !text-[24px] !font-normal">{value}</Kpi.Value>
-    </Kpi>
-  );
-}
 
 export function Overview() {
   const { api, tasks, setScreen, setCreatingTask, doneVersion } = useStore();
@@ -63,6 +53,8 @@ export function Overview() {
           >
             <TaskBoard tasks={open.slice(0, 8)} compact label="Open tasks" empty="Nothing open. Press c to add a task." />
           </Panel>
+          <div className="flex min-w-0 flex-col gap-3">
+          <ServerPanel />
           <Panel title="Done today" action={<span className="font-mono text-[11px] text-text-3">{doneToday.length}</span>}>
             <ul className="border-t border-line">
               {doneToday.map(([project, line], i) => (
@@ -74,8 +66,36 @@ export function Overview() {
               {doneToday.length === 0 && <li className="px-3 py-3 text-[12px] text-text-3">Nothing logged today.</li>}
             </ul>
           </Panel>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function ServerPanel() {
+  const { setScreen } = useStore();
+  const { target, status, error } = useServer(30_000);
+  if (!target) return null;
+  const up = status?.containers.filter((c) => c.state === "running").length ?? 0;
+  return (
+    <Panel
+      title="Server"
+      action={
+        <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("server")}>
+          Open
+        </button>
+      }
+    >
+      <div className="flex flex-col gap-1.5 border-t border-line px-3 py-2.5 text-[12px]">
+        <div className="flex items-center gap-2">
+          <Dot on={!error && !!status} />
+          <span className="font-mono text-[11px] text-text-2">{target}</span>
+          {status && <span className="ml-auto font-mono text-[11px] text-text-3">load {status.load[0].toFixed(2)}</span>}
+        </div>
+        {status && <span className="text-text-2">{`${up} of ${status.containers.length} containers up`}</span>}
+        {error && <span className="text-text-3">Can't reach it.{status ? ` Last read ${clock(status.at)}.` : ""}</span>}
+      </div>
+    </Panel>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Panel } from "../components/Panel";
+import { ServerTargetForm } from "../components/ServerTargetForm";
 import { Button, Field, Notice, fieldClass } from "../components/ui";
 import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
@@ -10,11 +11,16 @@ export function Settings() {
   const vault = useVault();
   const [path, setPath] = useState("");
   const [saved, setSaved] = useState(false);
+  const [server, setServer] = useState<string | null | undefined>(undefined);
+  const [serverSaved, setServerSaved] = useState(false);
 
   useEffect(() => setPath(vault.path), [vault.path]);
+  useEffect(() => {
+    void api.getConfig().then((c) => setServer(c.server));
+  }, [api]);
 
   const save = async () => {
-    await api.setConfig({ vault: path.trim() });
+    await api.setConfig({ ...(await api.getConfig()), vault: path.trim() });
     setSaved(true);
     vault.recheck();
   };
@@ -47,6 +53,13 @@ export function Settings() {
               {saved && <span className="text-text-3">Saved</span>}
             </div>
             <Notice>The vault lives on the home server. Connect to its share in Finder once, save the password in the Keychain and add it to Login Items so it mounts at login.</Notice>
+          </div>
+        </Panel>
+        <Panel title="Home server">
+          <div className="flex flex-col gap-3 border-t border-line p-3">
+            {server !== undefined && <ServerTargetForm initial={server ?? ""} onSaved={() => setServerSaved(true)} />}
+            {serverSaved && <span className="text-[12px] text-text-3">Saved</span>}
+            <Notice>Binder uses your ssh keys and ~/.ssh/config. It never stores a password.</Notice>
           </div>
         </Panel>
       </div>

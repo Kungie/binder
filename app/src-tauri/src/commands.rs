@@ -6,7 +6,10 @@ use crate::AppState;
 use binder_core::config::Config;
 use binder_core::model::*;
 use binder_core::notes::{self, DoneLine};
-use binder_core::{Db, Error};
+use binder_core::remote::SshRemote;
+use binder_core::repo::RepoStatus;
+use binder_core::server::ServerStatus;
+use binder_core::{Db, Error, devices, repo, server};
 use std::path::Path;
 use tauri::State;
 use tauri_plugin_opener::OpenerExt;
@@ -137,4 +140,60 @@ pub fn set_config(state: State<AppState>, config: Config) -> Res<()> {
 #[tauri::command]
 pub async fn vault_connected(state: State<'_, AppState>) -> Res<bool> {
     Ok(vault(&state).is_dir())
+}
+
+fn server_target(state: &State<AppState>) -> Res<String> {
+    state.config.lock().unwrap().server.clone().filter(|s| !s.trim().is_empty()).ok_or_else(|| "No server set.".to_string())
+}
+
+/// One SSH call; the window keeps working while it runs.
+#[tauri::command]
+pub async fn server_status(state: State<'_, AppState>) -> Res<ServerStatus> {
+    let target = server_target(&state)?;
+    server::fetch(&SshRemote { target }, now()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn list_devices(state: State<'_, AppState>) -> Res<Vec<Device>> {
+    state.db.lock().unwrap().list_devices().map_err(text)
+}
+
+#[tauri::command]
+pub async fn create_device(state: State<'_, AppState>, device: NewDevice) -> Res<Device> {
+    state.db.lock().unwrap().create_device(device).map_err(text)
+}
+
+#[tauri::command]
+pub async fn update_device(state: State<'_, AppState>, id: i64, patch: DevicePatch) -> Res<Device> {
+    state.db.lock().unwrap().update_device(id, patch).map_err(text)
+}
+
+#[tauri::command]
+pub async fn delete_device(state: State<'_, AppState>, id: i64) -> Res<()> {
+    state.db.lock().unwrap().delete_device(id).map_err(text)
+}
+
+/// Probes every device at once, two seconds each at most.
+#[tauri::command]
+pub async fn probe_devices(state: State<'_, AppState>) -> Res<Vec<(i64, bool)>> {
+    let list = state.db.lock().unwrap().list_devices().map_err(text)?;
+    let handles: Vec<_> = list
+        .into_iter()
+        .map(|d| std::thread::spawn(move || (d.id, devices::probe(&d.address, d.port, std::time::Duration::from_secs(2)))))
+        .collect();
+    Ok(handles.into_iter().filter_map(|h| h.join().ok()).collect())
+}
+
+fn expand_home(path: &str) -> std::path::PathBuf {
+    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
+        (Some(rest), Some(home)) => std::path::PathBuf::from(home).join(rest),
+        _ => std::path::PathBuf::from(path),
+    }
+}
+
+/// None when the project has no repo, or its folder isn't a git repository any more.
+#[tauri::command]
+pub async fn repo_status(state: State<'_, AppState>, project_id: i64) -> Res<Option<RepoStatus>> {
+    let p = state.db.lock().unwrap().get_project(project_id).map_err(text)?;
+    Ok(p.repo.and_then(|r| repo::repo_status(&expand_home(&r)).ok()))
 }

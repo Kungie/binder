@@ -1,15 +1,22 @@
 import type { Api } from "./api";
-import type { Config, DoneLine, NewProject, Project, Task } from "./types";
+import type { Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
 import { localDay, oneLine, viewTasks } from "./tasks";
 
 export interface Seed {
   projects: Project[];
   tasks: Task[];
   done: Record<number, DoneLine[]>;
+  devices?: Device[];
+  server?: ServerStatus;
+  repos?: Record<number, RepoStatus>;
 }
 
 export interface MemoryOptions {
   vaultConnected?: boolean;
+  /** The SSH target in the config. Defaults to "lab"; null means none is set. */
+  server?: string | null;
+  /** Device addresses that don't answer a probe. */
+  offline?: string[];
 }
 
 const FOLD: Record<string, string> = { ş: "S", Ş: "S", ı: "I", İ: "I", ğ: "G", Ğ: "G", ü: "U", Ü: "U", ö: "O", Ö: "O", ç: "C", Ç: "C" };
@@ -28,13 +35,25 @@ export function derivePrefix(name: string, taken: string[]): string {
 }
 
 /** An in-memory stand-in for the app, following the core's rules. Used by tests and the browser preview. */
-export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done: Record<number, DoneLine[]> } {
+export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done: Record<number, DoneLine[]>; setServerReachable(v: boolean): void } {
   const tasks = seed.tasks.map((t) => ({ ...t }));
   const projects = seed.projects.map((p) => ({ ...p }));
   const done: Record<number, DoneLine[]> = Object.fromEntries(Object.entries(seed.done).map(([k, v]) => [k, [...v]]));
   const counters: Record<string, number> = {};
-  let config: Config = { vault: "/Volumes/vault" };
-  let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id)) + 1;
+  const devices = (seed.devices ?? []).map((d) => ({ ...d }));
+  const offline = options.offline ?? ["10.0.7.30"];
+  let reachable = true;
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: false };
+  let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
+  const device = (id: number) => {
+    const d = devices.find((x) => x.id === id);
+    if (!d) throw new Error(`no device with id ${id}`);
+    return d;
+  };
+  const required = (what: string, v: string) => {
+    if (!v.trim()) throw new Error(`A device needs ${what}.`);
+    return v.trim();
+  };
   const now = () => Math.floor(Date.now() / 1000);
   const connected = () => options.vaultConnected ?? true;
 
@@ -62,6 +81,9 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
 
   return {
     done,
+    setServerReachable(v) {
+      reachable = v;
+    },
     async listTasks(view, includeClosed) {
       return viewTasks(tasks, view, includeClosed).map((t) => ({ ...t }));
     },
@@ -166,6 +188,45 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
     async vaultConnected() {
       return connected();
     },
+    async serverStatus() {
+      if (!config.server) throw new Error("No server set.");
+      if (!reachable || !seed.server) throw new Error(`Can't reach ${config.server}`);
+      return { ...seed.server, at: now() };
+    },
+    async listDevices() {
+      return [...devices].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map((d) => ({ ...d }));
+    },
+    async createDevice(nd) {
+      const d: Device = {
+        id: nextId++,
+        name: required("a name", nd.name),
+        kind: nd.kind ?? "other",
+        address: required("an address", nd.address),
+        port: nd.port ?? 22,
+        note: nd.note ?? "",
+      };
+      devices.push(d);
+      return { ...d };
+    },
+    async updateDevice(id, p) {
+      const d = device(id);
+      if (p.name !== undefined) d.name = required("a name", p.name);
+      if (p.kind) d.kind = p.kind;
+      if (p.address !== undefined) d.address = required("an address", p.address);
+      if (p.port !== undefined) d.port = p.port;
+      if (p.note !== undefined) d.note = p.note;
+      return { ...d };
+    },
+    async deleteDevice(id) {
+      devices.splice(devices.indexOf(device(id)), 1);
+    },
+    async probeDevices() {
+      return devices.map((d) => [d.id, !offline.includes(d.address)] as [number, boolean]);
+    },
+    async repoStatus(projectId) {
+      const p = project(projectId);
+      return p.repo ? (seed.repos?.[projectId] ?? null) : null;
+    },
   };
 }
 
@@ -201,9 +262,49 @@ export function demoSeed(): Seed {
     mk(7, "TSK-2", "Order PETG, black and white", { priority: "urgent" }),
     mk(8, "ORB-1", "Set up the project", { project_id: 1, status: "done" }),
   ];
+  const container = (name: string, image: string, up = true) => ({
+    name,
+    image,
+    state: up ? "running" : "exited",
+    status: up ? "Up 6 days" : "Exited (0) 3 hours ago",
+  });
+  const GB = 1024 ** 3;
   return {
     projects,
     tasks,
     done: { 1: [{ date: day, text: "Keep sync off by default until conflicts are handled." }] },
+    devices: [
+      { id: 101, name: "studio", kind: "mac", address: "10.0.7.10", port: 22, note: "" },
+      { id: 102, name: "lab", kind: "server", address: "10.0.7.2", port: 22, note: "Raspberry Pi 5, 8 GB" },
+      { id: 103, name: "printer", kind: "printer", address: "10.0.7.30", port: 8883, note: "" },
+    ],
+    server: {
+      containers: [
+        container("jellyfin", "jellyfin/jellyfin:latest"),
+        container("pihole", "pihole/pihole:latest"),
+        container("home-assistant", "ghcr.io/home-assistant/home-assistant:stable"),
+        container("grafana", "grafana/grafana:11"),
+        container("prometheus", "prom/prometheus:v3"),
+        container("mosquitto", "eclipse-mosquitto:2"),
+        container("caddy", "caddy:2"),
+        container("uptime-kuma", "louislam/uptime-kuma:1"),
+        container("syncthing", "syncthing/syncthing:latest", false),
+      ],
+      services: [
+        { name: "cron", description: "Regular background program processing daemon" },
+        { name: "docker", description: "Docker Application Container Engine" },
+        { name: "smbd", description: "Samba SMB Daemon" },
+        { name: "ssh", description: "OpenBSD Secure Shell server" },
+        { name: "tailscaled", description: "Tailscale node agent" },
+      ],
+      load: [0.42, 0.37, 0.3],
+      mem_total: 8 * GB,
+      mem_available: 3.9 * GB,
+      disk_size: 58 * GB,
+      disk_used: 47 * GB,
+      temp_c: 48.3,
+      at: t,
+    },
+    repos: { 1: { branch: "main", changed: 3, ahead: 1, behind: 0, last_subject: "Fix the toolbar spacing", last_date: day } },
   };
 }

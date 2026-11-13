@@ -71,8 +71,80 @@ export interface DoneLine {
   text: string;
 }
 
+export interface PrinterConfig {
+  name: string;
+  address: string;
+  serial: string;
+  cert_sha256: string | null;
+}
+
 export interface Config {
   vault: string;
+  server: string | null;
+  printers: PrinterConfig[];
+  claude_hooks: boolean;
+}
+
+export type DeviceKind = "mac" | "server" | "printer" | "other";
+
+export interface Device {
+  id: number;
+  name: string;
+  kind: DeviceKind;
+  address: string;
+  port: number;
+  note: string;
+}
+
+export interface NewDevice {
+  name: string;
+  kind?: DeviceKind;
+  address: string;
+  port?: number;
+  note?: string;
+}
+
+export interface DevicePatch {
+  name?: string;
+  kind?: DeviceKind;
+  address?: string;
+  port?: number;
+  note?: string;
+}
+
+export const DEVICE_KIND_LABEL: Record<DeviceKind, string> = { mac: "Mac", server: "Server", printer: "Printer", other: "Other" };
+
+export interface Container {
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+}
+
+export interface Service {
+  name: string;
+  description: string;
+}
+
+export interface ServerStatus {
+  containers: Container[];
+  services: Service[];
+  load: [number, number, number];
+  mem_total: number;
+  mem_available: number;
+  disk_size: number;
+  disk_used: number;
+  temp_c: number | null;
+  at: number;
+}
+
+export interface RepoStatus {
+  branch: string | null;
+  changed: number;
+  ahead: number;
+  behind: number;
+  last_subject: string | null;
+  last_date: string | null;
 }
 
 export const STATUSES: Status[] = ["backlog", "todo", "in_progress", "done", "canceled"];

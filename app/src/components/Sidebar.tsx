@@ -29,6 +29,8 @@ const NAV: { screen: Screen; label: string; d: string }[] = [
   { screen: "overview", label: "Overview", d: "M2 2h4v4H2zM8 2h4v4H8zM2 8h4v4H2zM8 8h4v4H8z" },
   { screen: "tasks", label: "Tasks", d: "M7 1.8a5.2 5.2 0 1 1 0 10.4A5.2 5.2 0 0 1 7 1.8zM4.8 7.1l1.5 1.5 3-3.2" },
   { screen: "projects", label: "Projects", d: "M1.8 3.5h4l1.2 1.4h5.2v6.6H1.8z" },
+  { screen: "devices", label: "Devices", d: "M2 3h10v6.5H2zM5 12h4M7 9.5V12" },
+  { screen: "server", label: "Server", d: "M2 2.5h10v3.5H2zM2 8h10v3.5H2zM4.2 4.25h.01M4.2 9.75h.01" },
 ];
 
 export function Sidebar() {

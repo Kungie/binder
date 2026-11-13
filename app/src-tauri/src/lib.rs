@@ -42,6 +42,13 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::vault_connected,
+            commands::server_status,
+            commands::list_devices,
+            commands::create_device,
+            commands::update_device,
+            commands::delete_device,
+            commands::probe_devices,
+            commands::repo_status,
         ])
         .run(tauri::generate_context!())
         .expect("Binder could not start");

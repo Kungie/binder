@@ -70,3 +70,12 @@ describe("Settings", () => {
     await waitFor(async () => expect((await api.getConfig()).vault).toBe("/Volumes/notes"));
   });
 });
+
+describe("Repo", () => {
+  it("project_shows_repo_row", async () => {
+    const { user } = await setup();
+    await pick(user, "orbit");
+    const row = await screen.findByRole("group", { name: "Git" });
+    for (const t of ["main", "3 changed", "↑1 ↓0", "Fix the toolbar spacing"]) expect(within(row).getByText(t)).toBeInTheDocument();
+  });
+});

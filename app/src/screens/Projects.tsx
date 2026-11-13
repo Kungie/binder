@@ -5,7 +5,7 @@ import { Button, Notice } from "../components/ui";
 import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
-import { type DoneLine, type Project, type ProjectState, isClosed } from "../lib/types";
+import { type DoneLine, type Project, type ProjectState, type RepoStatus, isClosed } from "../lib/types";
 import { useVault, vaultNotice } from "../lib/useVault";
 
 function DoneLog({ project }: { project: Project }) {
@@ -57,6 +57,30 @@ function DoneLog({ project }: { project: Project }) {
   );
 }
 
+function GitRow({ project }: { project: Project }) {
+  const { api } = useStore();
+  const [repo, setRepo] = useState<RepoStatus | null>(null);
+  useEffect(() => {
+    let live = true;
+    setRepo(null);
+    if (project.repo) void api.repoStatus(project.id).then((r) => live && setRepo(r), () => live && setRepo(null));
+    return () => {
+      live = false;
+    };
+  }, [api, project.id, project.repo]);
+  if (!repo) return null;
+  return (
+    <div role="group" aria-label="Git" className="flex min-w-0 items-center gap-3 text-[12px]">
+      <span className="w-20 shrink-0 text-text-3">Git</span>
+      <span className="font-mono text-[11px] text-text">{repo.branch ?? "detached"}</span>
+      <span className="text-text-2">{repo.changed ? `${repo.changed} changed` : "Clean"}</span>
+      <span className="font-mono text-[11px] text-text-2">{`↑${repo.ahead} ↓${repo.behind}`}</span>
+      {repo.last_subject && <span className="min-w-0 truncate text-text-2">{repo.last_subject}</span>}
+      {repo.last_date && <span className="shrink-0 font-mono text-[11px] text-text-3">{repo.last_date}</span>}
+    </div>
+  );
+}
+
 function Detail({ project }: { project: Project }) {
   const { api, tasks, updateProject, deleteProject, reload } = useStore();
   const vault = useVault();
@@ -103,6 +127,7 @@ function Detail({ project }: { project: Project }) {
           Choose
         </Button>
       </div>
+      <GitRow project={project} />
       {project.note && (
         <div className="flex items-center gap-2 text-[12px]">
           <span className="w-20 text-text-3">Note</span>

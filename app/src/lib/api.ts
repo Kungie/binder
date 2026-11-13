@@ -1,5 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Config, DoneLine, NewProject, NewTask, Project, ProjectPatch, Task, TaskPatch, TaskView } from "./types";
+import type {
+  Config,
+  Device,
+  DevicePatch,
+  DoneLine,
+  NewDevice,
+  NewProject,
+  NewTask,
+  Project,
+  ProjectPatch,
+  RepoStatus,
+  ServerStatus,
+  Task,
+  TaskPatch,
+  TaskView,
+} from "./types";
 import { demoSeed, memoryApi } from "./memory";
 
 /** Everything the interface asks of the app. Tauri commands in the app, an in-memory fake elsewhere. */
@@ -20,6 +35,14 @@ export interface Api {
   getConfig(): Promise<Config>;
   setConfig(config: Config): Promise<void>;
   vaultConnected(): Promise<boolean>;
+  serverStatus(): Promise<ServerStatus>;
+  listDevices(): Promise<Device[]>;
+  createDevice(device: NewDevice): Promise<Device>;
+  updateDevice(id: number, patch: DevicePatch): Promise<Device>;
+  deleteDevice(id: number): Promise<void>;
+  /** Each device's id with whether it answered on its port. */
+  probeDevices(): Promise<[number, boolean][]>;
+  repoStatus(projectId: number): Promise<RepoStatus | null>;
 }
 
 /** Tauri sends a command's error as a string; make it an Error so callers handle one shape. */
@@ -48,6 +71,13 @@ export const tauriApi: Api = {
   getConfig: () => call("get_config"),
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),
+  serverStatus: () => call("server_status"),
+  listDevices: () => call("list_devices"),
+  createDevice: (device) => call("create_device", { device }),
+  updateDevice: (id, patch) => call("update_device", { id, patch }),
+  deleteDevice: (id) => call("delete_device", { id }),
+  probeDevices: () => call("probe_devices"),
+  repoStatus: (projectId) => call("repo_status", { projectId }),
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
