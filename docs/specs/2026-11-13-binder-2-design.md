@@ -61,6 +61,7 @@ The sidebar holds Overview, Tasks, Projects, Devices, Server and Printer, then t
   - A task opens in a side sheet with its notes (Markdown) and, for agent tasks, its run.
 - **Projects:**
   - Each project shows its tasks, its done log (read from its Obsidian note) and an **Open note** button.
+  - Its repo: branch, uncommitted changes, commits ahead of and behind its upstream, and the last commit's subject and date, read with `git` from the repo folder.
 - **Devices:**
   - The owner's machines: this Mac, the Raspberry Pi, the printer and any added by hand.
   - Each shows a name, kind, address and online state, plus a free-text note.
@@ -136,10 +137,10 @@ The owner's notes live on the Pi, not on the Mac.
   - **Full access**: `--dangerously-skip-permissions`, chosen per task, with a one-line warning.
 - **How a run works:**
   - Binder copies the prompt (title and notes) to `~/.binder-agent/<run>.prompt` with `scp`.
-  - It starts `tmux new-session -d -s binder-<run>`, which runs `claude -p` in that folder with the prompt on stdin, writes its output to `<run>.log` and its exit code to `<run>.exit`.
+  - It starts `claude -p` in that folder with `setsid nohup`, so the run outlives the SSH connection, with the prompt on stdin. Output goes to `<run>.log`, the process id to `<run>.pid`, and the exit code to `<run>.exit`. (No tmux: the Pi doesn't have it, and nothing here needs a terminal to attach to.)
   - Claude Code on the Pi must already be signed in. Binder checks this once with `claude --version` and says so if it fails.
-- **Status:** while a run is live, Binder polls it every 10 seconds (whether the tmux session exists, the exit file, and the last 40 lines of the log). The task's status follows: in progress while running, then done on exit code 0, else back to todo with the error shown.
-- **Stop** kills the tmux session. Logs stay on the Pi; the run record (start, end, exit code, last lines) stays in the database.
+- **Status:** while a run is live, Binder polls it every 10 seconds (whether the process is alive, the exit file, and the last 40 lines of the log). The task's status follows: in progress while running, then done on exit code 0, else back to todo with the error shown.
+- **Stop** ends the run's process group. Logs stay on the Pi; the run record (start, end, exit code, last lines) stays in the database.
 
 ## 9. Printer
 
