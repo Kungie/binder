@@ -248,6 +248,7 @@ name = "binder-core"
 version = "2.0.0"
 dependencies = [
  "chrono",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

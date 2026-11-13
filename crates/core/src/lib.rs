@@ -31,9 +31,11 @@ pub mod model;
 pub mod notes;
 pub mod printer;
 pub mod projects;
+pub mod redact;
 pub mod remote;
 pub mod repo;
 pub mod server;
+pub mod session;
 pub mod tasks;
 
 pub use db::Db;
