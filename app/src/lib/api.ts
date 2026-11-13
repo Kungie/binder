@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   Access,
+  NewPrinter,
+  PrinterCommand,
+  PrinterView,
   AgentRun,
   Config,
   Device,
@@ -50,6 +54,13 @@ export interface Api {
   stopRun(run: string): Promise<AgentRun>;
   /** A task's runs, newest first. */
   runsFor(taskId: number): Promise<AgentRun[]>;
+  printers(): Promise<PrinterView[]>;
+  /** The access code goes to the Keychain and is never sent back. */
+  addPrinter(printer: NewPrinter): Promise<void>;
+  removePrinter(serial: string): Promise<void>;
+  printerCommand(serial: string, kind: PrinterCommand): Promise<void>;
+  /** Calls back with each printer update. Returns the unsubscribe. */
+  onPrinter(cb: (view: PrinterView) => void): () => void;
 }
 
 /** Tauri sends a command's error as a string; make it an Error so callers handle one shape. */
@@ -89,6 +100,14 @@ export const tauriApi: Api = {
   pollRun: (run) => call("poll_run", { run }),
   stopRun: (run) => call("stop_run", { run }),
   runsFor: (taskId) => call("runs_for", { taskId }),
+  printers: () => call("printers"),
+  addPrinter: ({ name, address, serial, accessCode }) => call("add_printer", { name, address, serial, accessCode }),
+  removePrinter: (serial) => call("remove_printer", { serial }),
+  printerCommand: (serial, kind) => call("printer_command", { serial, kind }),
+  onPrinter(cb) {
+    const off = listen<PrinterView>("printer://state", (e) => cb(e.payload));
+    return () => void off.then((f) => f());
+  },
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

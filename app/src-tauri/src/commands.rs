@@ -3,7 +3,9 @@
 //! SMB share must not freeze the window.
 
 use crate::AppState;
-use binder_core::config::Config;
+use binder_core::config::{Config, PrinterConfig};
+use binder_core::printer::PrinterCommand;
+use crate::printer::{self, PrinterView};
 use binder_core::model::*;
 use binder_core::notes::{self, DoneLine};
 use binder_core::remote::SshRemote;
@@ -225,4 +227,52 @@ pub async fn stop_run(state: State<'_, AppState>, run: String) -> Res<AgentRun> 
 #[tauri::command]
 pub async fn runs_for(state: State<'_, AppState>, task_id: i64) -> Res<Vec<AgentRun>> {
     agent::list_runs(&state.db.lock().unwrap(), task_id).map_err(text)
+}
+
+#[tauri::command]
+pub async fn printers(state: State<'_, AppState>) -> Res<Vec<PrinterView>> {
+    let list = state.config.lock().unwrap().printers.clone();
+    Ok(list
+        .into_iter()
+        .map(|c| state.printers.view(&c.serial).unwrap_or(PrinterView { config: c, state: Default::default(), online: false, error: None }))
+        .collect())
+}
+
+/// The access code goes straight to the Keychain. Only the name, address and serial reach the config.
+#[tauri::command]
+pub async fn add_printer(app: tauri::AppHandle, state: State<'_, AppState>, name: String, address: String, serial: String, access_code: String) -> Res<()> {
+    let (name, address, serial, code) = (name.trim(), address.trim(), serial.trim(), access_code.trim());
+    if name.is_empty() || address.is_empty() || serial.is_empty() || code.is_empty() {
+        return Err("A printer needs a name, an address, a serial and an access code.".into());
+    }
+    if state.config.lock().unwrap().printers.iter().any(|p| p.serial == serial) {
+        return Err("That printer is already added.".into());
+    }
+    printer::keychain(serial)
+        .and_then(|e| e.set_password(code))
+        .map_err(|_| "Couldn't save the access code in the Keychain.".to_string())?;
+    let config = PrinterConfig { name: name.into(), address: address.into(), serial: serial.into(), cert_sha256: None };
+    {
+        let mut c = state.config.lock().unwrap();
+        c.printers.push(config.clone());
+        c.save(&state.config_path).map_err(text)?;
+    }
+    printer::start(&app, config);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_printer(state: State<'_, AppState>, serial: String) -> Res<()> {
+    state.printers.stop(&serial);
+    if let Ok(entry) = printer::keychain(&serial) {
+        let _ = entry.delete_credential();
+    }
+    let mut c = state.config.lock().unwrap();
+    c.printers.retain(|p| p.serial != serial);
+    c.save(&state.config_path).map_err(text)
+}
+
+#[tauri::command]
+pub async fn printer_command(app: tauri::AppHandle, serial: String, kind: PrinterCommand) -> Res<()> {
+    printer::send(&app, &serial, kind).await
 }

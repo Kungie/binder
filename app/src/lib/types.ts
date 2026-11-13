@@ -141,6 +141,38 @@ export interface ServerStatus {
   at: number;
 }
 
+export interface PrinterState {
+  gcode_state: string | null;
+  percent: number | null;
+  remaining_min: number | null;
+  layer: number | null;
+  total_layers: number | null;
+  nozzle_c: number | null;
+  nozzle_target_c: number | null;
+  bed_c: number | null;
+  bed_target_c: number | null;
+  job: string | null;
+}
+
+export interface PrinterView {
+  config: PrinterConfig;
+  state: PrinterState;
+  online: boolean;
+  error: string | null;
+}
+
+export interface NewPrinter {
+  name: string;
+  address: string;
+  serial: string;
+  accessCode: string;
+}
+
+export type PrinterCommand = "pause" | "resume" | "stop";
+
+/** A job is on the plate: printing, paused or getting ready. */
+export const isPrinting = (s: PrinterState) => ["RUNNING", "PAUSE", "PREPARE"].includes(s.gcode_state ?? "");
+
 export type Access = "edits_only" | "full";
 
 export interface AgentRun {

@@ -10,6 +10,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Overview } from "./screens/Overview";
 import { Devices } from "./screens/Devices";
 import { Server } from "./screens/Server";
+import { Printer } from "./screens/Printer";
 
 function Screens() {
   const { screen } = useStore();
@@ -24,6 +25,8 @@ function Screens() {
       return <Devices />;
     case "server":
       return <Server />;
+    case "printer":
+      return <Printer />;
     case "settings":
       return <Settings />;
   }

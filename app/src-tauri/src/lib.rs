@@ -1,4 +1,5 @@
 mod commands;
+mod printer;
 
 use binder_core::{Db, config::Config};
 use std::path::PathBuf;
@@ -9,6 +10,7 @@ pub struct AppState {
     pub db: Mutex<Db>,
     pub config: Mutex<Config>,
     pub config_path: PathBuf,
+    pub printers: printer::Printers,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -22,7 +24,11 @@ pub fn run() {
             let config_path = dir.join("config.toml");
             let config = Config::load(&config_path)?;
             let db = Db::open(&dir.join("binder.db"))?;
-            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path });
+            let printers = config.printers.clone();
+            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default() });
+            for p in printers {
+                printer::start(app.handle(), p);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,6 +59,10 @@ pub fn run() {
             commands::poll_run,
             commands::stop_run,
             commands::runs_for,
+            commands::printers,
+            commands::add_printer,
+            commands::remove_printer,
+            commands::printer_command,
         ])
         .run(tauri::generate_context!())
         .expect("Binder could not start");

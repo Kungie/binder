@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { AgentRun, Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
+import type { AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
 import { localDay, oneLine, viewTasks } from "./tasks";
 
 export interface Seed {
@@ -9,6 +9,7 @@ export interface Seed {
   devices?: Device[];
   server?: ServerStatus;
   repos?: Record<number, RepoStatus>;
+  printers?: PrinterView[];
 }
 
 export interface MemoryOptions {
@@ -35,13 +36,23 @@ export function derivePrefix(name: string, taken: string[]): string {
 }
 
 /** An in-memory stand-in for the app, following the core's rules. Used by tests and the browser preview. */
-export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done: Record<number, DoneLine[]>; setServerReachable(v: boolean): void } {
+export function memoryApi(
+  seed: Seed,
+  options: MemoryOptions = {},
+): Api & { done: Record<number, DoneLine[]>; setServerReachable(v: boolean): void; printerCommands: [string, PrinterCommand][] } {
   const tasks = seed.tasks.map((t) => ({ ...t }));
   const projects = seed.projects.map((p) => ({ ...p }));
   const done: Record<number, DoneLine[]> = Object.fromEntries(Object.entries(seed.done).map(([k, v]) => [k, [...v]]));
   const counters: Record<string, number> = {};
   const devices = (seed.devices ?? []).map((d) => ({ ...d }));
   const runs: AgentRun[] = [];
+  const printers: PrinterView[] = (seed.printers ?? []).map((p) => ({ ...p, config: { ...p.config }, state: { ...p.state } }));
+  const printerCommands: [string, PrinterCommand][] = [];
+  const printer = (serial: string) => {
+    const p = printers.find((x) => x.config.serial === serial);
+    if (!p) throw new Error(`No printer ${serial}.`);
+    return p;
+  };
   const findRun = (run: string) => {
     const r = runs.find((x) => x.run === run);
     if (!r) throw new Error(`No run called ${run}.`);
@@ -87,6 +98,7 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
 
   return {
     done,
+    printerCommands,
     setServerReachable(v) {
       reachable = v;
     },
@@ -258,6 +270,29 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
     async runsFor(taskId) {
       return runs.filter((r) => r.task_id === taskId).map((r) => ({ ...r }));
     },
+    async printers() {
+      return printers.map((p) => ({ ...p, config: { ...p.config }, state: { ...p.state } }));
+    },
+    async addPrinter({ name, address, serial }) {
+      if (!name.trim() || !address.trim() || !serial.trim()) throw new Error("A printer needs a name, an address and a serial.");
+      if (printers.some((p) => p.config.serial === serial.trim())) throw new Error("That printer is already added.");
+      printers.push({
+        config: { name: name.trim(), address: address.trim(), serial: serial.trim(), cert_sha256: null },
+        state: { gcode_state: null, percent: null, remaining_min: null, layer: null, total_layers: null, nozzle_c: null, nozzle_target_c: null, bed_c: null, bed_target_c: null, job: null },
+        online: false,
+        error: null,
+      });
+    },
+    async removePrinter(serial) {
+      printers.splice(printers.indexOf(printer(serial)), 1);
+    },
+    async printerCommand(serial, kind) {
+      printer(serial);
+      printerCommands.push([serial, kind]);
+    },
+    onPrinter() {
+      return () => {};
+    },
     async repoStatus(projectId) {
       const p = project(projectId);
       return p.repo ? (seed.repos?.[projectId] ?? null) : null;
@@ -340,6 +375,25 @@ export function demoSeed(): Seed {
       temp_c: 48.3,
       at: t,
     },
+    printers: [
+      {
+        config: { name: "workshop", address: "10.0.7.30", serial: "DEMO0SERIAL01", cert_sha256: null },
+        state: {
+          gcode_state: "RUNNING",
+          percent: 42,
+          remaining_min: 73,
+          layer: 120,
+          total_layers: 300,
+          nozzle_c: 219.8,
+          nozzle_target_c: 220,
+          bed_c: 54.9,
+          bed_target_c: 55,
+          job: "case-lid",
+        },
+        online: true,
+        error: null,
+      },
+    ],
     repos: { 1: { branch: "main", changed: 3, ahead: 1, behind: 0, last_subject: "Fix the toolbar spacing", last_date: day } },
   };
 }

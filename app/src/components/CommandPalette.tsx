@@ -47,6 +47,7 @@ export function CommandPalette() {
               <Command.Item className={item} onSelect={go("projects")}>Go to Projects</Command.Item>
               <Command.Item className={item} onSelect={go("devices")}>Go to Devices</Command.Item>
               <Command.Item className={item} onSelect={go("server")}>Go to Server</Command.Item>
+              <Command.Item className={item} onSelect={go("printer")}>Go to Printer</Command.Item>
               <Command.Item className={item} onSelect={go("settings")}>Go to Settings</Command.Item>
             </Command.Group>
             <Command.Group heading="Create" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:text-text-3">

@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import type { Api } from "./api";
 import type { NewProject, NewTask, Project, ProjectPatch, Task, TaskPatch, TaskView } from "./types";
 
-export type Screen = "overview" | "tasks" | "projects" | "devices" | "server" | "settings";
+export type Screen = "overview" | "tasks" | "projects" | "devices" | "server" | "printer" | "settings";
 
 export interface Store {
   api: Api;

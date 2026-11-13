@@ -7,6 +7,9 @@ import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
 import type { DoneLine } from "../lib/types";
 import { clock, useServer } from "../lib/useServer";
+import { Progress } from "../components/Progress";
+import { isPrinting } from "../lib/types";
+import { minutes, usePrinters } from "../lib/usePrinters";
 
 const WEEK = 7 * 24 * 3600;
 
@@ -55,6 +58,7 @@ export function Overview() {
           </Panel>
           <div className="flex min-w-0 flex-col gap-3">
           <ServerPanel />
+          <PrinterPanel />
           <Panel title="Done today" action={<span className="font-mono text-[11px] text-text-3">{doneToday.length}</span>}>
             <ul className="border-t border-line">
               {doneToday.map(([project, line], i) => (
@@ -95,6 +99,33 @@ function ServerPanel() {
         </div>
         {status && <span className="text-text-2">{`${up} of ${status.containers.length} containers up`}</span>}
         {error && <span className="text-text-3">Can't reach it.{status ? ` Last read ${clock(status.at)}.` : ""}</span>}
+      </div>
+    </Panel>
+  );
+}
+
+function PrinterPanel() {
+  const { setScreen } = useStore();
+  const { printers } = usePrinters();
+  const p = printers.find((x) => isPrinting(x.state));
+  if (!p) return null;
+  return (
+    <Panel
+      label="Printer"
+      title="Printer"
+      action={
+        <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("printer")}>
+          Open
+        </button>
+      }
+    >
+      <div className="flex flex-col gap-2 border-t border-line px-3 py-2.5 text-[12px]">
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 truncate text-text">{p.state.job ?? p.config.name}</span>
+          <span className="ml-auto font-mono text-[11px] text-text">{`${p.state.percent ?? 0}%`}</span>
+        </div>
+        <Progress value={p.state.percent ?? 0} label="Progress" />
+        <span className="font-mono text-[11px] text-text-3">{`${minutes(p.state.remaining_min)} left`}</span>
       </div>
     </Panel>
   );
