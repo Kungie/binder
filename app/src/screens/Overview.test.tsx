@@ -52,3 +52,24 @@ describe("Done today", () => {
     expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
   });
 });
+
+describe("Overview layout and mascot", () => {
+  it("done today comes before open tasks", async () => {
+    setup({ 1: [at("09:10", "Early one.")] });
+    const done = await screen.findByRole("list", { name: "Done today" });
+    const open = await screen.findByText("Open tasks");
+    expect(done.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("an empty done today shows the mascot", async () => {
+    setup({});
+    const line = await screen.findByText("Nothing logged today.");
+    expect(line.closest("div")?.parentElement?.querySelector("[data-mascot]")).not.toBeNull();
+  });
+
+  it("the sidebar shows the mascot mark", async () => {
+    setup({});
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(nav.querySelector("[data-mascot-mark]")).not.toBeNull();
+  });
+});

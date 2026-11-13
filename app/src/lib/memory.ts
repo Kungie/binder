@@ -589,7 +589,12 @@ export function demoSeed(): Seed {
   return {
     projects,
     tasks,
-    done: { 1: [{ date: day, time: "10:42", text: "Keep sync off by default until conflicts are handled." }] },
+    done: {
+      1: [{ date: day, time: "10:42", text: "Keep sync off by default until conflicts are handled." }],
+      3: [{ date: day, time: "15:10", text: "Keep machine-specific settings in a local file that git ignores." }],
+      2: [{ date: day, time: "09:05", text: "Move backups to the second disk and keep 14 days." }],
+      4: [{ date: day, time: "12:30", text: "Store readings as integers in tenths of a degree." }],
+    },
     devices: [
       { id: 101, name: "studio", kind: "mac", address: "10.0.7.10", port: 22, note: "" },
       { id: 102, name: "lab", kind: "server", address: "10.0.7.2", port: 22, note: "Raspberry Pi 5, 8 GB" },

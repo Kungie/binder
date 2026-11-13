@@ -14,6 +14,7 @@ import { bytes } from "../lib/format";
 import { ago } from "../lib/time";
 import { loadPercent } from "../lib/load";
 import type { CloudEntry, CloudStatus } from "../lib/types";
+import { Empty } from "../components/Mascot";
 
 const WEEK = 7 * 24 * 3600;
 
@@ -58,7 +59,12 @@ export function Overview() {
           <Metric title="In progress" value={doing} />
           <Metric title="Done this week" value={doneWeek} />
         </div>
-        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start gap-3">
+        <div className="grid grid-cols-2 items-start gap-3">
+          <DoneToday items={doneToday} />
+          <div className="flex min-w-0 flex-col gap-3">
+          <ServerPanel />
+          <CloudPanel />
+          <PrinterPanel />
           <Panel
             title="Open tasks"
             action={
@@ -69,11 +75,6 @@ export function Overview() {
           >
             <TaskBoard tasks={open.slice(0, 8)} compact label="Open tasks" empty="Nothing open. Press c to add a task." />
           </Panel>
-          <div className="flex min-w-0 flex-col gap-3">
-          <ServerPanel />
-          <CloudPanel />
-          <PrinterPanel />
-          <DoneToday items={doneToday} />
           </div>
         </div>
       </div>
@@ -101,7 +102,7 @@ function DoneToday({ items }: { items: DoneItem[] }) {
           </li>
         ))}
       </ul>
-      {items.length === 0 && <p className="border-t border-line px-3 py-3 text-[12px] text-text-3">Nothing logged today.</p>}
+      {items.length === 0 && <Empty>Nothing logged today.</Empty>}
       {items.length > DONE_SHOWN && (
         <button type="button" className="w-full border-t border-line px-3 py-2 text-left text-[12px] text-text-3 hover:text-text" onClick={() => setAll(!all)}>
           {all ? "Show fewer" : `Show all (${items.length})`}
