@@ -179,6 +179,7 @@ pub fn poll_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Res
     db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3, tail = ?4 WHERE run = ?1 AND ended IS NULL", params![run, ended, code, tail])?;
     if ended.is_some() {
         set_status(&mut db, r.task_id, if code == Some(0) { Status::Done } else { Status::Todo }, now)?;
+        db.update_task(r.task_id, TaskPatch { attention: Some(true), ..Default::default() }, now)?;
     }
     get_run(&db, run)
 }

@@ -1,6 +1,7 @@
 import type { Api } from "./api";
 import type { AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
 import { localDay, oneLine, viewTasks } from "./tasks";
+import { PALETTE, colorFor } from "./colors";
 
 export interface Seed {
   projects: Project[];
@@ -60,7 +61,7 @@ export function memoryApi(
   };
   const offline = options.offline ?? ["10.0.7.30"];
   let reachable = true;
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: false };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: false, cloud: "/Volumes/cloud", cloud_share: null };
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
   const device = (id: number) => {
     const d = devices.find((x) => x.id === id);
@@ -109,18 +110,23 @@ export function memoryApi(
       const title = t.title.trim();
       if (!title) throw new Error("A task needs a title.");
       const prefix = t.project_id ? project(t.project_id).prefix : "TSK";
+      const status = t.status ?? "todo";
+      const sort = Math.max(0, ...tasks.filter((x) => x.status === status).map((x) => x.sort)) + 1;
       const created: Task = {
         id: nextId++,
         key: `${prefix}-${nextNumber(prefix)}`,
         title,
         notes: t.notes ?? "",
-        status: t.status ?? "todo",
+        status,
         priority: t.priority ?? "none",
         project_id: t.project_id ?? null,
         assignee: t.assignee ?? "me",
         due: t.due ?? null,
+        due_time: t.due ? (t.due_time ?? null) : null,
         created: now(),
         updated: now(),
+        attention: false,
+        sort,
       };
       tasks.push(created);
       return { ...created };
@@ -137,8 +143,15 @@ export function memoryApi(
       if (p.clear_project) t.project_id = null;
       else if (p.project_id !== undefined) t.project_id = project(p.project_id).id;
       if (p.assignee) t.assignee = p.assignee;
-      if (p.clear_due) t.due = null;
+      if (p.clear_due) (t.due = null), (t.due_time = null);
       else if (p.due !== undefined) t.due = p.due;
+      if (p.clear_due_time) t.due_time = null;
+      else if (p.due_time !== undefined) {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.due_time)) throw new Error("A time is HH:MM.");
+        t.due_time = p.due_time;
+      }
+      if (p.attention !== undefined) t.attention = p.attention;
+      if (p.sort !== undefined) t.sort = p.sort;
       t.updated = Math.max(now(), t.updated + 1);
       return { ...t };
     },
@@ -161,7 +174,24 @@ export function memoryApi(
         if (prefix === "TSK") throw new Error("TSK is kept for tasks without a project.");
         if (taken.includes(prefix)) throw new Error(`The prefix ${prefix} is taken.`);
       }
-      const p: Project = { id: nextId++, name, prefix, repo: np.repo ?? null, note: null, state: "active", created: now(), agent_dir: null };
+      const p: Project = {
+        id: nextId++,
+        name,
+        prefix,
+        repo: np.repo ?? null,
+        note: null,
+        state: "active",
+        created: now(),
+        agent_dir: null,
+        github: null,
+        url: null,
+        description: null,
+        pushed_at: null,
+        private: false,
+        archived: false,
+        color: colorFor(name),
+        language: null,
+      };
       projects.push(p);
       return { ...p };
     },
@@ -172,6 +202,10 @@ export function memoryApi(
       else if (patch.repo !== undefined) p.repo = patch.repo;
       if (patch.state) p.state = patch.state;
       if (patch.agent_dir !== undefined) p.agent_dir = patch.agent_dir.trim() || null;
+      if (patch.color !== undefined) {
+        if (!(PALETTE as readonly string[]).includes(patch.color)) throw new Error("Pick one of the project colours.");
+        p.color = patch.color;
+      }
       return { ...p };
     },
     async deleteProject(id) {
@@ -308,14 +342,55 @@ export function memoryApi(
 }
 
 /** A made-up developer's workshop, for the preview and tests. */
+/** A project made by hand, before its id and prefix. */
+function hand(name: string): Omit<Project, "id" | "prefix" | "created"> {
+  return {
+    name,
+    repo: null,
+    note: null,
+    state: "active",
+    agent_dir: null,
+    github: null,
+    url: null,
+    description: null,
+    pushed_at: null,
+    private: false,
+    archived: false,
+    color: colorFor(name),
+    language: null,
+  };
+}
+
+/** A project that came from the made-up developer's GitHub, pushed `days` ago. */
+function gh(name: string, description: string, language: string, days: number): Omit<Project, "id" | "prefix" | "created"> {
+  return {
+    ...hand(name),
+    github: `demo-dev/${name}`,
+    url: `https://github.com/demo-dev/${name}`,
+    description,
+    language,
+    pushed_at: new Date(Date.now() - days * 86400000).toISOString(),
+  };
+}
+
 export function demoSeed(): Seed {
   const t = Math.floor(Date.now() / 1000);
   const day = localDay();
   const projects: Project[] = [
-    { id: 1, name: "orbit", prefix: "ORB", repo: "~/code/orbit", note: "/Volumes/vault/Projects/orbit.md", state: "active", created: t - 864000, agent_dir: null },
-    { id: 2, name: "homelab", prefix: "LAB", repo: null, note: null, state: "active", created: t - 432000, agent_dir: "~/homelab" },
+    {
+      ...gh("orbit", "A sync engine for local-first notes", "TypeScript", 1),
+      id: 1,
+      prefix: "ORB",
+      repo: "~/code/orbit",
+      note: "/Volumes/vault/Projects/orbit.md",
+      created: t - 864000,
+    },
+    { ...hand("homelab"), id: 2, prefix: "LAB", created: t - 432000, agent_dir: "~/homelab" },
   ];
   const mk = (id: number, key: string, title: string, extra: Partial<Task>): Task => ({
+    due_time: null,
+    attention: false,
+    sort: id,
     id: id + 10,
     key,
     title,

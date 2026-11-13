@@ -15,8 +15,12 @@ export interface Task {
   project_id: number | null;
   assignee: Assignee;
   due: string | null;
+  /** `HH:MM` */
+  due_time: string | null;
   created: number;
   updated: number;
+  attention: boolean;
+  sort: number;
 }
 
 export interface NewTask {
@@ -27,6 +31,7 @@ export interface NewTask {
   project_id?: number;
   assignee?: Assignee;
   due?: string;
+  due_time?: string;
 }
 
 export interface TaskPatch {
@@ -39,6 +44,10 @@ export interface TaskPatch {
   assignee?: Assignee;
   due?: string;
   clear_due?: boolean;
+  due_time?: string;
+  clear_due_time?: boolean;
+  attention?: boolean;
+  sort?: number;
 }
 
 export type TaskView = { kind: "all" } | { kind: "mine" } | { kind: "agent" } | { kind: "project"; id: number };
@@ -52,6 +61,14 @@ export interface Project {
   state: ProjectState;
   created: number;
   agent_dir: string | null;
+  github: string | null;
+  url: string | null;
+  description: string | null;
+  pushed_at: string | null;
+  private: boolean;
+  archived: boolean;
+  color: string;
+  language: string | null;
 }
 
 export interface NewProject {
@@ -67,6 +84,7 @@ export interface ProjectPatch {
   state?: ProjectState;
   /** Blank clears it. */
   agent_dir?: string;
+  color?: string;
 }
 
 export interface DoneLine {
@@ -86,6 +104,8 @@ export interface Config {
   server: string | null;
   printers: PrinterConfig[];
   claude_hooks: boolean;
+  cloud: string;
+  cloud_share: string | null;
 }
 
 export type DeviceKind = "mac" | "server" | "printer" | "other";

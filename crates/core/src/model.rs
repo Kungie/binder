@@ -116,9 +116,15 @@ pub struct Task {
     pub assignee: Assignee,
     /// `YYYY-MM-DD`
     pub due: Option<String>,
+    /// `HH:MM`, only with a due date.
+    pub due_time: Option<String>,
     /// Unix seconds.
     pub created: i64,
     pub updated: i64,
+    /// Set when the agent's run ends; cleared when the owner opens the task.
+    pub attention: bool,
+    /// Order inside its status column, lower first.
+    pub sort: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -131,6 +137,7 @@ pub struct NewTask {
     pub project_id: Option<i64>,
     pub assignee: Option<Assignee>,
     pub due: Option<String>,
+    pub due_time: Option<String>,
 }
 
 /// What to change on a task. `None` leaves a field alone; the `clear_*` flags empty the optional ones.
@@ -145,7 +152,12 @@ pub struct TaskPatch {
     pub clear_project: bool,
     pub assignee: Option<Assignee>,
     pub due: Option<String>,
+    /// Also clears `due_time`.
     pub clear_due: bool,
+    pub due_time: Option<String>,
+    pub clear_due_time: bool,
+    pub attention: Option<bool>,
+    pub sort: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,6 +181,18 @@ pub struct Project {
     pub created: i64,
     /// The folder on the home server where the agent runs this project's tasks.
     pub agent_dir: Option<String>,
+    /// `owner/name` on GitHub.
+    pub github: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+    pub pushed_at: Option<String>,
+    pub private: bool,
+    /// Archived on GitHub, or gone from the owner's repos.
+    pub archived: bool,
+    /// One of `projects::PALETTE`.
+    pub color: String,
+    /// The repo's main language on GitHub.
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -188,6 +212,7 @@ pub struct ProjectPatch {
     pub state: Option<ProjectState>,
     /// Blank clears it.
     pub agent_dir: Option<String>,
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

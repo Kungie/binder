@@ -69,6 +69,19 @@ const MIGRATIONS: &[&str] = &[
         date TEXT NOT NULL,
         text TEXT NOT NULL
     );",
+    // v3: board order, due times, attention, GitHub projects and colours
+    "ALTER TABLE tasks ADD COLUMN due_time TEXT;
+    ALTER TABLE tasks ADD COLUMN attention INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE tasks ADD COLUMN sort INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE projects ADD COLUMN github TEXT;
+    ALTER TABLE projects ADD COLUMN url TEXT;
+    ALTER TABLE projects ADD COLUMN description TEXT;
+    ALTER TABLE projects ADD COLUMN pushed_at TEXT;
+    ALTER TABLE projects ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '';
+    ALTER TABLE projects ADD COLUMN language TEXT;
+    CREATE UNIQUE INDEX projects_github ON projects(github);",
 ];
 
 impl Db {

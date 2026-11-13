@@ -14,6 +14,10 @@ pub struct Config {
     pub printers: Vec<PrinterConfig>,
     /// Whether Binder's Claude Code hooks are installed.
     pub claude_hooks: bool,
+    /// Where the Cloud share is mounted.
+    pub cloud: PathBuf,
+    /// The share's address, for Connect: `smb://host/cloud`.
+    pub cloud_share: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -28,7 +32,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None }
     }
 }
 

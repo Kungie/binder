@@ -5,7 +5,20 @@ use crate::notes::note_stem;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
-const COLUMNS: &str = "id, name, prefix, repo, note, state, created, agent_dir";
+const COLUMNS: &str = "id, name, prefix, repo, note, state, created, agent_dir, github, url, description, pushed_at, private, archived, color, language";
+
+/// Muted project colours, used small: a dot beside the name.
+pub const PALETTE: [&str; 8] = ["#5E6AD2", "#26B5CE", "#4CB782", "#F2C94C", "#F2994A", "#EB5757", "#B76EDB", "#8D8D8D"];
+
+/// A stable colour for a name: FNV-1a over the lowercase name, into the palette.
+pub fn color_for(name: &str) -> &'static str {
+    let mut h: u32 = 0x811c9dc5;
+    for b in name.to_lowercase().bytes() {
+        h ^= b as u32;
+        h = h.wrapping_mul(0x01000193);
+    }
+    PALETTE[(h % PALETTE.len() as u32) as usize]
+}
 
 fn row_to_project(r: &Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -17,6 +30,15 @@ fn row_to_project(r: &Row) -> rusqlite::Result<Project> {
         state: ProjectState::parse(&r.get::<_, String>(5)?),
         created: r.get(6)?,
         agent_dir: r.get(7)?,
+        github: r.get(8)?,
+        url: r.get(9)?,
+        description: r.get(10)?,
+        pushed_at: r.get(11)?,
+        private: r.get(12)?,
+        archived: r.get(13)?,
+        // Projects from before colours get theirs from the name.
+        language: r.get(15)?,
+        color: Some(r.get::<_, String>(14)?).filter(|c| !c.is_empty()).unwrap_or_else(|| color_for(&r.get::<_, String>(1).unwrap_or_default()).to_string()),
     })
 }
 
@@ -107,8 +129,8 @@ impl Db {
         };
         let next = self.next_free_number(&prefix)?;
         self.conn.execute(
-            "INSERT INTO projects (name, prefix, repo, state, next_number, created) VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-            params![name, prefix, p.repo, next, now],
+            "INSERT INTO projects (name, prefix, repo, state, next_number, created, color) VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?6)",
+            params![name, prefix, p.repo, next, now, color_for(&name)],
         )?;
         self.get_project(self.conn.last_insert_rowid())
     }
@@ -145,12 +167,18 @@ impl Db {
         if let Some(state) = patch.state {
             p.state = state;
         }
+        if let Some(color) = patch.color {
+            if !PALETTE.contains(&color.as_str()) {
+                return Err(Error::Invalid("Pick one of the project colours.".into()));
+            }
+            p.color = color;
+        }
         if let Some(dir) = patch.agent_dir {
             p.agent_dir = Some(dir.trim().to_string()).filter(|d| !d.is_empty());
         }
         self.conn.execute(
-            "UPDATE projects SET name = ?2, repo = ?3, state = ?4, agent_dir = ?5 WHERE id = ?1",
-            params![id, p.name, p.repo, p.state.as_str(), p.agent_dir],
+            "UPDATE projects SET name = ?2, repo = ?3, state = ?4, agent_dir = ?5, color = ?6 WHERE id = ?1",
+            params![id, p.name, p.repo, p.state.as_str(), p.agent_dir, p.color],
         )?;
         self.get_project(id)
     }

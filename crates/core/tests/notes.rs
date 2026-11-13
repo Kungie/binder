@@ -7,6 +7,14 @@ use std::path::Path;
 fn project(name: &str, repo: Option<&str>, note: Option<&Path>) -> Project {
     Project {
         agent_dir: None,
+        github: None,
+        url: None,
+        description: None,
+        pushed_at: None,
+        private: false,
+        archived: false,
+        color: "#5E6AD2".into(),
+        language: None,
         id: 1,
         name: name.into(),
         prefix: "P".into(),
