@@ -299,3 +299,24 @@ fn paths_outside_root_refused() {
     assert_eq!(f.remote("Photos/./a.jpg").unwrap(), format!("{}/Photos/a.jpg", w.remote));
     assert_eq!(f.remote("").unwrap(), w.remote);
 }
+
+#[test]
+fn fast_move_across_and_space() {
+    let w = World::new();
+    fs::create_dir_all(w.root().join("SD")).unwrap();
+    let f = w.fast();
+    let mut seen = vec![];
+    let landed = f.move_across("Photos", "SD", &never(), &mut |a, b| seen.push((a, b))).unwrap();
+    assert_eq!(landed, w.root().join("SD/Photos"));
+    assert_eq!(tree(&w.root().join("SD/Photos")).get("a.jpg").map(String::as_str), Some("jpg"));
+    assert!(!w.root().join("Photos").exists());
+    assert_eq!(seen.last().map(|s| s.0 == s.1), Some(true));
+    let cancel = AtomicBool::new(true);
+    assert!(f.move_across("SD/Photos", "", &cancel, &mut |_, _| {}).is_err());
+    assert!(w.root().join("SD/Photos/a.jpg").exists(), "a cancel keeps the source");
+    let s = f.space("SD").unwrap();
+    assert!(s.total > 0 && s.free <= s.total, "{s:?}");
+    let m = cloud::space(&w.root()).unwrap();
+    assert!(s.total.abs_diff(m.total) < 1 << 20, "{s:?} {m:?}");
+    assert!(f.space("../x").is_err());
+}

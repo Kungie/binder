@@ -394,3 +394,125 @@ fn land_waits_for_a_partial_the_share_hasnt_shown_yet() {
     let never = dir.join(partial_name("never.txt"));
     assert!(land(&never, &dir, "never.txt", Conflict::KeepBoth, None).is_err());
 }
+
+/// Folders that stand for other disks: a rename between two disks fails with EXDEV, as the share reports it.
+struct FakeDisks(Vec<std::path::PathBuf>);
+
+impl FakeDisks {
+    fn disk(&self, p: &Path) -> Option<usize> {
+        self.0.iter().enumerate().filter(|(_, d)| p.starts_with(d)).max_by_key(|(_, d)| d.components().count()).map(|(i, _)| i)
+    }
+}
+
+impl Disks for FakeDisks {
+    fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        if self.disk(from) != self.disk(to) {
+            return Err(std::io::Error::from_raw_os_error(libc::EXDEV));
+        }
+        fs::rename(from, to)
+    }
+}
+
+fn two_disks() -> (tempfile::TempDir, FakeDisks) {
+    let d = root();
+    fs::create_dir_all(d.path().join("SD/films")).unwrap();
+    fs::write(d.path().join("SD/films/a.mkv"), "film").unwrap();
+    let disks = FakeDisks(vec![d.path().join("SD")]);
+    (d, disks)
+}
+
+fn all_names(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn trash_goes_to_the_items_own_disk() {
+    let (d, disks) = two_disks();
+    let r = d.path();
+    let id = trash_on(&disks, r, "SD/films/a.mkv").unwrap();
+    assert!(id.starts_with("SD/"), "{id}");
+    assert!(!r.join("SD/films/a.mkv").exists());
+    assert_eq!(fs::read_dir(r.join("SD/.trash")).unwrap().filter(|e| e.as_ref().unwrap().file_name() != ".disks").count(), 1);
+    assert_eq!(fs::read_to_string(r.join(".trash/.disks")).unwrap(), "SD\n");
+    assert!(!r.join("SD/films/.trash").exists(), "no stray trash further down");
+    let main_slots: Vec<String> = all_names(&r.join(".trash")).into_iter().filter(|n| n != ".disks").collect();
+    assert!(main_slots.is_empty(), "the failed try left a slot: {main_slots:?}");
+    // A second item on the card adds no second line.
+    fs::write(r.join("SD/b.txt"), "b").unwrap();
+    trash_on(&disks, r, "SD/b.txt").unwrap();
+    assert_eq!(fs::read_to_string(r.join(".trash/.disks")).unwrap(), "SD\n");
+    // The root disk keeps its own trash and plain ids.
+    let plain = trash_on(&disks, r, "notes.txt").unwrap();
+    assert!(!plain.contains('/'));
+}
+
+#[test]
+fn trash_list_merges_disks() {
+    let (d, disks) = two_disks();
+    let r = d.path();
+    trash_on(&disks, r, "notes.txt").unwrap();
+    trash_on(&disks, r, "SD/films/a.mkv").unwrap();
+    let mut origins: Vec<String> = list_trash(r).unwrap().into_iter().map(|t| t.origin).collect();
+    origins.sort();
+    assert_eq!(origins, ["SD/films/a.mkv", "notes.txt"]);
+}
+
+#[test]
+fn restore_and_empty_across_disks() {
+    let (d, disks) = two_disks();
+    let r = d.path();
+    let id = trash_on(&disks, r, "SD/films/a.mkv").unwrap();
+    trash_on(&disks, r, "notes.txt").unwrap();
+    assert_eq!(restore(r, &id).unwrap(), r.join("SD/films/a.mkv"));
+    assert_eq!(fs::read_to_string(r.join("SD/films/a.mkv")).unwrap(), "film");
+    trash_on(&disks, r, "SD/films/a.mkv").unwrap();
+    assert_eq!(list_trash(r).unwrap().len(), 2);
+    empty_trash(r).unwrap();
+    assert!(list_trash(r).unwrap().is_empty());
+    assert!(r.join("SD/.trash").is_dir(), "the card's trash folder stays, empty");
+    assert_eq!(all_names(&r.join("SD/.trash")), Vec::<String>::new());
+}
+
+#[test]
+fn move_across_disks_copies_then_removes() {
+    let (d, disks) = two_disks();
+    let r = d.path();
+    let r2 = move_to_on(&disks, r, "Photos", "SD");
+    assert!(matches!(r2, Err(Error::CrossDisk)), "{r2:?}");
+    assert!(r.join("Photos/a.jpg").exists(), "nothing changed");
+    assert!(move_to_on(&disks, r, "SD/films/a.mkv", "SD").is_ok(), "same disk is a plain move");
+    let never = AtomicBool::new(false);
+    let mut seen = vec![];
+    let landed = move_across(r, "Photos", "SD", &never, &mut |a, b| seen.push((a, b))).unwrap();
+    assert_eq!(landed, r.join("SD/Photos"));
+    assert_eq!(fs::read_to_string(r.join("SD/Photos/a.jpg")).unwrap(), "jpg");
+    assert!(!r.join("Photos").exists());
+    assert_eq!(seen.last(), Some(&(3, 3)));
+    // A name taken on the other disk keeps both.
+    fs::write(r.join("a.mkv"), "other").unwrap();
+    assert_eq!(move_across(r, "a.mkv", "SD", &never, &mut |_, _| {}).unwrap(), r.join("SD/a 2.mkv"));
+}
+
+#[test]
+fn cancelled_move_across_keeps_the_source() {
+    let (d, _) = two_disks();
+    let r = d.path();
+    let cancel = AtomicBool::new(true);
+    assert!(move_across(r, "Photos", "SD", &cancel, &mut |_, _| {}).is_err());
+    assert!(r.join("Photos/a.jpg").exists());
+    assert!(!r.join("SD/Photos").exists());
+    assert!(all_names(&r.join("SD")).iter().all(|n| !n.starts_with(".binder-partial-")));
+}
+
+#[test]
+fn list_hides_disk_trash_and_lost_found() {
+    let (d, disks) = two_disks();
+    let r = d.path();
+    fs::create_dir(r.join("SD/lost+found")).unwrap();
+    trash_on(&disks, r, "SD/films/a.mkv").unwrap();
+    assert_eq!(names(&list(r, "SD", true).unwrap()), ["films"]);
+    fs::create_dir(r.join("Photos/.trash")).unwrap();
+    assert!(names(&list(r, "Photos", true).unwrap()).contains(&".trash"), "only a disk's own trash hides");
+}

@@ -419,6 +419,29 @@ impl Fast<'_> {
         landed?.ok_or_else(|| unreachable!("KeepBoth always lands"))
     }
 
+    /// A move to another disk on the server: `copy` into a partial on the target disk, then the source is removed
+    /// there, only once the copy has landed.
+    pub fn move_across(&self, rel: &str, dest_dir_rel: &str, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+        let name = last_name(rel)?;
+        let source = self.remote(rel)?;
+        let landed = self.copy(rel, dest_dir_rel, &name, Conflict::KeepBoth, cancel, progress)?.expect("KeepBoth always lands");
+        run(self.shell, &format!("rm -rf {}", quote(&source)))?;
+        Ok(landed)
+    }
+
+    /// The size and free space of the disk that holds `rel`, from `df` on the server. Through SMB the Mac only
+    /// sees the share's own disk.
+    pub fn space(&self, rel: &str) -> Result<cloud::Space> {
+        let out = run(self.shell, &format!("df -Pk {}", quote(&self.remote(rel)?)))?;
+        let line = out.lines().nth(1).ok_or_else(|| Error::Remote(format!("Couldn't read the space: {}", out.trim())))?;
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let kb = |i: usize| fields.get(i).and_then(|f| f.parse::<u64>().ok()).map(|n| n * 1024);
+        match (kb(1), kb(3)) {
+            (Some(total), Some(free)) => Ok(cloud::Space { total, free }),
+            _ => Err(Error::Remote(format!("Couldn't read the space: {}", line.trim()))),
+        }
+    }
+
     /// A file's size, or a folder's total bytes and item count, counted on the server. Links aren't followed.
     pub fn size(&self, rel: &str) -> Result<(u64, u64)> {
         let p = quote(&self.remote(rel)?);

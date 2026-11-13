@@ -12,6 +12,28 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub const TRASH: &str = ".trash";
 const ORIGIN: &str = ".origin";
 const PARTIAL: &str = ".binder-partial-";
+/// In the root's trash: the other disks' roots that hold a trash of their own, one relative path per line.
+const DISKS: &str = ".disks";
+/// ext4 makes it at a disk's root; it is root-owned and never the owner's.
+const LOST_FOUND: &str = "lost+found";
+
+/// How items are renamed. The share reports a rename from one disk to another as EXDEV; through SMB that is the
+/// only sign of a disk boundary the Mac gets. Tests fake it.
+pub trait Disks {
+    fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()>;
+}
+
+pub struct RealDisks;
+
+impl Disks for RealDisks {
+    fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        fs::rename(from, to)
+    }
+}
+
+fn cross_disk(e: &std::io::Error) -> bool {
+    e.raw_os_error() == Some(libc::EXDEV)
+}
 const CHUNK: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,11 +154,12 @@ fn sort(entries: &mut [Entry]) {
 /// A folder's entries: folders first, then by name. The trash and unfinished copies never show; dotfiles only when asked.
 pub fn list(root: &Path, rel: &str, show_hidden: bool) -> Result<Vec<Entry>> {
     let dir = resolve(root, rel)?;
-    let at_root = rel.trim_matches('/').is_empty();
+    let here = rel.trim_matches('/');
+    let disk_root = here.is_empty() || disk_roots(root).iter().any(|d| d == here);
     let mut out = vec![];
     for item in fs::read_dir(&dir)? {
         let name = item?.file_name().to_string_lossy().into_owned();
-        if (at_root && name == TRASH) || name.starts_with(PARTIAL) || (!show_hidden && name.starts_with('.')) {
+        if (disk_root && name == TRASH) || name == LOST_FOUND || name.starts_with(PARTIAL) || (!show_hidden && name.starts_with('.')) {
             continue;
         }
         out.push(entry_of(&dir.join(&name), join_rel(rel, &name))?);
@@ -359,6 +382,33 @@ pub fn rename(root: &Path, rel: &str, new_name: &str) -> Result<PathBuf> {
 
 /// Moves into another folder, keeping both on a name clash.
 pub fn move_to(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<PathBuf> {
+    move_to_on(&RealDisks, root, rel, dest_dir_rel)
+}
+
+/// `move_to`, renaming through `disks`. A move the share refuses as crossing disks gives `Error::CrossDisk` with
+/// nothing changed; `move_across` does those.
+pub fn move_to_on(disks: &dyn Disks, root: &Path, rel: &str, dest_dir_rel: &str) -> Result<PathBuf> {
+    let (from, dest) = move_ends(root, rel, dest_dir_rel)?;
+    let name = from.file_name().expect("not the root").to_string_lossy().into_owned();
+    let to = free_name(&dest, &name);
+    match disks.rename(&from, &to) {
+        Ok(()) => Ok(to),
+        Err(e) if cross_disk(&e) => Err(Error::CrossDisk),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A move to another disk: a copy into a partial on the target disk, then the source is removed, only once the copy
+/// has landed. A cancelled or failed copy leaves the source as it was. Progress counts bytes.
+pub fn move_across(root: &Path, rel: &str, dest_dir_rel: &str, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+    let (from, dest) = move_ends(root, rel, dest_dir_rel)?;
+    let landed = copy_into(&from, &dest, Conflict::KeepBoth, Some(root), cancel, progress)?.expect("KeepBoth always lands");
+    remove(&from)?;
+    Ok(landed)
+}
+
+/// The two ends of a move, checked: not Cloud itself, into a folder, and not into itself.
+fn move_ends(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<(PathBuf, PathBuf)> {
     if rel.trim_matches('/').is_empty() {
         return Err(Error::Invalid("Cloud itself can't be moved.".into()));
     }
@@ -370,10 +420,7 @@ pub fn move_to(root: &Path, rel: &str, dest_dir_rel: &str) -> Result<PathBuf> {
     if dest.canonicalize()?.starts_with(from.canonicalize()?) {
         return Err(Error::Invalid("A folder can't go inside itself.".into()));
     }
-    let name = from.file_name().expect("not the root").to_string_lossy().into_owned();
-    let to = free_name(&dest, &name);
-    fs::rename(&from, &to)?;
-    Ok(to)
+    Ok((from, dest))
 }
 
 fn trash_dir(root: &Path) -> Result<PathBuf> {
@@ -384,48 +431,120 @@ fn trash_dir(root: &Path) -> Result<PathBuf> {
 
 /// Moves an item to the trash, remembering where it was. Returns its trash id.
 pub fn trash(root: &Path, rel: &str) -> Result<String> {
+    trash_on(&RealDisks, root, rel)
+}
+
+/// The disks' roots that hold a trash, relative to Cloud's root: the root itself (`""`) first, then those found.
+fn disk_roots(root: &Path) -> Vec<String> {
+    let listed = fs::read_to_string(root.join(TRASH).join(DISKS)).unwrap_or_default();
+    let mut out = vec![String::new()];
+    for line in listed.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if !out.iter().any(|d| d == line) && resolve(root, line).is_ok_and(|p| p.is_dir()) {
+            out.push(line.to_string());
+        }
+    }
+    out
+}
+
+fn record_disk(root: &Path, disk: &str) -> Result<()> {
+    if disk_roots(root).iter().any(|d| d == disk) {
+        return Ok(());
+    }
+    let path = trash_dir(root)?.join(DISKS);
+    let mut f = fs::OpenOptions::new().create(true).append(true).open(path)?;
+    f.write_all(format!("{disk}\n").as_bytes())?;
+    Ok(())
+}
+
+fn disk_dir(root: &Path, disk: &str) -> PathBuf {
+    if disk.is_empty() { root.to_path_buf() } else { root.join(disk) }
+}
+
+/// A trash id names its slot, after the disk's root when that isn't Cloud's: `<slot>` or `SD/<slot>`.
+fn slot_path(root: &Path, id: &str) -> PathBuf {
+    let (disk, slot) = id.rsplit_once('/').unwrap_or(("", id));
+    disk_dir(root, disk).join(TRASH).join(slot)
+}
+
+/// `trash`, renaming through `disks`. The item goes to the `.trash` at the root of its own disk: Cloud's first, then
+/// each folder on the way down to the item, until the share takes the rename. A try that crosses disks leaves
+/// nothing behind.
+pub fn trash_on(disks: &dyn Disks, root: &Path, rel: &str) -> Result<String> {
     let rel = rel.trim_matches('/');
-    if rel.is_empty() || rel == TRASH || rel.starts_with(&format!("{TRASH}/")) {
+    let in_a_trash = disk_roots(root).iter().any(|d| {
+        let bin = if d.is_empty() { TRASH.to_string() } else { format!("{d}/{TRASH}") };
+        rel == bin || rel.starts_with(&format!("{bin}/"))
+    });
+    if rel.is_empty() || in_a_trash {
         return Err(Error::Invalid("That can't go to the trash.".into()));
     }
     let from = resolve(root, rel)?;
     fs::symlink_metadata(&from)?;
-    let bin = trash_dir(root)?;
-    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
-    let slot = (0..)
-        .map(|n| bin.join(format!("{ms}-{n}")))
-        .find(|p| fs::create_dir(p).is_ok())
-        .expect("a free slot");
-    fs::write(slot.join(ORIGIN), rel)?;
-    if let Err(e) = fs::rename(&from, slot.join(from.file_name().expect("not the root"))) {
-        let _ = fs::remove_dir_all(&slot);
-        return Err(e.into());
+    let name = from.file_name().expect("not the root").to_owned();
+    let parts: Vec<&str> = rel.split('/').collect();
+    for depth in 0..parts.len() {
+        let disk = parts[..depth].join("/");
+        let bin = disk_dir(root, &disk).join(TRASH);
+        let made_bin = !bin.exists();
+        fs::create_dir_all(&bin)?;
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+        let slot = (0..).map(|n| bin.join(format!("{ms}-{n}"))).find(|p| fs::create_dir(p).is_ok()).expect("a free slot");
+        let undo = |slot: &Path| {
+            let _ = fs::remove_dir_all(slot);
+            if made_bin {
+                let _ = fs::remove_dir(&bin);
+            }
+        };
+        if let Err(e) = fs::write(slot.join(ORIGIN), rel) {
+            undo(&slot);
+            return Err(e.into());
+        }
+        match disks.rename(&from, &slot.join(&name)) {
+            Ok(()) => {
+                let slot_name = slot.file_name().expect("a slot name").to_string_lossy().into_owned();
+                if disk.is_empty() {
+                    return Ok(slot_name);
+                }
+                record_disk(root, &disk)?;
+                return Ok(format!("{disk}/{slot_name}"));
+            }
+            Err(e) if cross_disk(&e) => undo(&slot),
+            Err(e) => {
+                undo(&slot);
+                return Err(e.into());
+            }
+        }
     }
-    Ok(slot.file_name().expect("a slot name").to_string_lossy().into_owned())
+    Err(Error::Invalid("No trash on that item's disk took it.".into()))
 }
 
-/// What's in the trash, newest first.
+/// What's in the trash on every disk, newest first.
 pub fn list_trash(root: &Path) -> Result<Vec<TrashEntry>> {
-    let bin = trash_dir(root)?;
+    trash_dir(root)?;
     let mut out = vec![];
-    for slot in fs::read_dir(&bin)? {
-        let slot = slot?.path();
-        let id = slot.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        let Ok(origin) = fs::read_to_string(slot.join(ORIGIN)) else { continue };
-        let Some(item) = fs::read_dir(&slot)?.filter_map(|e| e.ok()).map(|e| e.path()).find(|p| p.file_name().is_some_and(|n| n != ORIGIN)) else {
-            continue;
-        };
-        let deleted = id.split('-').next().and_then(|ms| ms.parse::<i64>().ok()).map_or(0, |ms| ms / 1000);
-        let name = item.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        let mut entry = entry_of(&item, format!("{id}/{name}"))?;
-        let unfinished = unfinished_name(&name).is_some();
-        if let Some(real) = unfinished_name(&name) {
-            entry.name = real.to_string();
+    for disk in disk_roots(root) {
+        let bin = disk_dir(root, &disk).join(TRASH);
+        let Ok(slots) = fs::read_dir(&bin) else { continue };
+        for slot in slots {
+            let slot = slot?.path();
+            let slot_name = slot.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let id = if disk.is_empty() { slot_name.clone() } else { format!("{disk}/{slot_name}") };
+            let Ok(origin) = fs::read_to_string(slot.join(ORIGIN)) else { continue };
+            let Some(item) = fs::read_dir(&slot)?.filter_map(|e| e.ok()).map(|e| e.path()).find(|p| p.file_name().is_some_and(|n| n != ORIGIN)) else {
+                continue;
+            };
+            let deleted = slot_name.split('-').next().and_then(|ms| ms.parse::<i64>().ok()).map_or(0, |ms| ms / 1000);
+            let name = item.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let mut entry = entry_of(&item, format!("{id}/{name}"))?;
+            let unfinished = unfinished_name(&name).is_some();
+            if let Some(real) = unfinished_name(&name) {
+                entry.name = real.to_string();
+            }
+            out.push((slot_name, TrashEntry { entry, id, origin, deleted, unfinished }));
         }
-        out.push(TrashEntry { entry, id, origin, deleted, unfinished });
     }
-    out.sort_by(|a, b| b.id.cmp(&a.id));
-    Ok(out)
+    out.sort_by(|a, b| b.0.cmp(&a.0));
+    Ok(out.into_iter().map(|(_, t)| t).collect())
 }
 
 /// Puts a trashed item back where it was, recreating its folders, and keeps both on a clash.
@@ -437,17 +556,28 @@ pub fn restore(root: &Path, id: &str) -> Result<PathBuf> {
     let origin = resolve(root, &item.origin)?;
     let parent = origin.parent().ok_or_else(outside)?;
     fs::create_dir_all(parent)?;
-    let target = free_name(parent, &item.entry.name);
-    let slot = trash_dir(root)?.join(id);
-    fs::rename(slot.join(&item.entry.name), &target)?;
+    let slot = slot_path(root, id);
+    let stored = fs::read_dir(&slot)?.filter_map(|e| e.ok()).map(|e| e.file_name()).find(|n| n != ORIGIN).ok_or_else(|| Error::Invalid("That's no longer in the trash.".into()))?;
+    let target = free_name(parent, &stored.to_string_lossy());
+    fs::rename(slot.join(&stored), &target)?;
     fs::remove_dir_all(slot)?;
     Ok(target)
 }
 
+/// Empties every disk's trash. The list of disks stays.
 pub fn empty_trash(root: &Path) -> Result<()> {
-    let bin = trash_dir(root)?;
-    fs::remove_dir_all(&bin)?;
-    fs::create_dir(&bin)?;
+    let disks = disk_roots(root);
+    let listed = fs::read_to_string(root.join(TRASH).join(DISKS)).ok();
+    for disk in &disks {
+        let bin = disk_dir(root, disk).join(TRASH);
+        if bin.exists() {
+            fs::remove_dir_all(&bin)?;
+        }
+        fs::create_dir(&bin)?;
+    }
+    if let Some(listed) = listed {
+        fs::write(root.join(TRASH).join(DISKS), listed)?;
+    }
     Ok(())
 }
 

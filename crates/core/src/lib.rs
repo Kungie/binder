@@ -21,6 +21,9 @@ pub enum Error {
     VaultMissing(PathBuf),
     #[error("{0}")]
     Remote(String),
+    /// A rename the share refused because it crosses from one disk to another.
+    #[error("That move crosses disks.")]
+    CrossDisk,
 }
 
 pub mod agent;
