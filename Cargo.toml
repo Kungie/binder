@@ -1,8 +1,15 @@
 [workspace]
 resolver = "2"
-members = ["crates/core"]
+members = ["crates/core", "app/src-tauri"]
 
 [workspace.package]
 version = "2.0.0"
 edition = "2024"
 license = "AGPL-3.0-only"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
