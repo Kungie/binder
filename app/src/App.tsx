@@ -1,6 +1,8 @@
 import type { Api } from "./lib/api";
 import { type Screen, StoreProvider, useStore } from "./lib/store";
 import { Sidebar } from "./components/Sidebar";
+import { NewTask } from "./components/NewTask";
+import { Tasks } from "./screens/Tasks";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="p-6 text-text-2">{title}</div>;
@@ -12,7 +14,7 @@ function Screens() {
     case "overview":
       return <Placeholder title="Overview" />;
     case "tasks":
-      return <Placeholder title="Tasks" />;
+      return <Tasks />;
     case "projects":
       return <Placeholder title="Projects" />;
     case "settings":
@@ -21,6 +23,7 @@ function Screens() {
 }
 
 export function Shell() {
+  const { creatingTask } = useStore();
   return (
     <div className="flex h-full">
       <Sidebar />
@@ -28,6 +31,7 @@ export function Shell() {
         <div className="h-3 shrink-0" data-tauri-drag-region />
         <Screens />
       </main>
+      {creatingTask && <NewTask />}
     </div>
   );
 }
