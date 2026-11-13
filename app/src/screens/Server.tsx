@@ -5,7 +5,7 @@ import { Button, Notice } from "../components/ui";
 import { clock, gb, percent, useServer } from "../lib/useServer";
 
 export function Server() {
-  const { target, status, error, refresh } = useServer(10_000);
+  const { target, status, error, refresh } = useServer(30_000);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
