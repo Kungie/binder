@@ -111,7 +111,7 @@ export function Board({ tasks }: { tasks: Task[] }) {
               if (over?.status !== status || over.before !== null) setOver({ status, before: null });
             }}
             onDrop={(e) => dropped(e, status, null)}
-            className={`flex w-[288px] shrink-0 flex-col rounded-panel bg-panel ${over?.status === status ? "ring-1 ring-line-strong" : ""}`}
+            className={`flex min-w-[248px] max-w-[360px] flex-1 flex-col rounded-panel bg-panel ${over?.status === status ? "ring-1 ring-line-strong" : ""}`}
           >
             <header className="flex h-10 shrink-0 items-center gap-2 px-3">
               <StatusIcon status={status} />

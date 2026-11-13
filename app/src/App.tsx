@@ -11,6 +11,8 @@ import { Overview } from "./screens/Overview";
 import { Devices } from "./screens/Devices";
 import { Server } from "./screens/Server";
 import { Printer } from "./screens/Printer";
+import { Cloud } from "./screens/Cloud";
+import { Transfers } from "./components/Transfers";
 
 function Screens() {
   const { screen } = useStore();
@@ -25,6 +27,8 @@ function Screens() {
       return <Devices />;
     case "server":
       return <Server />;
+    case "cloud":
+      return <Cloud />;
     case "printer":
       return <Printer />;
     case "settings":
@@ -40,6 +44,7 @@ export function Shell() {
       <main className="relative flex min-w-0 flex-1 flex-col">
         <div className="h-3 shrink-0" data-tauri-drag-region />
         <Screens />
+        <Transfers />
       </main>
       {creatingTask && <NewTask />}
       {creatingProject && <NewProject />}

@@ -43,6 +43,50 @@ function ClaudeCode() {
   );
 }
 
+/** Where Cloud is mounted on this Mac and the share address Connect opens. */
+function CloudSettings() {
+  const { api } = useStore();
+  const [path, setPath] = useState<string | null>(null);
+  const [share, setShare] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    void api.getConfig().then((c) => {
+      setPath(c.cloud);
+      setShare(c.cloud_share ?? "");
+    });
+  }, [api]);
+  const save = async () => {
+    const address = share.trim();
+    if (address && !address.startsWith("smb://")) return setNote("The share address starts with smb://.");
+    await api.setConfig({ ...(await api.getConfig()), cloud: (path ?? "").trim() || "/Volumes/cloud", cloud_share: address || null });
+    setNote("Saved");
+  };
+  if (path === null) return null;
+  return (
+    <Panel title="Cloud">
+      <div className="flex flex-col gap-3 border-t border-line p-3">
+        <Field label="Mount folder">
+          <input aria-label="Cloud mount folder" className={`${fieldClass} font-mono`} value={path} onChange={(e) => (setPath(e.target.value), setNote(null))} />
+        </Field>
+        <Field label="Share address">
+          <div className="flex gap-2">
+            <input
+              aria-label="Cloud share address"
+              placeholder="smb://server/cloud"
+              className={`${fieldClass} font-mono`}
+              value={share}
+              onChange={(e) => (setShare(e.target.value), setNote(null))}
+            />
+            <Button aria-label="Save Cloud settings" onClick={() => void save()}>Save</Button>
+          </div>
+        </Field>
+        {note && <span className="text-[12px] text-text-3">{note}</span>}
+        <Notice>Cloud is a folder on the home server, shared over SMB like the vault. Connect in Finder once, save the password in the Keychain and add the share to Login Items. Your phone reaches it from Files, Connect to Server, over Tailscale.</Notice>
+      </div>
+    </Panel>
+  );
+}
+
 export function Settings() {
   const { api } = useStore();
   const vault = useVault();
@@ -92,6 +136,7 @@ export function Settings() {
             <Notice>The vault lives on the home server. Connect to its share in Finder once, save the password in the Keychain and add it to Login Items so it mounts at login.</Notice>
           </div>
         </Panel>
+        <CloudSettings />
         <ClaudeCode />
         <Panel title="Home server">
           <div className="flex flex-col gap-3 border-t border-line p-3">

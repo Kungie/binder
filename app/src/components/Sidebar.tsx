@@ -33,6 +33,7 @@ const NAV: { screen: Screen; label: string; d: string }[] = [
   { screen: "projects", label: "Projects", d: "M1.8 3.5h4l1.2 1.4h5.2v6.6H1.8z" },
   { screen: "devices", label: "Devices", d: "M2 3h10v6.5H2zM5 12h4M7 9.5V12" },
   { screen: "server", label: "Server", d: "M2 2.5h10v3.5H2zM2 8h10v3.5H2zM4.2 4.25h.01M4.2 9.75h.01" },
+  { screen: "cloud", label: "Cloud", d: "M4 11h6.2a2.8 2.8 0 0 0 .4-5.57A3.8 3.8 0 0 0 3.3 6.2 2.4 2.4 0 0 0 4 11z" },
   { screen: "printer", label: "Printer", d: "M3.5 5V1.8h7V5M2 5h10v5H2zM4 8.5h6v3.7H4z" },
 ];
 

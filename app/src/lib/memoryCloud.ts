@@ -88,8 +88,8 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
     async cloudStatus(): Promise<CloudStatus> {
       const on = opts.mounted();
       const used = entries.reduce((s, e) => s + e.size, 0);
-      const total = 2 * 1024 ** 4;
-      return { mounted: on, path: "/Volumes/cloud", space: on ? { total, free: total - used - 600 * 1024 ** 3 } : null };
+      const total = 2e12;
+      return { mounted: on, path: "/Volumes/cloud", space: on ? { total, free: total - used - 600e9 } : null };
     },
     async cloudList(rel: string, showHidden: boolean): Promise<CloudEntry[]> {
       mounted();

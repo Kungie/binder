@@ -10,6 +10,9 @@ import { clock, useServer } from "../lib/useServer";
 import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
 import { minutes, usePrinters } from "../lib/usePrinters";
+import { bytes } from "../lib/format";
+import { ago } from "../lib/time";
+import type { CloudEntry, CloudStatus } from "../lib/types";
 
 const WEEK = 7 * 24 * 3600;
 
@@ -58,6 +61,7 @@ export function Overview() {
           </Panel>
           <div className="flex min-w-0 flex-col gap-3">
           <ServerPanel />
+          <CloudPanel />
           <PrinterPanel />
           <Panel title="Done today" action={<span className="font-mono text-[11px] text-text-3">{doneToday.length}</span>}>
             <ul className="border-t border-line">
@@ -74,6 +78,61 @@ export function Overview() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Space on the share and the three most recently changed items at its root. */
+function CloudPanel() {
+  const { api, setScreen } = useStore();
+  const [status, setStatus] = useState<CloudStatus | null>(null);
+  const [recent, setRecent] = useState<CloudEntry[]>([]);
+  useEffect(() => {
+    let live = true;
+    void api.cloudStatus().then(async (s) => {
+      if (!live) return;
+      setStatus(s);
+      if (!s.mounted) return;
+      const list = await api.cloudList("", false).catch(() => []);
+      if (live) setRecent([...list].sort((a, b) => b.modified - a.modified).slice(0, 3));
+    });
+    return () => {
+      live = false;
+    };
+  }, [api]);
+  const space = status?.space;
+  return (
+    <Panel
+      title="Cloud"
+      label="Cloud"
+      action={
+        <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("cloud")}>
+          Open
+        </button>
+      }
+    >
+      <div className="flex flex-col gap-2 border-t border-line px-3 py-2.5 text-[12px]">
+        {!status?.mounted ? (
+          <span className="text-text-3">Not connected</span>
+        ) : (
+          space && (
+            <>
+              <span className="font-mono text-[11px] text-text-2">{`${bytes(space.free)} free of ${bytes(space.total)}`}</span>
+              <Progress value={space.total ? ((space.total - space.free) / space.total) * 100 : 0} label="Cloud space used" />
+            </>
+          )
+        )}
+      </div>
+      {recent.length > 0 && (
+        <ul className="border-t border-line">
+          {recent.map((e) => (
+            <li key={e.rel} className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px] last:border-b-0">
+              <span className="min-w-0 flex-1 truncate text-text-2">{e.name}</span>
+              <span className="shrink-0 text-[11px] text-text-3">{ago(e.modified)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

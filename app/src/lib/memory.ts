@@ -149,6 +149,10 @@ export function memoryApi(
 
   return {
     ...cloud,
+    // A spread copies a getter's value once; this one must stay live.
+    get cloudConnects() {
+      return cloud.cloudConnects;
+    },
     opened,
     githubSync,
     async openRepoPage(projectId) {
