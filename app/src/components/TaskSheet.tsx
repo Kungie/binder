@@ -30,6 +30,13 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
     onClose();
   };
 
+  // Opening a task is reading it: what needed attention no longer does.
+  useEffect(() => {
+    if (task.attention) void updateTask(task.id, { attention: false });
+    // Only when another task opens, not on every change to this one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
+
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && close.current();
     window.addEventListener("keydown", onKey);
@@ -91,12 +98,23 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
           </select>
         </Field>
         <Field label="Due">
-          <input
-            type="date"
-            className={`${fieldClass} font-mono`}
-            value={task.due ?? ""}
-            onChange={(e) => void updateTask(task.id, e.target.value ? { due: e.target.value } : { clear_due: true })}
-          />
+          <div className="flex gap-2">
+            <input
+              type="date"
+              aria-label="Due date"
+              className={`${fieldClass} min-w-0 flex-1 font-mono`}
+              value={task.due ?? ""}
+              onChange={(e) => void updateTask(task.id, e.target.value ? { due: e.target.value } : { clear_due: true })}
+            />
+            <input
+              type="time"
+              aria-label="Due time"
+              disabled={!task.due}
+              className={`${fieldClass} w-28 font-mono disabled:opacity-40`}
+              value={task.due_time ?? ""}
+              onChange={(e) => void updateTask(task.id, e.target.value ? { due_time: e.target.value } : { clear_due_time: true })}
+            />
+          </div>
         </Field>
         {task.assignee === "agent" && <AgentRun key={task.id} task={task} />}
         <textarea

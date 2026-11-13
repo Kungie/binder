@@ -3,7 +3,7 @@ import { type Screen, useStore } from "../lib/store";
 import { isClosed } from "../lib/types";
 import { ProjectDot } from "./ProjectDot";
 
-function Item({ active, onClick, icon, children, count }: { active: boolean; onClick(): void; icon: ReactNode; children: ReactNode; count?: number }) {
+function Item({ active, onClick, icon, children, count, dot }: { active: boolean; onClick(): void; icon: ReactNode; children: ReactNode; count?: number; dot?: boolean }) {
   return (
     <button
       type="button"
@@ -15,7 +15,8 @@ function Item({ active, onClick, icon, children, count }: { active: boolean; onC
     >
       <span className="flex w-4 justify-center text-text-3">{icon}</span>
       <span className="truncate">{children}</span>
-      {count !== undefined && <span className="ml-auto font-mono text-[11px] text-text-3">{count}</span>}
+      {dot && <span role="img" aria-label="Needs attention" className="ml-auto size-1.5 shrink-0 rounded-full bg-urgent" />}
+      {count !== undefined && <span className={`${dot ? "" : "ml-auto "}font-mono text-[11px] text-text-3`}>{count}</span>}
     </button>
   );
 }
@@ -38,6 +39,7 @@ const NAV: { screen: Screen; label: string; d: string }[] = [
 export function Sidebar() {
   const { screen, setScreen, tasks, projects, openProject, selectedProject } = useStore();
   const open = tasks.filter((t) => !isClosed(t.status)).length;
+  const attention = tasks.some((t) => t.attention);
   return (
     <nav aria-label="Main" className="flex h-full w-[208px] shrink-0 flex-col border-r border-line px-2 pb-3 pt-10" data-tauri-drag-region>
       <div className="mb-3 flex items-center gap-2 px-2" data-tauri-drag-region>
@@ -47,7 +49,7 @@ export function Sidebar() {
       </div>
       <div className="flex flex-col gap-px">
         {NAV.map((n) => (
-          <Item key={n.screen} active={screen === n.screen} onClick={() => setScreen(n.screen)} icon={<Glyph d={n.d} />} count={n.screen === "tasks" ? open : undefined}>
+          <Item key={n.screen} active={screen === n.screen} onClick={() => setScreen(n.screen)} icon={<Glyph d={n.d} />} count={n.screen === "tasks" ? open : undefined} dot={n.screen === "tasks" && attention}>
             {n.label}
           </Item>
         ))}

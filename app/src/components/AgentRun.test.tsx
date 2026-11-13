@@ -9,6 +9,8 @@ import { demoSeed, memoryApi } from "../lib/memory";
 async function open(keys: string, name: string) {
   const api = memoryApi(demoSeed());
   const user = userEvent.setup();
+  // These tests drive the list; the board has its own.
+  localStorage.setItem("binder.tasks.layout.all", "list");
   render(
     <StoreProvider api={api} initialScreen="tasks">
       <Shell />

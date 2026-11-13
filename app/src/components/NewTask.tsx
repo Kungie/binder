@@ -5,7 +5,7 @@ import { Button, fieldClass } from "./ui";
 
 /** The new-task dialog: a title, then project and assignee. Enter creates, Esc cancels. */
 export function NewTask() {
-  const { projects, view, createTask, setCreatingTask, screen, selectedProject } = useStore();
+  const { projects, view, createTask, setCreatingTask, screen, selectedProject, newTaskStatus } = useStore();
   const preset = view.kind === "project" ? view.id : screen === "projects" ? selectedProject : null;
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<number | "">(preset ?? "");
@@ -16,7 +16,7 @@ export function NewTask() {
   const submit = async () => {
     if (!title.trim()) return setError("Give it a title.");
     try {
-      await createTask({ title, project_id: projectId === "" ? undefined : projectId, assignee });
+      await createTask({ title, project_id: projectId === "" ? undefined : projectId, assignee, status: newTaskStatus ?? undefined });
       close();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

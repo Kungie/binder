@@ -11,6 +11,8 @@ const ORDER = ["ORB-4", "TSK-2", "LAB-2", "TSK-1", "ORB-3", "ORB-2"];
 async function setup(options = {}) {
   const api = memoryApi(demoSeed(), options);
   const user = userEvent.setup();
+  // These tests drive the list; the board has its own.
+  localStorage.setItem("binder.tasks.layout.all", "list");
   render(
     <StoreProvider api={api} initialScreen="tasks">
       <Shell />

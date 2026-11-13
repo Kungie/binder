@@ -519,14 +519,26 @@ export function demoSeed(): Seed {
     ...extra,
   });
   const tasks: Task[] = [
-    mk(1, "ORB-4", "Wire the sync status into the toolbar", { project_id: 1, status: "in_progress", priority: "high" }),
-    mk(2, "LAB-2", "Update all containers and prune old images", { project_id: 2, assignee: "agent", priority: "medium" }),
+    mk(1, "ORB-4", "Wire the sync status into the toolbar", {
+      project_id: 1,
+      status: "in_progress",
+      priority: "high",
+      notes: "Show the sync state beside the title, with the last error on hover.",
+    }),
+    mk(2, "LAB-2", "Update all containers and prune old images", {
+      project_id: 2,
+      assignee: "agent",
+      priority: "medium",
+      due: localDay(new Date(Date.now() + 86_400_000)),
+      due_time: "09:00",
+      notes: "Pull new images, restart one by one, then `docker image prune`. Skip **home-assistant** this week.",
+    }),
     mk(3, "ORB-3", "Write release notes for 0.4", { project_id: 1, due: day }),
     mk(4, "TSK-1", "Print a new case lid for the Pi", { priority: "low" }),
-    mk(5, "LAB-1", "Back up the Home Assistant config", { project_id: 2, assignee: "agent", status: "done" }),
+    mk(5, "LAB-1", "Back up the Home Assistant config", { project_id: 2, assignee: "agent", status: "done", attention: true, notes: "Copied to the backup share. 840 MB." }),
     mk(6, "ORB-2", "Try a lighter font for the sidebar", { project_id: 1, status: "backlog" }),
     mk(7, "TSK-2", "Order PETG, black and white", { priority: "urgent" }),
-    mk(8, "ORB-1", "Set up the project", { project_id: 1, status: "done" }),
+    mk(8, "ORB-1", "Set up the project", { project_id: 1, status: "done", updated: t - 20 * 86400 }),
   ];
   const container = (name: string, image: string, up = true) => ({
     name,

@@ -32,7 +32,7 @@ describe("Command palette", () => {
     const user = await setup();
     await user.keyboard("{Meta>}k{/Meta}");
     await user.keyboard("go to tasks{Enter}");
-    expect(await screen.findByRole("grid", { name: "Tasks" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "In progress" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
   });
 
@@ -56,7 +56,7 @@ describe("Overview", () => {
     await setup();
     expect(screen.getByRole("group", { name: "Open: 6" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "In progress: 1" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Done this week: 2" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Done this week: 1" })).toBeInTheDocument();
   });
 
   it("shows_open_tasks_and_done_today", async () => {

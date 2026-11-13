@@ -8,6 +8,9 @@ import { demoSeed, memoryApi } from "../lib/memory";
 async function setup(initialScreen: "tasks" | "projects" = "tasks") {
   const api = memoryApi(demoSeed());
   const user = userEvent.setup();
+  // These tests drive the list; the board has its own.
+  localStorage.setItem("binder.tasks.layout.all", "list");
+  localStorage.setItem("binder.tasks.layout.agent", "list");
   render(
     <StoreProvider api={api} initialScreen={initialScreen}>
       <Shell />
@@ -50,7 +53,7 @@ describe("review fixes", () => {
     await user.keyboard("hello");
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "ORB-4" })).toBeNull();
-    await waitFor(async () => expect((await find(api, "ORB-4")).notes).toBe("hello"));
+    await waitFor(async () => expect((await find(api, "ORB-4")).notes).toMatch(/hover\.hello$/));
   });
 
   it("selection_is_dropped_when_rows_leave", async () => {

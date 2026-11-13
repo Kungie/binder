@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Api } from "./api";
-import type { GithubSync, NewProject, NewTask, Project, ProjectPatch, Task, TaskPatch, TaskView } from "./types";
+import type { GithubSync, NewProject, NewTask, Project, ProjectPatch, Status, Task, TaskPatch, TaskView } from "./types";
 
 export type Screen = "overview" | "tasks" | "projects" | "devices" | "server" | "printer" | "settings";
 
@@ -15,7 +15,9 @@ export interface Store {
   selectedProject: number | null;
   openProject(id: number): void;
   creatingTask: boolean;
-  setCreatingTask(v: boolean): void;
+  /** Opens or closes New task; a status starts the task in that board column. */
+  setCreatingTask(v: boolean, status?: Status): void;
+  newTaskStatus: Status | null;
   creatingProject: boolean;
   setCreatingProject(v: boolean): void;
   reload(): Promise<void>;
@@ -42,7 +44,12 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
   const [screen, setScreen] = useState<Screen>(initialScreen);
   const [view, setView] = useState<TaskView>({ kind: "all" });
   const [selectedProject, setSelectedProject] = useState<number | null>(null);
-  const [creatingTask, setCreatingTask] = useState(false);
+  const [creatingTask, setCreating] = useState(false);
+  const [newTaskStatus, setNewTaskStatus] = useState<Status | null>(null);
+  const setCreatingTask = useCallback((v: boolean, status?: Status) => {
+    setCreating(v);
+    setNewTaskStatus(v ? (status ?? null) : null);
+  }, []);
   const [creatingProject, setCreatingProject] = useState(false);
   const [doneVersion, setDoneVersion] = useState(0);
   const [github, setGithub] = useState<GithubSync | null>(null);
@@ -106,6 +113,7 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
       },
       creatingTask,
       setCreatingTask,
+      newTaskStatus,
       creatingProject,
       setCreatingProject,
       reload,
@@ -125,7 +133,7 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
       syncing,
       syncGithub,
     }),
-    [api, tasks, projects, screen, view, selectedProject, creatingTask, creatingProject, reload, after, doneVersion, github, syncing, syncGithub],
+    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, github, syncing, syncGithub],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
