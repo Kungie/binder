@@ -12,8 +12,10 @@ A personal desktop dashboard for one developer: a task table for the owner and f
 ## Layout
 
 ```
-crates/core/      Rust library: SQLite, tasks, projects, config, Obsidian notes (no Tauri)
-app/src-tauri/    Tauri app: thin commands over the core
+crates/core/      Rust library, no Tauri: SQLite, tasks, projects, devices, notes, SSH runner (server status,
+                  agent runs), git status, Bambu reports, Claude Code session summaries, hook install
+crates/cli/       binder-cli: the Claude Code hook (`hook <event>`) and the detached `summarize <session>`
+app/src-tauri/    Tauri app: thin commands over the core, the printer MQTT workers (printer.rs)
 app/src/          React + TypeScript + Tailwind interface
 ```
 
@@ -23,7 +25,11 @@ The interface talks to an `Api` interface: Tauri `invoke` in the app, an in-memo
 
 - `make test`, `make dev`, `make build`, `make preview`. Always build through `make`.
 - `~/Desktop` syncs with iCloud, which breaks codesign on build output, so the Makefile sets `CARGO_TARGET_DIR` to `~/Library/Caches/Binder/target`.
-- Data lives in `~/Library/Application Support/io.github.kungie.binder/` (`binder.db`, `config.toml`).
+- Data lives in `~/Library/Application Support/io.github.kungie.binder/` (`binder.db`, `config.toml`). The app and `binder-cli` share `binder.db` (WAL, 5 s busy timeout).
+- `binder-cli` ships as a Tauri sidecar: the Makefile copies it to `app/src-tauri/binaries/binder-cli-<triple>` before any build, and Tauri puts it in `Contents/MacOS/`.
+- Everything on the home server goes through the `Remote` trait (`SshRemote` in the app, `FakeRemote` in tests): `ssh -o BatchMode=yes -o ConnectTimeout=5`, never touching `~/.ssh`. Agent runs keep their files in `~/.binder-agent/` on the server.
+- Secrets: the printer access code lives in the Keychain (service `io.github.kungie.binder.printer`, account the serial); the printer certificate is pinned by SHA-256 in `config.toml`. Session text is redacted (`redact.rs`) before any model sees it.
+- `make install` replaces `/Applications/Binder.app`. The owner runs it; don't run it unasked.
 - The Obsidian vault lives on the Raspberry Pi and is mounted on the Mac at `/Volumes/vault` over SMB. Binder only appends under `## Done` in a project note and writes nothing when the vault isn't mounted.
 
 ## Look

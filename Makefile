@@ -1,4 +1,4 @@
-.PHONY: dev test build preview clean sidecar sidecar-release
+.PHONY: dev test build install preview clean sidecar sidecar-release
 
 # ~/Desktop syncs with iCloud, which stamps Finder attributes on build output and breaks codesign.
 # Build outside it.
@@ -27,6 +27,10 @@ test: sidecar
 
 build: sidecar-release
 	npm --prefix app run tauri build -- --bundles app
+
+install: build
+	rm -rf /Applications/Binder.app
+	cp -R $(CARGO_TARGET_DIR)/release/bundle/macos/Binder.app /Applications/
 
 preview:
 	npm --prefix app run dev
