@@ -204,6 +204,7 @@ impl Fast<'_> {
         if !dst_dir.is_dir() {
             return Err(Error::Invalid("Upload into a folder.".into()));
         }
+        cloud::not_inside(src, &dst_dir)?;
         if conflict == Conflict::Skip && exists(&dst_dir.join(&name)) {
             return Ok(None);
         }
@@ -266,8 +267,12 @@ impl Fast<'_> {
     pub fn download_dir(&self, rel: &str, dst_dir: &Path, conflict: Conflict, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<Option<PathBuf>> {
         let name = last_name(rel)?;
         let remote = self.remote(rel)?;
-        if !resolve(self.root, rel)?.is_dir() {
+        let src = resolve(self.root, rel)?;
+        if !src.is_dir() {
             return Err(Error::Invalid("Download a folder.".into()));
+        }
+        if dst_dir.is_dir() {
+            cloud::not_inside(&src, dst_dir)?;
         }
         if conflict == Conflict::Replace {
             return Err(Error::Invalid("Replace only works inside Cloud.".into()));
@@ -328,14 +333,11 @@ impl Fast<'_> {
         last_name(rel)?;
         let name = plain_name(name)?;
         let src = resolve(self.root, rel)?;
-        let meta = fs::symlink_metadata(&src)?;
         let dst_dir = resolve(self.root, dst_dir_rel)?;
         if !dst_dir.is_dir() {
             return Err(Error::Invalid("Copy into a folder.".into()));
         }
-        if meta.is_dir() && dst_dir.canonicalize()?.starts_with(src.canonicalize()?) {
-            return Err(Error::Invalid("A folder can't go inside itself.".into()));
-        }
+        cloud::not_inside(&src, &dst_dir)?;
         if conflict == Conflict::Skip && exists(&dst_dir.join(&name)) {
             return Ok(None);
         }
@@ -357,18 +359,28 @@ impl Fast<'_> {
         let zip = self.remote(rel)?;
         fs::symlink_metadata(resolve(self.root, rel)?)?;
         let stem = Path::new(&last_name(rel)?).file_stem().map(|s| s.to_string_lossy().into_owned()).ok_or_else(|| Error::Invalid("Nothing to extract.".into()))?;
-        let names = run(self.shell, &format!("unzip -Z1 {}", quote(&zip)))?;
+        let rel_dir = parent_rel(rel);
+        // unzip reads `[`, `*` and `?` in an archive's name as a pattern, so it only ever sees a plain-named link.
+        let link = self.join(&self.remote(&rel_dir)?, &partial_name("archive.zip"));
+        let l = quote(&link);
+        run(self.shell, &format!("ln -s -- {} {l}", quote(&zip)))?;
+        let out = self.extract_link(&l, &rel_dir, &stem, cancel, progress);
+        let _ = run(self.shell, &format!("rm -f -- {l}"));
+        out
+    }
+
+    fn extract_link(&self, l: &str, rel_dir: &str, stem: &str, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+        let names = run(self.shell, &format!("unzip -Z1 {l}"))?;
         if names.lines().any(leaves) {
             return Err(escapes());
         }
         let total = names.lines().filter(|l| !l.is_empty()).count() as u64;
-        let rel_dir = parent_rel(rel);
-        let dir = resolve(self.root, &rel_dir)?;
-        let partial = partial_name(&stem);
-        let remote_partial = self.join(&self.remote(&rel_dir)?, &partial);
+        let dir = resolve(self.root, rel_dir)?;
+        let partial = partial_name(stem);
+        let remote_partial = self.join(&self.remote(rel_dir)?, &partial);
         let local_partial = dir.join(&partial);
         let p = quote(&remote_partial);
-        let script = format!("mkdir {p} && {}", guarded(&format!("unzip -o {} -d {p}", quote(&zip))));
+        let script = format!("mkdir {p} && {}", guarded(&format!("unzip -o {l} -d {p}")));
         let mut done = 0u64;
         let watched = self.watch(&script, cancel, &mut |l| {
             let l = l.trim_start();
@@ -382,7 +394,7 @@ impl Fast<'_> {
             return Err(e);
         }
         progress(total, total);
-        self.land(&local_partial, &remote_partial, &dir, &stem, Conflict::KeepBoth, false)?.ok_or_else(|| unreachable!("KeepBoth always lands"))
+        self.land(&local_partial, &remote_partial, &dir, stem, Conflict::KeepBoth, false)?.ok_or_else(|| unreachable!("KeepBoth always lands"))
     }
 
     /// Zips items from one folder on the server, as `compress_local` names them. Progress counts items.

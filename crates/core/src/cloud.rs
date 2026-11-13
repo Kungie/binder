@@ -289,6 +289,7 @@ pub fn copy_into_as(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Option<PathBuf>> {
     let name = checked_name(name)?.to_string();
+    not_inside(src, dst_dir)?;
     if conflict == Conflict::Replace && trash_root.is_none() {
         return Err(Error::Invalid("Replace only works inside Cloud.".into()));
     }
@@ -311,6 +312,14 @@ pub fn copy_into_as(
         let _ = remove(&partial);
     }
     landed
+}
+
+/// Refuses a folder going into itself or a folder inside it, which would copy until the path is too long.
+pub(crate) fn not_inside(src: &Path, dst_dir: &Path) -> Result<()> {
+    if fs::symlink_metadata(src)?.is_dir() && dst_dir.canonicalize()?.starts_with(src.canonicalize()?) {
+        return Err(Error::Invalid("A folder can't go inside itself.".into()));
+    }
+    Ok(())
 }
 
 /// A partial name no other copy, in this process or another, can pick: `.binder-partial-<pid>-<n>-<name>`.

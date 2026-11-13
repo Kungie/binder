@@ -516,3 +516,18 @@ fn list_hides_disk_trash_and_lost_found() {
     fs::create_dir(r.join("Photos/.trash")).unwrap();
     assert!(names(&list(r, "Photos", true).unwrap()).contains(&".trash"), "only a disk's own trash hides");
 }
+
+#[test]
+fn copy_a_folder_into_itself_is_refused() {
+    let d = root();
+    let r = d.path();
+    let never = AtomicBool::new(false);
+    for dst in ["Photos", "Photos/2026"] {
+        let got = copy_into_as(&r.join("Photos"), &r.join(dst), "Photos", Conflict::KeepBoth, Some(r), &never, &mut |_, _| {});
+        assert!(matches!(&got, Err(Error::Invalid(m)) if m == "A folder can't go inside itself."), "{dst}: {got:?}");
+    }
+    let names: Vec<String> = fs::read_dir(r.join("Photos/2026")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert!(names.is_empty(), "{names:?}");
+    let file = copy_into_as(&r.join("Photos/a.jpg"), &r.join("Photos/2026"), "a.jpg", Conflict::KeepBoth, Some(r), &never, &mut |_, _| {}).unwrap();
+    assert_eq!(fs::read_to_string(file.unwrap()).unwrap(), "jpg");
+}

@@ -320,3 +320,37 @@ fn fast_move_across_and_space() {
     assert!(s.total.abs_diff(m.total) < 1 << 20, "{s:?} {m:?}");
     assert!(f.space("../x").is_err());
 }
+
+#[test]
+fn extract_a_zip_whose_name_has_wildcards() {
+    let w = World::new();
+    let f = w.fast();
+    fs::create_dir_all(w.root().join("one")).unwrap();
+    fs::write(w.root().join("one/wrong.txt"), "wrong").unwrap();
+    f.compress(&["one".into()], &never(), &mut |_, _| {}).unwrap();
+    fs::rename(w.root().join("one.zip"), w.root().join("Photos 1.zip")).unwrap();
+    f.compress(&["Photos".into()], &never(), &mut |_, _| {}).unwrap();
+    fs::rename(w.root().join("Photos.zip"), w.root().join("Photos [12].zip")).unwrap();
+    fs::copy(w.root().join("Photos [12].zip"), w.root().join("a*b.zip")).unwrap();
+    fs::copy(w.root().join("Photos 1.zip"), w.root().join("aXb.zip")).unwrap();
+    let out = f.extract("Photos [12].zip", &never(), &mut |_, _| {}).unwrap();
+    assert_eq!(out, w.root().join("Photos [12]"));
+    assert!(out.join("Photos/a.jpg").exists(), "{:?}", names(&out));
+    assert!(!out.join("one").exists(), "the other zip was unpacked");
+    let star = f.extract("a*b.zip", &never(), &mut |_, _| {}).unwrap();
+    assert!(star.join("Photos/a.jpg").exists() && !star.join("one").exists());
+    assert!(partials(&w.root()).is_empty(), "{:?}", names(&w.root()));
+}
+
+#[test]
+fn upload_or_download_a_folder_into_itself_is_refused() {
+    let w = World::new();
+    let f = w.fast();
+    let inside = |r: binder_core::Result<Option<PathBuf>>| matches!(&r, Err(Error::Invalid(m)) if m == "A folder can't go inside itself.");
+    let up = f.upload_dir(&w.root().join("Photos"), "Photos/2026", Conflict::KeepBoth, &never(), &mut |_, _| {});
+    assert!(inside(up));
+    let down = f.download_dir("Photos", &w.root().join("Photos/2026"), Conflict::KeepBoth, &never(), &mut |_, _| {});
+    assert!(inside(down));
+    assert_eq!(names(&w.root().join("Photos/2026")), vec!["b.jpg"]);
+    assert!(partials(&w.root()).is_empty());
+}
