@@ -7,7 +7,7 @@ export function PriorityIcon({ priority, size = 14 }: { priority: Priority; size
   if (priority === "urgent") {
     return (
       <svg width={size} height={size} viewBox="0 0 14 14" role="img" aria-label={label} className="shrink-0">
-        <rect x="1.5" y="1.5" width="11" height="11" rx="2.5" fill="var(--color-text)" />
+        <rect x="1.5" y="1.5" width="11" height="11" rx="2.5" fill="var(--color-urgent)" />
         <path d="M7 4v3.6" stroke="var(--color-bg)" strokeWidth="1.6" strokeLinecap="round" />
         <circle cx="7" cy="9.9" r="0.9" fill="var(--color-bg)" />
       </svg>

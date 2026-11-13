@@ -39,7 +39,7 @@ export function DonePrompt({ projectId, projectName, initial, onClose }: { proje
           if (e.key === "Enter") void submit();
           if (e.key === "Escape") onClose();
         }}
-        className="h-7 min-w-0 flex-1 rounded-control border border-line-strong bg-bg px-2 focus:border-text-3 focus:outline-none"
+        className="h-7 min-w-0 flex-1 rounded-control border border-line-strong bg-card px-2 focus:border-text-3 focus:outline-none"
       />
       {error ? <span className="shrink-0 text-text">{error.startsWith("Vault not connected") ? "Vault not connected" : error}</span> : <span className="shrink-0 font-mono text-[11px] text-text-3">enter · esc</span>}
     </div>

@@ -99,7 +99,7 @@ export function AgentRun({ task }: { task: Task }) {
       </div>
       {error && <Notice>{error}</Notice>}
       {run?.tail && (
-        <pre aria-label="Log" className="max-h-48 overflow-auto whitespace-pre-wrap rounded-control bg-bg p-2 font-mono text-[11px] leading-relaxed text-text-2">
+        <pre aria-label="Log" className="max-h-48 overflow-auto whitespace-pre-wrap rounded-control bg-card p-2 font-mono text-[11px] leading-relaxed text-text-2">
           {run.tail}
         </pre>
       )}

@@ -19,7 +19,7 @@ export function Button({ variant = "secondary", className = "", ...rest }: Butto
 }
 
 export const fieldClass =
-  "h-7 w-full rounded-control border border-line-strong bg-bg px-2 text-[12px] text-text placeholder:text-text-3 focus:border-text-3 focus:outline-none";
+  "h-7 w-full rounded-control border border-line bg-card px-2 text-[12px] text-text placeholder:text-text-3 focus:border-text-3 focus:outline-none";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (

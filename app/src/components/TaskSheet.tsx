@@ -105,7 +105,7 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={() => notes !== task.notes && void updateTask(task.id, { notes })}
-          className="min-h-40 flex-1 resize-none rounded-control border border-line bg-bg p-2 font-mono text-[12px] leading-relaxed text-text placeholder:text-text-3 focus:border-text-3 focus:outline-none"
+          className="min-h-40 flex-1 resize-none rounded-control border border-line bg-card p-2 font-mono text-[12px] leading-relaxed text-text placeholder:text-text-3 focus:border-text-3 focus:outline-none"
         />
       </div>
       <footer className="flex items-center border-t border-line px-4 py-3">

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { type Screen, useStore } from "../lib/store";
 import { isClosed } from "../lib/types";
+import { ProjectDot } from "./ProjectDot";
 
 function Item({ active, onClick, icon, children, count }: { active: boolean; onClick(): void; icon: ReactNode; children: ReactNode; count?: number }) {
   return (
@@ -38,7 +39,7 @@ export function Sidebar() {
   const { screen, setScreen, tasks, projects, openProject, selectedProject } = useStore();
   const open = tasks.filter((t) => !isClosed(t.status)).length;
   return (
-    <nav aria-label="Main" className="flex h-full w-[220px] shrink-0 flex-col border-r border-line px-2 pb-3 pt-10" data-tauri-drag-region>
+    <nav aria-label="Main" className="flex h-full w-[208px] shrink-0 flex-col border-r border-line px-2 pb-3 pt-10" data-tauri-drag-region>
       <div className="mb-3 flex items-center gap-2 px-2" data-tauri-drag-region>
         <span className="h-2.5 w-2.5 rounded-[3px] bg-text" aria-hidden="true" />
         <span className="font-medium">Binder</span>
@@ -54,13 +55,13 @@ export function Sidebar() {
       <div className="mb-1 mt-5 px-2 text-[11px] text-text-3">Projects</div>
       <div className="flex min-h-0 flex-col gap-px overflow-y-auto">
         {projects
-          .filter((p) => p.state === "active")
+          .filter((p) => p.state === "active" && !p.archived)
           .map((p) => (
             <Item
               key={p.id}
               active={screen === "projects" && selectedProject === p.id}
               onClick={() => openProject(p.id)}
-              icon={<span className="h-1.5 w-1.5 rounded-full bg-text" />}
+              icon={<ProjectDot color={p.color} />}
             >
               {p.name}
             </Item>

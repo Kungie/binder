@@ -5,33 +5,44 @@
 @import "@fontsource/geist-mono/500.css";
 
 @theme {
-  --color-bg: #000000;
-  --color-panel: #0a0a0a;
-  --color-raised: #141414;
-  --color-line: #1c1c1c;
-  --color-line-strong: #2a2a2a;
+  --color-bg: #0b0b0c;
+  --color-panel: #141416;
+  --color-card: #1c1c1f;
+  --color-raised: #242428;
+  --color-line: #26262a;
+  --color-line-strong: #34343a;
   --color-text: #ededed;
   --color-text-2: #a1a1a1;
   --color-text-3: #6b6b6b;
+
+  /* Colour means something, and stays small: icons, dots, chip icons, 2 px bars. */
+  --color-st-backlog: #6b6b6b;
+  --color-st-todo: #d4d4d4;
+  --color-st-progress: #f2c94c;
+  --color-st-done: #8b7cf6;
+  --color-st-canceled: #6b6b6b;
+  --color-urgent: #f2994a;
+  --color-ok: #4cb782;
+  --color-bad: #eb5757;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
-  --radius-control: 6px;
-  --radius-panel: 8px;
+  --radius-control: 8px;
+  --radius-panel: 10px;
   --shadow-menu: 0 12px 32px rgb(0 0 0 / 0.6), 0 0 0 1px var(--color-line-strong);
 
-  /* The shadcn roles PanelUI's components read, mapped onto Binder's black and white. */
+  /* The shadcn roles PanelUI's components read, mapped onto Binder's tokens. */
   --color-foreground: #ededed;
-  --color-card: #0a0a0a;
   --color-card-foreground: #ededed;
-  --color-muted: #141414;
+  --color-muted: #242428;
   --color-muted-foreground: #6b6b6b;
-  --color-secondary: #141414;
-  --color-border: #1c1c1c;
-  --color-destructive: #ededed;
+  --color-secondary: #242428;
+  --color-border: #26262a;
+  --color-destructive: #eb5757;
   --color-primary: #ededed;
-  --radius-xl: 8px;
-  --radius-2xl: 8px;
-  --radius-3xl: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 10px;
+  --radius-3xl: 10px;
   --font-weight-semibold: 500;
   --font-weight-bold: 500;
   --shadow-xs: none;

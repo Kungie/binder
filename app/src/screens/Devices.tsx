@@ -142,7 +142,7 @@ function DeviceSheet({ device, onClose, onChanged }: { device: Device; onClose()
             value={form.note}
             onChange={set("note")}
             placeholder="Where it is, what it runs"
-            className="min-h-32 flex-1 resize-none rounded-control border border-line bg-bg p-2 font-mono text-[12px] leading-relaxed text-text placeholder:text-text-3 focus:border-text-3 focus:outline-none"
+            className="min-h-32 flex-1 resize-none rounded-control border border-line bg-card p-2 font-mono text-[12px] leading-relaxed text-text placeholder:text-text-3 focus:border-text-3 focus:outline-none"
           />
         </label>
       </div>

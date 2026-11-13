@@ -20,7 +20,7 @@ export function Server() {
         )}
       </header>
       {target === null && (
-        <div className="flex max-w-[640px] flex-col gap-3 px-5">
+        <div className="flex max-w-[960px] flex-col gap-3 px-5">
           <Panel title="Connect the home server">
             <div className="flex flex-col gap-3 border-t border-line p-3">
               <ServerTargetForm onSaved={() => void refresh()} />

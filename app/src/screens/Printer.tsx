@@ -19,7 +19,7 @@ export function Printer() {
           Add printer
         </Button>
       </header>
-      <div className="flex max-w-[760px] flex-col gap-3 px-5 pb-5">
+      <div className="flex max-w-[960px] flex-col gap-3 px-5 pb-5">
         {printers.map((p) => (
           <PrinterPanel key={p.config.serial} view={p} onRemoved={() => void reload()} />
         ))}

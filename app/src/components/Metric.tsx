@@ -21,7 +21,7 @@ export function Dot({ on, label }: { on: boolean; label?: string }) {
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${on ? "bg-text" : "border border-text-3"}`}
+      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${on ? "bg-ok" : "border border-bad"}`}
     />
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Panel } from "../components/Panel";
+import { ProjectDot } from "../components/ProjectDot";
 import { TaskBoard } from "../components/TaskBoard";
 import { Button, Notice } from "../components/ui";
 import { pickFolder } from "../lib/pick";
@@ -121,7 +122,7 @@ function Detail({ project }: { project: Project }) {
   };
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+    <div className="flex min-w-0 max-w-[960px] flex-1 flex-col gap-4 overflow-y-auto p-5">
       <header className="flex items-center gap-3">
         <h1 className="text-[15px] font-medium">{project.name}</h1>
         <span className="font-mono text-[11px] text-text-3">{project.prefix}</span>
@@ -129,7 +130,7 @@ function Detail({ project }: { project: Project }) {
           aria-label="State"
           value={project.state}
           onChange={(e) => void updateProject(project.id, { state: e.target.value as ProjectState })}
-          className="h-6 rounded-control border border-line bg-bg px-1.5 text-[12px] text-text-2"
+          className="h-6 rounded-control border border-line bg-card px-1.5 text-[12px] text-text-2"
         >
           <option value="active">Active</option>
           <option value="paused">Paused</option>
@@ -199,7 +200,7 @@ export function Projects() {
                 onClick={() => openProject(p.id)}
                 className={`flex h-8 w-full items-center gap-2 rounded-control px-2 text-left text-[12px] ${p.id === current?.id ? "bg-raised text-text" : "text-text-2 hover:bg-raised/60"}`}
               >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${p.state === "active" ? "bg-text" : "border border-text-3"}`} aria-hidden="true" />
+                <ProjectDot color={p.color} />
                 <span className="truncate">{p.name}</span>
                 <span className="ml-auto font-mono text-[11px] text-text-3">{p.prefix}</span>
                 <span className="w-5 text-right font-mono text-[11px] text-text-3">{openCount(p.id)}</span>
