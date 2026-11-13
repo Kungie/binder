@@ -29,6 +29,7 @@ pub mod db;
 pub mod devices;
 pub mod model;
 pub mod notes;
+pub mod printer;
 pub mod projects;
 pub mod remote;
 pub mod repo;
