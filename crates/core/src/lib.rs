@@ -21,8 +21,10 @@ pub enum Error {
     VaultMissing(PathBuf),
 }
 
+pub mod config;
 pub mod db;
 pub mod model;
+pub mod notes;
 pub mod projects;
 pub mod tasks;
 
