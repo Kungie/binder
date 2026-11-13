@@ -1,3 +1,4 @@
+mod apps;
 mod commands;
 mod printer;
 mod transfers;
@@ -13,6 +14,10 @@ pub struct AppState {
     pub config_path: PathBuf,
     pub printers: printer::Printers,
     pub transfers: std::sync::Arc<transfers::Transfers>,
+    /// Whether the Cloud fast path is on, checked once per run.
+    pub fast: Mutex<Option<bool>>,
+    /// The Quick Look window, while it's open.
+    pub quicklook: Mutex<Option<std::process::Child>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,7 +32,7 @@ pub fn run() {
             let config = Config::load(&config_path)?;
             let db = Db::open(&dir.join("binder.db"))?;
             let printers = config.printers.clone();
-            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default(), transfers: Default::default() });
+            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default(), transfers: Default::default(), fast: Default::default(), quicklook: Default::default() });
             for p in printers {
                 printer::start(app.handle(), p);
             }
@@ -105,6 +110,17 @@ pub fn run() {
             commands::cloud_upload,
             commands::cloud_download,
             commands::cloud_cancel,
+            commands::cloud_copy,
+            commands::cloud_duplicate,
+            commands::cloud_compress,
+            commands::cloud_extract,
+            commands::cloud_info,
+            commands::cloud_size,
+            commands::cloud_space,
+            commands::cloud_fast_path,
+            commands::cloud_quicklook,
+            commands::cloud_apps_for,
+            commands::cloud_open_with,
         ])
         .run(tauri::generate_context!())
         .expect("Binder could not start");

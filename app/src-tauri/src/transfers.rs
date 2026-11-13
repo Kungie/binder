@@ -19,10 +19,19 @@ pub enum TransferState {
     Failed,
 }
 
+/// What `done` and `total` count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Unit {
+    Bytes,
+    Items,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TransferEvent {
     pub id: u64,
     pub name: String,
+    pub unit: Unit,
     pub done: u64,
     pub total: u64,
     pub state: TransferState,
@@ -37,7 +46,7 @@ pub struct Transfers {
 
 impl Transfers {
     /// Starts `work` on a thread and returns its id. `work` gets the cancel flag and a progress callback.
-    pub fn spawn<W, E>(self: &Arc<Self>, name: String, emit: E, work: W) -> u64
+    pub fn spawn<W, E>(self: &Arc<Self>, name: String, unit: Unit, emit: E, work: W) -> u64
     where
         W: FnOnce(&AtomicBool, &mut dyn FnMut(u64, u64)) -> Result<()> + Send + 'static,
         E: Fn(TransferEvent) + Send + 'static,
@@ -47,7 +56,7 @@ impl Transfers {
         self.flags.lock().unwrap().insert(id, flag.clone());
         let me = self.clone();
         std::thread::spawn(move || {
-            let event = |done, total, state, error| TransferEvent { id, name: name.clone(), done, total, state, error };
+            let event = |done, total, state, error| TransferEvent { id, name: name.clone(), unit, done, total, state, error };
             let (mut done, mut total) = (0, 0);
             let mut last: Option<Instant> = None;
             let result = work(&flag, &mut |d, t| {
@@ -89,7 +98,7 @@ mod tests {
     fn cancel_flag_stops_a_running_transfer() {
         let transfers = Arc::new(Transfers::default());
         let (tx, rx) = mpsc::channel();
-        let id = transfers.spawn("big.mov".into(), move |e| tx.send(e).unwrap(), |cancel, progress| {
+        let id = transfers.spawn("big.mov".into(), Unit::Bytes, move |e| tx.send(e).unwrap(), |cancel, progress| {
             for i in 0..1000u64 {
                 if cancel.load(Ordering::SeqCst) {
                     return Err(Error::Invalid("Cancelled.".into()));
@@ -112,7 +121,7 @@ mod tests {
     fn progress_is_throttled_and_the_end_always_reported() {
         let transfers = Arc::new(Transfers::default());
         let (tx, rx) = mpsc::channel();
-        transfers.spawn("a.bin".into(), move |e| tx.send(e).unwrap(), |_, progress| {
+        transfers.spawn("a.bin".into(), Unit::Bytes, move |e| tx.send(e).unwrap(), |_, progress| {
             for i in 1..=10_000u64 {
                 progress(i, 10_000);
             }
@@ -125,10 +134,23 @@ mod tests {
     }
 
     #[test]
+    fn items_unit_is_reported() {
+        let transfers = Arc::new(Transfers::default());
+        let (tx, rx) = mpsc::channel();
+        transfers.spawn("Archive.zip".into(), Unit::Items, move |e| tx.send(e).unwrap(), |_, progress| {
+            progress(3, 41_598);
+            Ok(())
+        });
+        let events: Vec<_> = rx.iter().collect();
+        assert!(events.iter().all(|e| e.unit == Unit::Items));
+        assert_eq!(serde_json::to_value(&events[0]).unwrap()["unit"], "items");
+    }
+
+    #[test]
     fn a_failed_copy_reports_its_error() {
         let transfers = Arc::new(Transfers::default());
         let (tx, rx) = mpsc::channel();
-        transfers.spawn("x".into(), move |e| tx.send(e).unwrap(), |_, _| Err(Error::Invalid("Disk full.".into())));
+        transfers.spawn("x".into(), Unit::Bytes, move |e| tx.send(e).unwrap(), |_, _| Err(Error::Invalid("Disk full.".into())));
         let end = rx.recv_timeout(Duration::from_secs(2)).unwrap();
         assert_eq!((end.state, end.error.as_deref()), (TransferState::Failed, Some("Disk full.")));
     }

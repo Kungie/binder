@@ -247,6 +247,10 @@ dependencies = [
  "binder-core",
  "chrono",
  "keyring",
+ "libc",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "rumqttc",
  "rustls",
  "serde",
@@ -255,6 +259,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "tempfile",
  "tokio",
 ]
 

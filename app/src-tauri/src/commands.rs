@@ -13,6 +13,11 @@ use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
 use binder_core::agent::{self, Access, AgentRun};
 use binder_core::cloud::{self, Conflict, Space};
+use binder_core::cloud_fast::Fast;
+use binder_core::shell::SshShell;
+use crate::apps::{self, AppChoice};
+use crate::transfers::Unit;
+use std::sync::atomic::AtomicBool;
 use binder_core::github::{self, GhCli, HiddenRepo, SyncReport};
 use binder_core::{Db, Error, devices, hooks, repo, server};
 use tauri::Emitter;
@@ -395,9 +400,18 @@ pub async fn cloud_status(state: State<'_, AppState>) -> Res<CloudStatus> {
     Ok(CloudStatus { mounted: on, path: root.to_string_lossy().into_owned(), space: if on { cloud::space(&root).ok() } else { None } })
 }
 
+/// Whether a process on this Mac is still running.
+fn alive(pid: u32) -> bool {
+    // SAFETY: signal 0 only asks whether the process exists; nothing is sent.
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
 #[tauri::command]
 pub async fn cloud_list(state: State<'_, AppState>, rel: String, show_hidden: bool) -> Res<Vec<cloud::Entry>> {
-    cloud::list(&cloud_root(&state)?, &rel, show_hidden).map_err(text)
+    let root = cloud_root(&state)?;
+    // Copies that died with an earlier run of Binder leave partials; they go to the trash as unfinished uploads.
+    let _ = cloud::sweep_partials(&root, &rel, &alive);
+    cloud::list(&root, &rel, show_hidden).map_err(text)
 }
 
 #[tauri::command]
@@ -410,9 +424,23 @@ pub async fn cloud_rename(state: State<'_, AppState>, rel: String, new_name: Str
     cloud::rename(&cloud_root(&state)?, &rel, &new_name).map(|_| ()).map_err(text)
 }
 
+/// Moves an item. A move inside one disk is a rename; one onto another disk (the SD card) becomes a transfer,
+/// whose id comes back.
 #[tauri::command]
-pub async fn cloud_move(state: State<'_, AppState>, rel: String, dest_dir_rel: String) -> Res<()> {
-    cloud::move_to(&cloud_root(&state)?, &rel, &dest_dir_rel).map(|_| ()).map_err(text)
+pub async fn cloud_move(app: tauri::AppHandle, state: State<'_, AppState>, rel: String, dest_dir_rel: String) -> Res<Vec<u64>> {
+    let root = cloud_root(&state)?;
+    match cloud::move_to(&root, &rel, &dest_dir_rel) {
+        Ok(_) => Ok(vec![]),
+        Err(Error::CrossDisk) => {
+            let fast = fast_path(&state);
+            let name = rel.rsplit('/').next().unwrap_or_default().to_string();
+            Ok(vec![job(&app, &state, name, Unit::Bytes, move |cancel, progress| match &fast {
+                Some(f) => f.with(|f| f.move_across(&rel, &dest_dir_rel, cancel, progress)).map(|_| ()),
+                None => cloud::move_across(&root, &rel, &dest_dir_rel, cancel, progress).map(|_| ()),
+            })])
+        }
+        Err(e) => Err(text(e)),
+    }
 }
 
 #[tauri::command]
@@ -435,10 +463,15 @@ pub async fn cloud_empty_trash(state: State<'_, AppState>) -> Res<()> {
     cloud::empty_trash(&cloud_root(&state)?).map_err(text)
 }
 
+/// Opens a file in its default app. A zip is extracted beside it on the server instead, as a transfer.
 #[tauri::command]
-pub async fn cloud_open(app: tauri::AppHandle, state: State<'_, AppState>, rel: String) -> Res<()> {
+pub async fn cloud_open(app: tauri::AppHandle, state: State<'_, AppState>, rel: String) -> Res<Vec<u64>> {
     let path = cloud::resolve(&cloud_root(&state)?, &rel).map_err(text)?;
-    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+    if path.is_file() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
+        return cloud_extract(app, state, rel).await;
+    }
+    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())?;
+    Ok(vec![])
 }
 
 #[tauri::command]
@@ -451,28 +484,52 @@ pub async fn cloud_connect(app: tauri::AppHandle, state: State<'_, AppState>) ->
     app.opener().open_url(share, None::<&str>).map_err(|e| e.to_string())
 }
 
-/// `trash_root` is Cloud's root for uploads, where Replace moves the old item to the trash; downloads to the Mac pass
-/// `None`, which refuses Replace.
-fn copies(
-    app: &tauri::AppHandle,
-    state: &State<AppState>,
-    jobs: Vec<(std::path::PathBuf, std::path::PathBuf)>,
-    conflict: Conflict,
-    trash_root: Option<std::path::PathBuf>,
-) -> Vec<u64> {
-    jobs.into_iter()
-        .map(|(src, dst_dir)| {
-            let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let app = app.clone();
-            let trash_root = trash_root.clone();
-            state.transfers.spawn(name, move |e| { let _ = app.emit("cloud://transfer", e); }, move |cancel, progress| {
-                cloud::copy_into(&src, &dst_dir, conflict, trash_root.as_deref(), cancel, progress).map(|_| ())
-            })
-        })
-        .collect()
+/// The fast path's parts, owned, so a transfer thread can build a `Fast` from them.
+#[derive(Clone)]
+pub struct FastParts {
+    shell: std::sync::Arc<SshShell>,
+    root: std::path::PathBuf,
+    remote: String,
 }
 
-/// Copies files or folders from the Mac into a Cloud folder. Returns the transfer ids.
+impl FastParts {
+    pub fn with<T>(&self, f: impl FnOnce(&Fast) -> T) -> T {
+        f(&Fast { shell: self.shell.as_ref(), root: &self.root, remote_root: &self.remote, gnu_tar: true })
+    }
+}
+
+/// The fast path when it's on: a server is set, and the first check this run showed the server sees the same
+/// folder as the mount. A failed check turns it off until the next start.
+fn fast_path(state: &State<AppState>) -> Option<FastParts> {
+    let (server, root, remote) = {
+        let c = state.config.lock().unwrap();
+        (c.server.clone()?, c.cloud.clone(), c.cloud_remote.clone())
+    };
+    let parts = FastParts { shell: std::sync::Arc::new(SshShell { target: server, program: "ssh".into() }), root, remote };
+    let mut known = state.fast.lock().unwrap();
+    let on = *known.get_or_insert_with(|| parts.with(|f| f.check()));
+    on.then_some(parts)
+}
+
+/// Starts one transfer that reports to the tray.
+fn job<W>(app: &tauri::AppHandle, state: &State<AppState>, name: String, unit: Unit, work: W) -> u64
+where
+    W: FnOnce(&AtomicBool, &mut dyn FnMut(u64, u64)) -> Result<(), Error> + Send + 'static,
+{
+    let app = app.clone();
+    state.transfers.spawn(name, unit, move |e| { let _ = app.emit("cloud://transfer", e); }, work)
+}
+
+fn name_of(path: &Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The relative path of an item inside Cloud, from its path on the mount.
+fn rel_of(root: &Path, path: &Path) -> Res<String> {
+    path.strip_prefix(root).map(|p| p.to_string_lossy().into_owned()).map_err(|_| "That path is outside Cloud.".to_string())
+}
+
+/// Copies files or folders from the Mac into a Cloud folder. Folders go through the fast path when it's on.
 #[tauri::command]
 pub async fn cloud_upload(app: tauri::AppHandle, state: State<'_, AppState>, paths: Vec<String>, dest_rel: String, conflict: Conflict) -> Res<Vec<u64>> {
     let root = cloud_root(&state)?;
@@ -480,11 +537,22 @@ pub async fn cloud_upload(app: tauri::AppHandle, state: State<'_, AppState>, pat
     if !dest.is_dir() {
         return Err("Upload into a folder.".into());
     }
-    let jobs = paths.into_iter().map(|p| (std::path::PathBuf::from(p), dest.clone())).collect();
-    Ok(copies(&app, &state, jobs, conflict, Some(root)))
+    let fast = if paths.iter().any(|p| Path::new(p).is_dir()) { fast_path(&state) } else { None };
+    Ok(paths
+        .into_iter()
+        .map(|p| {
+            let src = std::path::PathBuf::from(p);
+            let (root, dest, dest_rel) = (root.clone(), dest.clone(), dest_rel.clone());
+            let fast = fast.clone().filter(|_| src.is_dir());
+            job(&app, &state, name_of(&src), Unit::Bytes, move |cancel, progress| match fast {
+                Some(f) => f.with(|f| f.upload_dir(&src, &dest_rel, conflict, cancel, progress)).map(|_| ()),
+                None => cloud::copy_into(&src, &dest, conflict, Some(&root), cancel, progress).map(|_| ()),
+            })
+        })
+        .collect())
 }
 
-/// Copies Cloud items into a folder on the Mac. Returns the transfer ids.
+/// Copies Cloud items into a folder on the Mac. Folders come through the fast path when it's on.
 #[tauri::command]
 pub async fn cloud_download(app: tauri::AppHandle, state: State<'_, AppState>, rels: Vec<String>, dest_dir: String, conflict: Conflict) -> Res<Vec<u64>> {
     let root = cloud_root(&state)?;
@@ -492,8 +560,160 @@ pub async fn cloud_download(app: tauri::AppHandle, state: State<'_, AppState>, r
     if !dest.is_dir() {
         return Err("Save into a folder.".into());
     }
-    let jobs = rels.iter().map(|r| cloud::resolve(&root, r).map(|src| (src, dest.clone()))).collect::<Result<Vec<_>, _>>().map_err(text)?;
-    Ok(copies(&app, &state, jobs, conflict, None))
+    let srcs = rels.iter().map(|r| cloud::resolve(&root, r)).collect::<Result<Vec<_>, _>>().map_err(text)?;
+    let fast = if srcs.iter().any(|p| p.is_dir()) { fast_path(&state) } else { None };
+    Ok(rels
+        .into_iter()
+        .zip(srcs)
+        .map(|(rel, src)| {
+            let dest = dest.clone();
+            let fast = fast.clone().filter(|_| src.is_dir());
+            job(&app, &state, name_of(&src), Unit::Bytes, move |cancel, progress| match fast {
+                Some(f) => f.with(|f| f.download_dir(&rel, &dest, conflict, cancel, progress)).map(|_| ()),
+                None => cloud::copy_into(&src, &dest, conflict, None, cancel, progress).map(|_| ()),
+            })
+        })
+        .collect())
+}
+
+/// Copies Cloud items into a Cloud folder, as Paste after Copy does.
+#[tauri::command]
+pub async fn cloud_copy(app: tauri::AppHandle, state: State<'_, AppState>, rels: Vec<String>, dest_dir_rel: String, conflict: Conflict) -> Res<Vec<u64>> {
+    let root = cloud_root(&state)?;
+    let dest = cloud::resolve(&root, &dest_dir_rel).map_err(text)?;
+    let jobs = rels.into_iter().map(|rel| cloud::resolve(&root, &rel).map(|src| (rel, src))).collect::<Result<Vec<_>, _>>().map_err(text)?;
+    Ok(copy_jobs(&app, &state, &root, jobs.into_iter().map(|(rel, src)| (rel, src.clone(), dest_dir_rel.clone(), dest.clone(), name_of(&src), conflict)).collect()))
+}
+
+type CopyJob = (String, std::path::PathBuf, String, std::path::PathBuf, String, Conflict);
+
+/// Each copy as a transfer: `cp -a` on the server when the fast path is on, the chunked SMB copy otherwise.
+fn copy_jobs(app: &tauri::AppHandle, state: &State<AppState>, root: &Path, jobs: Vec<CopyJob>) -> Vec<u64> {
+    let fast = if jobs.is_empty() { None } else { fast_path(state) };
+    jobs.into_iter()
+        .map(|(rel, src, dest_rel, dest, name, conflict)| {
+            let (root, fast) = (root.to_path_buf(), fast.clone());
+            job(app, state, name.clone(), Unit::Bytes, move |cancel, progress| match fast {
+                Some(f) => f.with(|f| f.copy(&rel, &dest_rel, &name, conflict, cancel, progress)).map(|_| ()),
+                None => cloud::copy_into_as(&src, &dest, &name, conflict, Some(&root), cancel, progress).map(|_| ()),
+            })
+        })
+        .collect()
+}
+
+/// A copy of each item beside it, named as Finder names duplicates.
+#[tauri::command]
+pub async fn cloud_duplicate(app: tauri::AppHandle, state: State<'_, AppState>, rels: Vec<String>) -> Res<Vec<u64>> {
+    let root = cloud_root(&state)?;
+    let mut jobs = vec![];
+    for rel in rels {
+        let src = cloud::resolve(&root, &rel).map_err(text)?;
+        let dir = src.parent().ok_or("Cloud itself can't be duplicated.")?.to_path_buf();
+        let name = name_of(&cloud::copy_name(&dir, &name_of(&src)));
+        jobs.push((rel, src, rel_of(&root, &dir)?, dir, name, Conflict::KeepBoth));
+    }
+    Ok(copy_jobs(&app, &state, &root, jobs))
+}
+
+/// Zips items from one folder into it: `name.zip` for one, `Archive.zip` for several.
+#[tauri::command]
+pub async fn cloud_compress(app: tauri::AppHandle, state: State<'_, AppState>, rels: Vec<String>) -> Res<Vec<u64>> {
+    let root = cloud_root(&state)?;
+    let name = match rels.as_slice() {
+        [one] => format!("{}.zip", one.rsplit('/').next().unwrap_or_default()),
+        _ => "Archive.zip".into(),
+    };
+    let fast = fast_path(&state);
+    Ok(vec![job(&app, &state, name, Unit::Items, move |cancel, progress| match fast {
+        Some(f) => f.with(|f| f.compress(&rels, cancel, progress)).map(|_| ()),
+        None => cloud::compress_local(&root, &rels, cancel, progress).map(|_| ()),
+    })])
+}
+
+/// Unzips into a folder beside the zip, named after it.
+#[tauri::command]
+pub async fn cloud_extract(app: tauri::AppHandle, state: State<'_, AppState>, rel: String) -> Res<Vec<u64>> {
+    let root = cloud_root(&state)?;
+    cloud::resolve(&root, &rel).map_err(text)?;
+    let name = rel.rsplit('/').next().unwrap_or_default().to_string();
+    let fast = fast_path(&state);
+    Ok(vec![job(&app, &state, name, Unit::Items, move |cancel, progress| match fast {
+        Some(f) => f.with(|f| f.extract(&rel, cancel, progress)).map(|_| ()),
+        None => cloud::extract_local(&root, &rel, cancel, progress).map(|_| ()),
+    })])
+}
+
+#[tauri::command]
+pub async fn cloud_info(state: State<'_, AppState>, rel: String) -> Res<cloud::Info> {
+    cloud::info(&cloud_root(&state)?, &rel).map_err(text)
+}
+
+/// A folder's total bytes and item count, counted on the server when the fast path is on.
+#[tauri::command]
+pub async fn cloud_size(state: State<'_, AppState>, rel: String) -> Res<(u64, u64)> {
+    let root = cloud_root(&state)?;
+    match fast_path(&state) {
+        Some(f) => f.with(|f| f.size(&rel)).map_err(text),
+        None => cloud::tree_size(&root, &rel).map_err(text),
+    }
+}
+
+/// The size and free space of the disk holding the folder on screen. Only the server can tell the SD card apart.
+#[tauri::command]
+pub async fn cloud_space(state: State<'_, AppState>, rel: String) -> Res<Space> {
+    let root = cloud_root(&state)?;
+    if let Some(f) = fast_path(&state) {
+        if let Ok(s) = f.with(|f| f.space(&rel)) {
+            return Ok(s);
+        }
+    }
+    cloud::space(&cloud::resolve(&root, &rel).map_err(text)?).map_err(text)
+}
+
+/// `"ssh"` when the fast path is on, `"smb"` otherwise.
+#[tauri::command]
+pub async fn cloud_fast_path(state: State<'_, AppState>) -> Res<String> {
+    cloud_root(&state)?;
+    Ok(if fast_path(&state).is_some() { "ssh" } else { "smb" }.into())
+}
+
+/// Shows Quick Look for an item, or closes it when it's open.
+#[tauri::command]
+pub async fn cloud_quicklook(state: State<'_, AppState>, rel: String) -> Res<()> {
+    let path = cloud::resolve(&cloud_root(&state)?, &rel).map_err(text)?;
+    let mut open = state.quicklook.lock().unwrap();
+    if let Some(mut child) = open.take() {
+        if matches!(child.try_wait(), Ok(None)) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(());
+        }
+    }
+    let child = std::process::Command::new("/usr/bin/qlmanage")
+        .arg("-p")
+        .arg(&path)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    *open = Some(child);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cloud_apps_for(state: State<'_, AppState>, rel: String) -> Res<Vec<AppChoice>> {
+    let path = cloud::resolve(&cloud_root(&state)?, &rel).map_err(text)?;
+    Ok(apps::apps_for(&path))
+}
+
+#[tauri::command]
+pub async fn cloud_open_with(state: State<'_, AppState>, rel: String, app: String) -> Res<()> {
+    let path = cloud::resolve(&cloud_root(&state)?, &rel).map_err(text)?;
+    if !apps::is_app(Path::new(&app)) {
+        return Err("That isn't an app.".into());
+    }
+    let status = std::process::Command::new("/usr/bin/open").arg("-a").arg(&app).arg("--").arg(&path).status().map_err(|e| e.to_string())?;
+    if status.success() { Ok(()) } else { Err(format!("The app couldn't open {}.", name_of(&path))) }
 }
 
 #[tauri::command]
