@@ -1,13 +1,14 @@
 # Binder
 
-Binder is a small desktop app for running one developer's workshop. It keeps a task table for you and for a Claude Code agent on your home server, lists your projects, devices and 3D printer, and shows what runs on the server. Every project has a note in Obsidian that collects the key decisions as short dated lines.
+Binder is a small desktop app for running one developer's workshop. It keeps a task board for you and for a Claude Code agent on your home server, brings in your GitHub repos as projects, lists your devices and 3D printer, shows what runs on the server and gives you a small file manager for a folder on it. Every project has a note in Obsidian that collects the key decisions as short dated lines.
 
-It's black and white, keyboard first, and built for one person. The core is Rust, the window is Tauri with a React interface, and the data stays on your own machines.
+It's mostly black and white, with a few colours that each mean something, keyboard first, and built for one person. The core is Rust, the window is Tauri with a React interface, and the data stays on your own machines.
 
 ## What it does
 
-- **Tasks:** one table for you and the agent. A task assigned to the agent gets a **Run** button that starts `claude -p` on the home server over SSH, in the background, and follows it until it ends.
-- **Projects:** each has a repo folder (branch, changes, ahead and behind, last commit) and an Obsidian note whose `## Done` section is the project's long-term memory.
+- **Tasks:** a board with Backlog, Todo, In progress and Done columns, or the same tasks as a keyboard-first table. Cards show two lines of notes and chips for status, due date, project and the agent. Drag a card to change its status or its place. A task assigned to the agent gets a **Run** button that starts `claude -p` on the home server over SSH, in the background, and follows it until it ends; an orange dot marks it when the run ends.
+- **Projects:** your GitHub repos come in on their own through the `gh` CLI and its login, at start and with **Sync**. Your own edits stay, and nothing is deleted: a repo that's archived or gone moves to Archived. Projects that aren't on GitHub can be added by hand. A project can have a local folder (branch, changes, ahead and behind, last commit) and an Obsidian note whose `## Done` section is its long-term memory.
+- **Cloud:** a file manager over a folder on the home server, shared over SMB. Browse, upload large files with progress, save to the Mac, rename, move, and delete into a trash you can restore from. Your phone reaches the same folder from the Files app.
 - **Server:** containers, running services, load, memory, disk and temperature, read over SSH every 30 seconds. Read only.
 - **Devices:** your machines and whether each one answers.
 - **Printer:** a Bambu Lab printer in LAN mode over MQTT: job, progress, temperatures, pause, resume and stop.
@@ -17,6 +18,8 @@ It's black and white, keyboard first, and built for one person. The core is Rust
 
 - **Server:** Settings › Home server takes an SSH target, `user@host` or a `Host` from `~/.ssh/config`. Binder uses your keys through the system `ssh` and never stores a password.
 - **Vault:** the Obsidian vault can live anywhere that mounts as a folder, such as an SMB share. Binder writes only when it's mounted; done lines wait otherwise.
+- **GitHub:** install the GitHub CLI and run `gh auth login` once. Binder never reads or stores a token.
+- **Cloud:** on the server, run `sudo scripts/cloud-share.sh <user>` once. It creates `/srv/cloud` and shares it as `[cloud]`. On the Mac, connect to `smb://<server>/cloud` in Finder, save the password in the Keychain, add the share to Login Items and put the same address in Settings › Cloud. On a phone, use Files › Connect to Server with the server's Tailscale address.
 - **Printer:** the access code goes to the login Keychain, never to a file.
 - macOS asks once for Local Network access. Allow it, or Binder can't reach addresses on your LAN.
 

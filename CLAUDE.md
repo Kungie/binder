@@ -1,6 +1,6 @@
 # Binder 2
 
-A personal desktop dashboard for one developer: a task table for the owner and for a Claude Code agent on the home server, projects with Obsidian notes, devices, the home server and a Bambu 3D printer. The spec is `docs/specs/2026-11-13-binder-2-design.md` and wins over this file. Plans live in `docs/plans/`.
+A personal desktop dashboard for one developer: a task board for the owner and for a Claude Code agent on the home server, projects from GitHub with Obsidian notes, devices, the home server, Cloud (a file manager over an SMB share on the server) and a Bambu 3D printer. The specs are `docs/specs/2026-11-13-binder-2-design.md` and `docs/specs/2026-11-13-binder-2.1-design.md` (2.1 wins where they differ), and they win over this file. Plans live in `docs/plans/`.
 
 ## Working with the owner
 
@@ -13,9 +13,11 @@ A personal desktop dashboard for one developer: a task table for the owner and f
 
 ```
 crates/core/      Rust library, no Tauri: SQLite, tasks, projects, devices, notes, SSH runner (server status,
-                  agent runs), git status, Bambu reports, Claude Code session summaries, hook install
+                  agent runs), git status, Bambu reports, Claude Code session summaries, hook install,
+                  GitHub sync through `gh` (github.rs), Cloud file operations (cloud.rs)
 crates/cli/       binder-cli: the Claude Code hook (`hook <event>`) and the detached `summarize <session>`
-app/src-tauri/    Tauri app: thin commands over the core, the printer MQTT workers (printer.rs)
+app/src-tauri/    Tauri app: thin commands over the core, the printer MQTT workers (printer.rs), Cloud copies
+                  in flight (transfers.rs)
 app/src/          React + TypeScript + Tailwind interface
 ```
 
@@ -31,20 +33,24 @@ The interface talks to an `Api` interface: Tauri `invoke` in the app, an in-memo
 - Secrets: the printer access code lives in the Keychain (service `io.github.kungie.binder.printer`, account the serial); the printer certificate is pinned by SHA-256 in `config.toml`. Session text is redacted (`redact.rs`) before any model sees it.
 - `make install` replaces `/Applications/Binder.app`. The owner runs it; don't run it unasked.
 - The Obsidian vault lives on the Raspberry Pi and is mounted on the Mac at `/Volumes/vault` over SMB. Binder only appends under `## Done` in a project note and writes nothing when the vault isn't mounted.
+- Cloud is `/srv/cloud` on the server, shared as `[cloud]` (`scripts/cloud-share.sh`) and mounted at `/Volumes/cloud`. Every Cloud command refuses unless that path is a mount point, so nothing lands on the Mac's own disk. Paths never leave the share's root, and deletes go to `.trash/<id>/` beside an `.origin` file.
+- GitHub sync runs `gh` with its own login on a second database connection, at start and on **Sync**. It only updates GitHub's facts on a project (URL, description, privacy, last push, language, archived), never the owner's edits, and never deletes.
 
 ## Look
 
-Dark only, no colour, minimal. Panels like panelui.dev, chrome like Orca and Linear.
+Dark only and mostly black and white. Colour is small (an icon, a dot, a chip's icon) and always means something. Panels like panelui.dev, chrome like Orca and Linear, the task board like Roma.
 
-| Token | Hex |
-|---|---|
-| bg | `#000000` |
-| panel | `#0A0A0A` |
-| raised | `#141414` |
-| line | `#1C1C1C` |
-| line-strong | `#2A2A2A` |
-| text | `#EDEDED` |
-| text-2 | `#A1A1A1` |
-| text-3 | `#6B6B6B` |
+| Token | Hex | Use |
+|---|---|---|
+| bg | `#0B0B0C` | window |
+| panel | `#141416` | panels, board columns |
+| card | `#1C1C1F` | cards, inputs, chips |
+| raised | `#242428` | hover, selected, menus |
+| line | `#26262A` | hairlines |
+| text | `#EDEDED` | |
+| text-2 | `#A1A1A1` | |
+| text-3 | `#6B6B6B` | |
 
-Inter 13 px (12 px in tables), weights 400 and 500 only; Geist Mono for numbers, ids and paths. Radius 6 px on controls, 8 px on panels. State shows through shape, never colour. Copy: plain English, no exclamation marks, no em dashes, no filler.
+Meaning colours: backlog and canceled `#6B6B6B`, todo `#D4D4D4`, in progress `#F2C94C`, done `#8B7CF6`, urgent and needs attention `#F2994A`, error and offline `#EB5757`, online `#4CB782`. Each project has one of 8 colours (`#5E6AD2 #26B5CE #4CB782 #F2C94C #F2994A #EB5757 #B76EDB #8D8D8D`), from a hash of its name or chosen by the owner.
+
+Inter 13 px (12 px in tables), weights 400 and 500 only; Geist Mono for numbers, ids and paths. Radius 8 px on controls, 10 px on cards and panels; chips are 24 px pills. Sidebar 208 px, detail screens at most 960 px wide. Copy: plain English, no exclamation marks, no em dashes, no filler.
