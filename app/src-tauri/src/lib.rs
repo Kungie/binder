@@ -20,11 +20,25 @@ pub struct AppState {
     pub quicklook: Mutex<Option<std::process::Child>>,
 }
 
+#[derive(Clone, Copy, serde::Serialize)]
+struct DropPoint {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct Dropped {
+    paths: Vec<PathBuf>,
+    x: f64,
+    y: f64,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_drag::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -52,9 +66,22 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Files dropped from Finder go to the interface, which decides whether Cloud takes them.
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
-                let _ = window.emit("cloud://drop", paths);
+            // Files dragged over or dropped on the window go to the interface with the pointer in CSS pixels, so it
+            // can tell which folder is under it: Cloud paths are a move, others an upload.
+            let scale = window.scale_factor().unwrap_or(1.0);
+            let at = |p: &tauri::PhysicalPosition<f64>| DropPoint { x: p.x / scale, y: p.y / scale };
+            match event {
+                tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, position }) => {
+                    let p = at(position);
+                    let _ = window.emit("cloud://drop", Dropped { paths: paths.clone(), x: p.x, y: p.y });
+                }
+                tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Over { position }) => {
+                    let _ = window.emit("cloud://drag-over", Some(at(position)));
+                }
+                tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Leave) => {
+                    let _ = window.emit("cloud://drag-over", None::<DropPoint>);
+                }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![

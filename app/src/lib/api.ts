@@ -124,8 +124,44 @@ export interface Api {
   cloudDownload(rels: string[], destDir: string, conflict: Conflict): Promise<number[]>;
   cloudCancel(id: number): Promise<void>;
   onTransfer(cb: (t: Transfer) => void): () => void;
-  /** Files dropped on the window from Finder. */
-  onDrop(cb: (paths: string[]) => void): () => void;
+  /** Files dropped on the window, with the pointer in CSS pixels. */
+  onDrop(cb: (d: Dropped) => void): () => void;
+  /** The pointer while files are dragged over the window; null when they leave. */
+  onDragOver(cb: (p: { x: number; y: number } | null) => void): () => void;
+  /** Starts a native drag of these Mac paths, out to Finder or back onto the window. */
+  startDrag(paths: string[]): Promise<void>;
+}
+
+export interface Dropped {
+  paths: string[];
+  x: number;
+  y: number;
+}
+
+/** The picture under the pointer while dragging: a file, with a count for several. */
+function dragIcon(count: number): string {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  if (!g) return "";
+  g.fillStyle = "#1C1C1F";
+  g.strokeStyle = "#A1A1A1";
+  g.lineWidth = 2;
+  g.beginPath();
+  g.roundRect(14, 6, 36, 48, 6);
+  g.fill();
+  g.stroke();
+  if (count > 1) {
+    g.fillStyle = "#EDEDED";
+    g.beginPath();
+    g.arc(48, 48, 12, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#0B0B0C";
+    g.font = "500 13px Inter, sans-serif";
+    g.textAlign = "center";
+    g.fillText(String(count), 48, 53);
+  }
+  return c.toDataURL("image/png");
 }
 
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
@@ -209,7 +245,12 @@ export const tauriApi: Api = {
   cloudDownload: (rels, destDir, conflict) => call("cloud_download", { rels, destDir, conflict }),
   cloudCancel: (id) => call("cloud_cancel", { id }),
   onTransfer: (cb) => subscribe<Transfer>("cloud://transfer", cb),
-  onDrop: (cb) => subscribe<string[]>("cloud://drop", cb),
+  onDrop: (cb) => subscribe<Dropped>("cloud://drop", cb),
+  onDragOver: (cb) => subscribe<{ x: number; y: number } | null>("cloud://drag-over", cb),
+  startDrag: async (paths) => {
+    const { startDrag } = await import("@crabnebula/tauri-plugin-drag");
+    await startDrag({ item: paths, icon: dragIcon(paths.length) });
+  },
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

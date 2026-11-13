@@ -61,7 +61,10 @@ export function memoryApi(
   /** URLs opened in the browser. */
   opened: string[];
   readonly cloudConnects: number;
-  dropFiles(paths: string[]): void;
+  /** Acts as if files were dropped on the window at a point. */
+  dropFiles(paths: string[], x?: number, y?: number): void;
+  /** Mac paths each native drag started with. */
+  dragged: string[][];
 } {
   const tasks = seed.tasks.map((t) => ({ ...t }));
   const projects = seed.projects.map((p) => ({ ...p }));

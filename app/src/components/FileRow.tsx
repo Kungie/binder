@@ -70,13 +70,11 @@ export interface FileRowProps {
   /** Right-click. */
   onMenu(e: MouseEvent): void;
   onRename(name: string | null): void;
+  /** Starts the native drag; the row's own HTML drag is cancelled. */
   onDragStart(e: DragEvent): void;
-  onDragOver(e: DragEvent): void;
-  onDragLeave(): void;
-  onDrop(e: DragEvent): void;
 }
 
-export function FileRow({ entry, selected, renaming, dropTarget, onSelect, onOpen, onMenu, onRename, onDragStart, onDragOver, onDragLeave, onDrop }: FileRowProps) {
+export function FileRow({ entry, selected, renaming, dropTarget, onSelect, onOpen, onMenu, onRename, onDragStart }: FileRowProps) {
   const dir = entry.kind === "dir";
   return (
     <tr
@@ -86,10 +84,8 @@ export function FileRow({ entry, selected, renaming, dropTarget, onSelect, onOpe
       onClick={(e) => onSelect({ meta: e.metaKey, shift: e.shiftKey })}
       onDoubleClick={onOpen}
       onContextMenu={onMenu}
+      data-drop-rel={dir ? entry.rel : undefined}
       onDragStart={onDragStart}
-      onDragOver={dir ? onDragOver : undefined}
-      onDragLeave={dir ? onDragLeave : undefined}
-      onDrop={dir ? onDrop : undefined}
       className={`h-8 cursor-default border-b border-line text-[12px] last:border-b-0 ${selected ? "bg-raised" : "hover:bg-raised/50"} ${dropTarget ? "outline outline-1 -outline-offset-1 outline-text-3" : ""}`}
     >
       <td className="px-3">

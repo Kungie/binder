@@ -1,4 +1,4 @@
-import { type DragEvent, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { FileInfo } from "../components/FileInfo";
 import { FileRow, KindIcon, NameInput } from "../components/FileRow";
@@ -160,7 +160,6 @@ export function Cloud() {
   const [apps, setApps] = useState<AppChoice[]>([]);
   const [info, setInfo] = useState<string | null>(null);
   const [picking, setPicking] = useState<string[] | null>(null);
-  const dragging = useRef<string | null>(null);
   const table = useRef<HTMLTableElement>(null);
   const mounted = status?.mounted ?? false;
 
@@ -219,18 +218,39 @@ export function Cloud() {
   };
 
   const upload = useCallback(
-    (paths: string[]) => {
+    async (paths: string[], dest = rel) => {
       if (!paths.length) return;
-      const count = paths.filter((p) => entries.some((e) => e.name === baseOf(p))).length;
-      askOnClash(count, (choice) => void api.cloudUpload(paths, rel, choice).catch(fail));
+      const there = dest === rel ? entries : await api.cloudList(dest, true).catch(() => []);
+      const count = paths.filter((p) => there.some((e) => e.name === baseOf(p))).length;
+      askOnClash(count, (choice) => void api.cloudUpload(paths, dest, choice).catch(fail));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [api, entries, rel],
   );
-  const latestUpload = useRef(upload);
-  latestUpload.current = upload;
-  // Files dropped on the window from Finder land in the folder on screen.
-  useEffect(() => api.onDrop((paths) => mode === "files" && latestUpload.current(paths)), [api, mode]);
+
+  /** The folder under the pointer: a folder row or a breadcrumb, else the folder on screen. */
+  const targetAt = (x: number, y: number) => document.elementFromPoint?.(x, y)?.closest("[data-drop-rel]")?.getAttribute("data-drop-rel") ?? rel;
+  const onDropRef = useRef<(paths: string[], x: number, y: number) => void>(() => {});
+  onDropRef.current = (paths, x, y) => {
+    setDropOn(null);
+    const target = targetAt(x, y);
+    // Paths from the share itself (a row dragged out and back) are a move; anything else is an upload.
+    const prefix = `${status?.path ?? "/Volumes/cloud"}/`;
+    const inside = paths.filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length));
+    const outside = paths.filter((p) => !p.startsWith(prefix));
+    if (inside.length)
+      void act(async () => {
+        for (const src of inside) if (src !== target) await move(src, target);
+      });
+    if (outside.length) void upload(outside, target);
+  };
+  useEffect(() => api.onDrop((d) => mode === "files" && onDropRef.current(d.paths, d.x, d.y)), [api, mode]);
+  const overRef = useRef<(p: { x: number; y: number } | null) => void>(() => {});
+  overRef.current = (p) => {
+    const t = p ? targetAt(p.x, p.y) : null;
+    setDropOn(t && t !== rel ? t : null);
+  };
+  useEffect(() => api.onDragOver((p) => overRef.current(p)), [api]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -368,27 +388,6 @@ export function Cloud() {
     if (key === "Enter" || key === "F2") return handled(), setRenaming(one.rel);
   };
 
-  const dropZone = (target: string) => ({
-    onDragOver: (e: DragEvent) => {
-      if (!dragging.current || dragging.current === target) return;
-      e.preventDefault();
-      setDropOn(target);
-    },
-    onDragLeave: () => setDropOn((d) => (d === target ? null : d)),
-    onDrop: (e: DragEvent) => {
-      e.preventDefault();
-      const src = dragging.current ?? e.dataTransfer.getData("text/plain");
-      dragging.current = null;
-      setDropOn(null);
-      if (!src) return;
-      // Dragging one of several selected rows moves them all.
-      const srcs = sel.items.includes(src) ? sel.items : [src];
-      void act(async () => {
-        for (const s of srcs) if (s !== target) await move(s, target);
-      });
-    },
-  });
-
   if (!mounted) return <NotConnected status={status} />;
 
   const crumbs = rel ? rel.split("/") : [];
@@ -419,7 +418,7 @@ export function Cloud() {
                 type="button"
                 aria-current={to === rel && mode === "files" ? "page" : undefined}
                 onClick={() => (setMode("files"), go(to))}
-                {...dropZone(to)}
+                data-drop-rel={to}
                 className={`truncate rounded-control px-1 ${to === rel ? "font-medium text-text" : "text-text-3 hover:text-text"} ${dropOn === to ? "bg-raised" : ""}`}
               >
                 {i === 0 ? "Cloud" : baseOf(to)}
@@ -530,10 +529,11 @@ export function Cloud() {
                       if (name) void act(() => api.cloudRename(entry.rel, name));
                     }}
                     onDragStart={(e) => {
-                      dragging.current = entry.rel;
-                      e.dataTransfer.setData("text/plain", entry.rel);
+                      // A native drag, so Finder gets the files; dropped back here it comes in as a move.
+                      e.preventDefault();
+                      const rels = sel.items.includes(entry.rel) ? order.filter((r) => sel.items.includes(r)) : [entry.rel];
+                      void api.startDrag(rels.map((r) => `${status?.path ?? "/Volumes/cloud"}/${r}`)).catch(fail);
                     }}
-                    {...dropZone(entry.rel)}
                   />
                 ))}
               </tbody>

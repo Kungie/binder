@@ -1,3 +1,4 @@
+import type { Dropped } from "./api";
 import type { AppChoice, CloudEntry, CloudInfo, CloudStatus, Conflict, Space, Transfer, TrashEntry } from "./types";
 
 /** What the fake Cloud starts with: every entry by its path, folders included. */
@@ -28,7 +29,8 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
   const zips: Record<string, CloudEntry[]> = Object.fromEntries(Object.entries(seed?.zips ?? {}).map(([k, v]) => [k, v.map((e) => ({ ...e }))]));
   const quickLooked: string[] = [];
   const transferListeners = new Set<(t: Transfer) => void>();
-  const dropListeners = new Set<(paths: string[]) => void>();
+  const dropListeners = new Set<(d: Dropped) => void>();
+  const dragged: string[][] = [];
   const cancelled = new Set<number>();
   const opened: string[] = [];
   let connects = 0;
@@ -115,8 +117,15 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
       return connects;
     },
     /** Acts as if files were dropped on the window from Finder. */
-    dropFiles(paths: string[]) {
-      dropListeners.forEach((cb) => cb(paths));
+    dropFiles(paths: string[], x = 0, y = 0) {
+      dropListeners.forEach((cb) => cb({ paths, x, y }));
+    },
+    dragged,
+    async startDrag(paths: string[]) {
+      dragged.push([...paths]);
+    },
+    onDragOver(_cb: (p: { x: number; y: number } | null) => void) {
+      return () => {};
     },
     async cloudStatus(): Promise<CloudStatus> {
       const on = opts.mounted();
@@ -330,7 +339,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
       transferListeners.add(cb);
       return () => void transferListeners.delete(cb);
     },
-    onDrop(cb: (paths: string[]) => void) {
+    onDrop(cb: (d: Dropped) => void) {
       dropListeners.add(cb);
       return () => void dropListeners.delete(cb);
     },

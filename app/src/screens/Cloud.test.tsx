@@ -127,16 +127,37 @@ describe("Cloud", () => {
     expect(names()).not.toContain("Taxes");
   });
 
-  it("dragging_a_row_onto_a_folder_moves_it", async () => {
-    const { fireEvent } = await import("@testing-library/react");
-    await setup();
+  it("a drop of cloud paths on a folder moves them", async () => {
+    const { api } = await setup();
     await ready();
-    const data: Record<string, string> = {};
-    const dt = { setData: (k: string, v: string) => (data[k] = v), getData: (k: string) => data[k] ?? "", types: [] };
-    fireEvent.dragStart(row("README.md"), { dataTransfer: dt });
-    fireEvent.dragOver(row("Documents"), { dataTransfer: dt });
-    fireEvent.drop(row("Documents"), { dataTransfer: dt });
-    await waitFor(() => expect(names()).not.toContain("README.md"));
+    document.elementFromPoint = () => row("Documents");
+    api.dropFiles(["/Volumes/cloud/README.md", "/Volumes/cloud/Videos"], 40, 120);
+    await waitFor(() => expect(names()).toEqual(["Backups", "Documents", "Photos"]));
+    expect((await api.cloudList("Documents", false)).map((e) => e.name)).toEqual(["Videos", "lease.pdf", "README.md", "taxes-2025.xlsx"]);
+  });
+
+  it("a drop of mac paths uploads into the folder under the pointer", async () => {
+    const { api } = await setup();
+    await ready();
+    document.elementFromPoint = () => row("Photos");
+    api.dropFiles(["/Users/x/Desktop/beach.jpg"], 40, 120);
+    await screen.findByRole("region", { name: "Transfers" });
+    await waitFor(async () => expect((await api.cloudList("Photos", false)).map((e) => e.name)).toContain("beach.jpg"));
+    expect(names()).not.toContain("beach.jpg");
+  });
+
+  it("dragging a row calls startDrag with the selection's mac paths", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    const { api, user } = await setup();
+    await ready();
+    await user.click(row("Videos"));
+    await user.keyboard("{Meta>}");
+    await user.click(row("README.md"));
+    await user.keyboard("{/Meta}");
+    fireEvent.dragStart(row("README.md"));
+    expect(api.dragged).toEqual([["/Volumes/cloud/Videos", "/Volumes/cloud/README.md"]]);
+    fireEvent.dragStart(row("Photos"));
+    expect(api.dragged[1]).toEqual(["/Volumes/cloud/Photos"]);
   });
 
   it("overview_shows_cloud_space", async () => {
