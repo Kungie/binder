@@ -214,9 +214,13 @@ fn pending_for(db: &Db, project_id: i64) -> Result<Vec<String>> {
 pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session_id: &str, today: &str) -> Result<usize> {
     let Some(s) = get_session(db, session_id)? else { return Ok(0) };
     let (talk, end) = new_talk(Path::new(&s.transcript), s.offset)?;
-    // Claim the talk before the slow model call, so a second summarize can't read it again.
-    db.conn.execute("UPDATE sessions SET offset = ?2, pending_chars = 0 WHERE session_id = ?1", params![session_id, end as i64])?;
-    if talk.trim().is_empty() {
+    // Claim the talk before the slow model call. The claim only moves a cursor nobody else moved, so when two
+    // processes race for the same talk, one gets it and the other stops here.
+    let claimed = db.conn.execute(
+        "UPDATE sessions SET offset = ?2, pending_chars = 0 WHERE session_id = ?1 AND offset = ?3",
+        params![session_id, end as i64, s.offset as i64],
+    )?;
+    if claimed == 0 || talk.trim().is_empty() {
         return Ok(0);
     }
     let talk = redact(&talk);
@@ -247,10 +251,14 @@ pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session
     }
 
     if vault.is_dir() {
-        let path = note_for(db, vault, s.project_id, today)?;
-        for line in &fresh {
-            notes::append_done(&path, today, line)?;
-        }
+        // SQLite's write lock doubles as the lock on note writes, so two processes never edit a note at once.
+        exclusive(db, |db| {
+            let path = note_for(db, vault, s.project_id, today)?;
+            for line in &fresh {
+                notes::append_done(&path, today, line)?;
+            }
+            Ok(())
+        })?;
     } else {
         for line in &fresh {
             db.conn.execute("INSERT INTO pending_done (project_id, date, text) VALUES (?1, ?2, ?3)", params![s.project_id, today, line])?;
@@ -259,27 +267,51 @@ pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session
     Ok(fresh.len())
 }
 
-/// Writes the done lines that waited for the vault. Each is removed right after it's written.
+/// Runs `f` inside an immediate transaction: other processes wait for it, and an error rolls it back.
+fn exclusive<T>(db: &mut Db, f: impl FnOnce(&mut Db) -> Result<T>) -> Result<T> {
+    db.conn.execute_batch("BEGIN IMMEDIATE")?;
+    match f(db) {
+        Ok(v) => {
+            db.conn.execute_batch("COMMIT")?;
+            Ok(v)
+        }
+        Err(e) => {
+            let _ = db.conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
+/// Writes the done lines that waited for the vault, one at a time. Each line is removed in the same transaction
+/// that writes it, so it's written once even when the app and a hook flush together, and kept if the write fails.
 pub fn flush_pending(db: &mut Db, vault: &Path) -> Result<usize> {
     if !vault.is_dir() {
         return Ok(0);
     }
-    let rows: Vec<(i64, i64, String, String)> = {
-        let mut stmt = db.conn.prepare("SELECT id, project_id, date, text FROM pending_done ORDER BY id")?;
-        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?
-    };
     let mut written = 0;
-    for (id, project_id, date, text) in rows {
-        match note_for(db, vault, project_id, &date) {
-            Ok(path) => {
-                notes::append_done(&path, &date, &text)?;
-                written += 1;
+    loop {
+        let done = exclusive(db, |db| {
+            let row: Option<(i64, i64, String, String)> = db
+                .conn
+                .query_row("SELECT id, project_id, date, text FROM pending_done ORDER BY id LIMIT 1", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })
+                .optional()?;
+            let Some((id, project_id, date, text)) = row else { return Ok(true) };
+            db.conn.execute("DELETE FROM pending_done WHERE id = ?1", [id])?;
+            match note_for(db, vault, project_id, &date) {
+                Ok(path) => {
+                    notes::append_done(&path, &date, &text)?;
+                    written += 1;
+                }
+                // The project was deleted since; its line has nowhere to go.
+                Err(Error::NotFound(..)) => {}
+                Err(e) => return Err(e),
             }
-            // The project was deleted since; its line has nowhere to go.
-            Err(Error::NotFound(..)) => {}
-            Err(e) => return Err(e),
+            Ok(false)
+        })?;
+        if done {
+            return Ok(written);
         }
-        db.conn.execute("DELETE FROM pending_done WHERE id = ?1", [id])?;
     }
-    Ok(written)
 }

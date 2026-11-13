@@ -1,6 +1,6 @@
 //! The commands the interface calls. Each one locks what it needs, calls the core and turns errors into text.
-//! Commands that touch the vault are `async`, so Tauri runs them off the main thread: a slow or stalled
-//! SMB share must not freeze the window.
+//! Every command is `async`, so Tauri runs it off the main thread: a slow SMB share, SSH call or database lock
+//! must not freeze the window.
 
 use crate::AppState;
 use binder_core::config::{Config, PrinterConfig};
@@ -47,42 +47,42 @@ fn note_for(db: &mut Db, vault: &Path, id: i64) -> Result<Project, Error> {
 }
 
 #[tauri::command]
-pub fn list_tasks(state: State<AppState>, view: TaskView, include_closed: bool) -> Res<Vec<Task>> {
+pub async fn list_tasks(state: State<'_, AppState>, view: TaskView, include_closed: bool) -> Res<Vec<Task>> {
     state.db.lock().unwrap().list_tasks(view, include_closed).map_err(text)
 }
 
 #[tauri::command]
-pub fn create_task(state: State<AppState>, task: NewTask) -> Res<Task> {
+pub async fn create_task(state: State<'_, AppState>, task: NewTask) -> Res<Task> {
     state.db.lock().unwrap().create_task(task, now()).map_err(text)
 }
 
 #[tauri::command]
-pub fn update_task(state: State<AppState>, id: i64, patch: TaskPatch) -> Res<Task> {
+pub async fn update_task(state: State<'_, AppState>, id: i64, patch: TaskPatch) -> Res<Task> {
     state.db.lock().unwrap().update_task(id, patch, now()).map_err(text)
 }
 
 #[tauri::command]
-pub fn delete_task(state: State<AppState>, id: i64) -> Res<()> {
+pub async fn delete_task(state: State<'_, AppState>, id: i64) -> Res<()> {
     state.db.lock().unwrap().delete_task(id).map_err(text)
 }
 
 #[tauri::command]
-pub fn list_projects(state: State<AppState>) -> Res<Vec<Project>> {
+pub async fn list_projects(state: State<'_, AppState>) -> Res<Vec<Project>> {
     state.db.lock().unwrap().list_projects().map_err(text)
 }
 
 #[tauri::command]
-pub fn create_project(state: State<AppState>, project: NewProject) -> Res<Project> {
+pub async fn create_project(state: State<'_, AppState>, project: NewProject) -> Res<Project> {
     state.db.lock().unwrap().create_project(project, now()).map_err(text)
 }
 
 #[tauri::command]
-pub fn update_project(state: State<AppState>, id: i64, patch: ProjectPatch) -> Res<Project> {
+pub async fn update_project(state: State<'_, AppState>, id: i64, patch: ProjectPatch) -> Res<Project> {
     state.db.lock().unwrap().update_project(id, patch).map_err(text)
 }
 
 #[tauri::command]
-pub fn delete_project(state: State<AppState>, id: i64) -> Res<()> {
+pub async fn delete_project(state: State<'_, AppState>, id: i64) -> Res<()> {
     state.db.lock().unwrap().delete_project(id).map_err(text)
 }
 
@@ -129,12 +129,12 @@ pub async fn done_today(state: State<'_, AppState>) -> Res<Vec<(String, DoneLine
 }
 
 #[tauri::command]
-pub fn get_config(state: State<AppState>) -> Config {
-    state.config.lock().unwrap().clone()
+pub async fn get_config(state: State<'_, AppState>) -> Res<Config> {
+    Ok(state.config.lock().unwrap().clone())
 }
 
 #[tauri::command]
-pub fn set_config(state: State<AppState>, config: Config) -> Res<()> {
+pub async fn set_config(state: State<'_, AppState>, config: Config) -> Res<()> {
     config.save(&state.config_path).map_err(text)?;
     *state.config.lock().unwrap() = config;
     Ok(())
@@ -153,7 +153,7 @@ fn server_target(state: &State<AppState>) -> Res<String> {
 #[tauri::command]
 pub async fn server_status(state: State<'_, AppState>) -> Res<ServerStatus> {
     let target = server_target(&state)?;
-    server::fetch(&SshRemote { target }, now()).map_err(text)
+    server::fetch(&SshRemote::new(target), now()).map_err(text)
 }
 
 #[tauri::command]
@@ -202,26 +202,26 @@ pub async fn repo_status(state: State<'_, AppState>, project_id: i64) -> Res<Opt
 }
 
 fn remote(state: &State<AppState>) -> Res<SshRemote> {
-    Ok(SshRemote { target: server_target(state)? })
+    Ok(SshRemote::new(server_target(state)?))
 }
 
-// The agent commands hold the database lock through one SSH call. Other commands wait for it, the window doesn't.
+// The agent functions lock the database only around reads and writes, never during the SSH call.
 #[tauri::command]
 pub async fn start_run(state: State<'_, AppState>, task_id: i64, dir: String, access: Access) -> Res<AgentRun> {
     let r = remote(&state)?;
-    agent::start_run(&mut state.db.lock().unwrap(), &r, task_id, &dir, access, now()).map_err(text)
+    agent::start_run(&state.db, &r, task_id, &dir, access, now()).map_err(text)
 }
 
 #[tauri::command]
 pub async fn poll_run(state: State<'_, AppState>, run: String) -> Res<AgentRun> {
     let r = remote(&state)?;
-    agent::poll_run(&mut state.db.lock().unwrap(), &r, &run, now()).map_err(text)
+    agent::poll_run(&state.db, &r, &run, now()).map_err(text)
 }
 
 #[tauri::command]
 pub async fn stop_run(state: State<'_, AppState>, run: String) -> Res<AgentRun> {
     let r = remote(&state)?;
-    agent::stop_run(&mut state.db.lock().unwrap(), &r, &run, now()).map_err(text)
+    agent::stop_run(&state.db, &r, &run, now()).map_err(text)
 }
 
 #[tauri::command]

@@ -218,3 +218,77 @@ fn parse_lines_handles_chatter_around_json() {
     assert_eq!(parse_lines("{not json} then {\"lines\": [\"A {brace} inside.\"]}"), ["A {brace} inside."]);
     assert_eq!(parse_lines("nothing here"), Vec::<String>::new());
 }
+
+#[test]
+fn concurrent_flushes_write_each_line_once() {
+    let w = World::new();
+    let path = w.dir.path().join("binder.db");
+    let mut db = Db::open(&path).unwrap();
+    let p = db.create_project(NewProject { name: "orbit".into(), ..Default::default() }, 1).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    for i in 0..40 {
+        conn.execute("INSERT INTO pending_done (project_id, date, text) VALUES (?1, '2026-11-13', ?2)", rusqlite::params![p.id, format!("Line {i}.")]).unwrap();
+    }
+    let vault = w.vault();
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let handles: Vec<_> = (0..2)
+        .map(|_| {
+            let (path, vault, barrier) = (path.clone(), vault.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                let mut db = Db::open(&path).unwrap();
+                barrier.wait();
+                flush_pending(&mut db, &vault).unwrap()
+            })
+        })
+        .collect();
+    let written: usize = handles.into_iter().map(|h| h.join().unwrap()).sum();
+    assert_eq!(written, 40);
+    let note = PathBuf::from(db.get_project(p.id).unwrap().note.unwrap());
+    let lines = notes::read_done(&note).unwrap();
+    assert_eq!(lines.len(), 40, "each line exactly once");
+}
+
+#[test]
+fn concurrent_summaries_read_the_talk_once() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Slow(std::sync::Arc<AtomicUsize>);
+    impl Summarizer for Slow {
+        fn lines(&self, _: &[String], _: &str) -> Result<Vec<String>> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            Ok(vec![])
+        }
+    }
+    let w = World::new();
+    let path = w.dir.path().join("binder.db");
+    let repo = w.dir.path().join("code/orbit").to_string_lossy().into_owned();
+    let mut db = Db::open(&path).unwrap();
+    db.create_project(NewProject { name: "orbit".into(), repo: Some(repo), ..Default::default() }, 1).unwrap();
+    let t = w.transcript("a.jsonl", FIXTURE);
+    let input = HookInput {
+        session_id: "s1".into(),
+        transcript_path: t.to_string_lossy().into_owned(),
+        cwd: w.dir.path().join("code/orbit").to_string_lossy().into_owned(),
+        hook_event_name: "SessionEnd".into(),
+    };
+    on_hook(&mut db, &input, 1).unwrap();
+    let calls = std::sync::Arc::new(AtomicUsize::new(0));
+    for _ in 0..20 {
+        // Each round adds new talk and races two summaries for it.
+        w.transcript("a.jsonl", &talk_line("user", "More."));
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let before = calls.load(Ordering::SeqCst);
+        let hs: Vec<_> = (0..2)
+            .map(|_| {
+                let (path, vault, barrier, calls) = (path.clone(), w.vault(), barrier.clone(), calls.clone());
+                std::thread::spawn(move || {
+                    let mut db = Db::open(&path).unwrap();
+                    barrier.wait();
+                    summarize(&mut db, &vault, &Slow(calls), "s1", "2026-11-13").unwrap()
+                })
+            })
+            .collect();
+        hs.into_iter().for_each(|h| { h.join().unwrap(); });
+        assert_eq!(calls.load(Ordering::SeqCst) - before, 1, "the same talk reached the model twice");
+    }
+}

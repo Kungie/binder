@@ -7,6 +7,7 @@ use crate::remote::{Remote, quote};
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
+use std::sync::{Mutex, MutexGuard};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -115,9 +116,19 @@ fn set_status(db: &mut Db, task_id: i64, status: Status, now: i64) -> Result<()>
     db.update_task(task_id, TaskPatch { status: Some(status), ..Default::default() }, now).map(|_| ())
 }
 
-pub fn start_run(db: &mut Db, remote: &dyn Remote, task_id: i64, dir: &str, access: Access, now: i64) -> Result<AgentRun> {
-    let task = db.get_task(task_id)?;
+fn lock(db: &Mutex<Db>) -> MutexGuard<'_, Db> {
+    db.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+// The database is locked only to read and write, never during an SSH call: a slow or stalled server must not
+// hold up the rest of the app.
+
+pub fn start_run(db: &Mutex<Db>, remote: &dyn Remote, task_id: i64, dir: &str, access: Access, now: i64) -> Result<AgentRun> {
+    let task = lock(db).get_task(task_id)?;
     let run = format!("{}-{now}", task.key).to_lowercase();
+    if get_run(&lock(db), &run).is_ok() {
+        return Err(Error::Invalid("That task just started a run.".into()));
+    }
     let prompt = if task.notes.trim().is_empty() { task.title.clone() } else { format!("{}\n\n{}", task.title, task.notes) };
     let f = files(&run);
     let script = format!(
@@ -128,29 +139,33 @@ pub fn start_run(db: &mut Db, remote: &dyn Remote, task_id: i64, dir: &str, acce
         flag = access.flag(),
     );
     remote.run(&script, Some(&prompt))?;
+    let mut db = lock(db);
     db.conn.execute(
         "INSERT INTO agent_runs (task_id, run, dir, access, started) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![task_id, run, dir, access.as_str(), now],
     )?;
-    set_status(db, task_id, Status::InProgress, now)?;
-    get_run(db, &run)
+    set_status(&mut db, task_id, Status::InProgress, now)?;
+    get_run(&db, &run)
 }
 
 /// Reads a live run once: its exit file, whether its process is alive, and the end of its log.
 /// A run that already ended is returned as it is.
-pub fn poll_run(db: &mut Db, remote: &dyn Remote, run: &str, now: i64) -> Result<AgentRun> {
-    let r = get_run(db, run)?;
+pub fn poll_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Result<AgentRun> {
+    let r = get_run(&lock(db), run)?;
     if r.ended.is_some() {
         return Ok(r);
     }
     let f = files(run);
+    // A login shell may print first, so the answer starts after a marker.
     let script = format!(
-        "if [ -f {f}.exit ]; then echo \"exit:$(cat {f}.exit)\"; \
+        "echo --binder:state--\n\
+         if [ -f {f}.exit ]; then echo \"exit:$(cat {f}.exit)\"; \
          elif kill -0 \"$(cat {f}.pid 2>/dev/null)\" 2>/dev/null; then echo running; else echo lost; fi\n\
          echo --binder:tail--\ntail -n 40 {f}.log 2>/dev/null\nexit 0\n"
     );
     let out = remote.run(&script, None)?;
-    let (head, tail) = out.split_once("--binder:tail--").unwrap_or((&out, ""));
+    let out = out.rsplit_once("--binder:state--").map_or(out.as_str(), |(_, after)| after);
+    let (head, tail) = out.split_once("--binder:tail--").unwrap_or((out, ""));
     let tail = tail.trim_matches('\n').trim_end().to_string();
     let head = head.trim();
     let (ended, code) = if head == "running" {
@@ -160,22 +175,24 @@ pub fn poll_run(db: &mut Db, remote: &dyn Remote, run: &str, now: i64) -> Result
     } else {
         (Some(now), None)
     };
-    db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3, tail = ?4 WHERE run = ?1", params![run, ended, code, tail])?;
+    let mut db = lock(db);
+    db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3, tail = ?4 WHERE run = ?1 AND ended IS NULL", params![run, ended, code, tail])?;
     if ended.is_some() {
-        set_status(db, r.task_id, if code == Some(0) { Status::Done } else { Status::Todo }, now)?;
+        set_status(&mut db, r.task_id, if code == Some(0) { Status::Done } else { Status::Todo }, now)?;
     }
-    get_run(db, run)
+    get_run(&db, run)
 }
 
 /// Stops a live run and everything it started.
-pub fn stop_run(db: &mut Db, remote: &dyn Remote, run: &str, now: i64) -> Result<AgentRun> {
-    let r = get_run(db, run)?;
+pub fn stop_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Result<AgentRun> {
+    let r = get_run(&lock(db), run)?;
     if r.ended.is_some() {
         return Ok(r);
     }
     let f = files(run);
     remote.run(&format!("kill -- -\"$(cat {f}.pid)\" 2>/dev/null\nexit 0\n"), None)?;
-    db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3 WHERE run = ?1", params![run, now, STOPPED])?;
-    set_status(db, r.task_id, Status::Todo, now)?;
-    get_run(db, run)
+    let mut db = lock(db);
+    db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3 WHERE run = ?1 AND ended IS NULL", params![run, now, STOPPED])?;
+    set_status(&mut db, r.task_id, Status::Todo, now)?;
+    get_run(&db, run)
 }
