@@ -85,6 +85,8 @@ pub fn run() {
             commands::set_claude_hooks,
             commands::github_sync,
             commands::open_repo_page,
+            commands::hidden_repos,
+            commands::unhide_repo,
             commands::cloud_status,
             commands::cloud_list,
             commands::cloud_mkdir,

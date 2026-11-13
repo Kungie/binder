@@ -191,10 +191,23 @@ impl Db {
     }
 
     /// Its tasks stay, keep their keys and lose the project.
-    pub fn delete_project(&mut self, id: i64) -> Result<()> {
-        if self.conn.execute("DELETE FROM projects WHERE id = ?1", [id])? == 0 {
+    /// Deletes a project. A GitHub project's repo is remembered as hidden, so sync doesn't bring it back.
+    pub fn delete_project(&mut self, id: i64, now: i64) -> Result<()> {
+        use rusqlite::OptionalExtension;
+        let tx = self.conn.unchecked_transaction()?;
+        let link: Option<(Option<String>, Option<String>)> =
+            tx.query_row("SELECT github, github_id FROM projects WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+        let Some((github, github_id)) = link else {
             return Err(Error::NotFound("project", id));
+        };
+        if let Some(name_with_owner) = github {
+            tx.execute(
+                "INSERT OR REPLACE INTO hidden_repos (github_id, name_with_owner, hidden_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![github_id, name_with_owner, now],
+            )?;
         }
+        tx.execute("DELETE FROM projects WHERE id = ?1", [id])?;
+        tx.commit()?;
         Ok(())
     }
 }

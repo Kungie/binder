@@ -13,7 +13,7 @@ use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
 use binder_core::agent::{self, Access, AgentRun};
 use binder_core::cloud::{self, Conflict, Space};
-use binder_core::github::{self, GhCli, SyncReport};
+use binder_core::github::{self, GhCli, HiddenRepo, SyncReport};
 use binder_core::{Db, Error, devices, hooks, repo, server};
 use tauri::Emitter;
 use std::path::Path;
@@ -86,7 +86,17 @@ pub async fn update_project(state: State<'_, AppState>, id: i64, patch: ProjectP
 
 #[tauri::command]
 pub async fn delete_project(state: State<'_, AppState>, id: i64) -> Res<()> {
-    state.db.lock().unwrap().delete_project(id).map_err(text)
+    state.db.lock().unwrap().delete_project(id, now()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn hidden_repos(state: State<'_, AppState>) -> Res<Vec<HiddenRepo>> {
+    state.db.lock().unwrap().list_hidden_repos().map_err(text)
+}
+
+#[tauri::command]
+pub async fn unhide_repo(state: State<'_, AppState>, name_with_owner: String) -> Res<()> {
+    state.db.lock().unwrap().unhide_repo(&name_with_owner).map_err(text)
 }
 
 /// Makes the note if needed and opens it in Obsidian.

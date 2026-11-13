@@ -170,3 +170,63 @@ fn a_renamed_repo_keeps_its_project() {
     assert_eq!(p.github.as_deref(), Some("demo-dev/gut-cli"));
     assert_eq!(p.url.as_deref(), Some("https://github.com/demo-dev/gut-cli"));
 }
+
+fn owned(name_with_owner: &str, id: Option<&str>) -> Repo {
+    let name = name_with_owner.split('/').nth(1).unwrap();
+    Repo { id: id.map(String::from), name_with_owner: name_with_owner.into(), url: format!("https://github.com/{name_with_owner}"), ..repo(name, 1) }
+}
+
+#[test]
+fn deleted_github_project_stays_deleted() {
+    let mut db = Db::in_memory().unwrap();
+    let gh = FakeGitHub(RefCell::new(vec![repo("a", 1), repo("b", 1)]));
+    sync(&mut db, &gh, NOW).unwrap();
+    db.delete_project(by_name(&db, "a").id, NOW).unwrap();
+    let report = sync(&mut db, &gh, NOW).unwrap();
+    assert_eq!(report.added, 0);
+    assert_eq!(db.list_projects().unwrap().len(), 1);
+    let hidden = db.list_hidden_repos().unwrap();
+    assert_eq!(hidden.len(), 1);
+    assert_eq!((hidden[0].github_id.as_deref(), hidden[0].name_with_owner.as_str(), hidden[0].hidden_at), (Some("R_a"), "demo-dev/a", NOW));
+}
+
+#[test]
+fn hidden_by_name_when_repo_had_no_id() {
+    let mut db = Db::in_memory().unwrap();
+    let gh = FakeGitHub(RefCell::new(vec![owned("Owner/Repo", None)]));
+    sync(&mut db, &gh, NOW).unwrap();
+    db.delete_project(by_name(&db, "Repo").id, NOW).unwrap();
+    *gh.0.borrow_mut() = vec![owned("owner/repo", None)];
+    assert_eq!(sync(&mut db, &gh, NOW).unwrap().added, 0);
+    assert!(db.list_projects().unwrap().is_empty());
+}
+
+#[test]
+fn hidden_repo_is_not_linked_by_name() {
+    let mut db = Db::in_memory().unwrap();
+    let gh = FakeGitHub(RefCell::new(vec![owned("owner/notes", Some("R_notes"))]));
+    sync(&mut db, &gh, NOW).unwrap();
+    db.delete_project(by_name(&db, "notes").id, NOW).unwrap();
+    db.create_project(NewProject { name: "notes".into(), ..Default::default() }, NOW).unwrap();
+    sync(&mut db, &gh, NOW).unwrap();
+    assert_eq!(by_name(&db, "notes").github, None);
+}
+
+#[test]
+fn unhide_brings_it_back() {
+    let mut db = Db::in_memory().unwrap();
+    let gh = FakeGitHub(RefCell::new(vec![owned("owner/notes", Some("R_notes"))]));
+    sync(&mut db, &gh, NOW).unwrap();
+    db.delete_project(by_name(&db, "notes").id, NOW).unwrap();
+    db.unhide_repo("owner/notes").unwrap();
+    assert!(db.list_hidden_repos().unwrap().is_empty());
+    assert_eq!(sync(&mut db, &gh, NOW).unwrap().added, 1);
+}
+
+#[test]
+fn deleting_a_hand_added_project_hides_nothing() {
+    let mut db = Db::in_memory().unwrap();
+    let p = db.create_project(NewProject { name: "scratch".into(), ..Default::default() }, NOW).unwrap();
+    db.delete_project(p.id, NOW).unwrap();
+    assert!(db.list_hidden_repos().unwrap().is_empty());
+}

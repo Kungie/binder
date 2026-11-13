@@ -124,6 +124,28 @@ impl GitHub for GhCli {
     }
 }
 
+/// A repo the owner deleted as a project. Sync leaves it out until it's brought back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HiddenRepo {
+    pub github_id: Option<String>,
+    pub name_with_owner: String,
+    pub hidden_at: i64,
+}
+
+impl Db {
+    pub fn list_hidden_repos(&self) -> Result<Vec<HiddenRepo>> {
+        let mut st = self.conn.prepare("SELECT github_id, name_with_owner, hidden_at FROM hidden_repos ORDER BY hidden_at DESC, name_with_owner")?;
+        let rows = st.query_map([], |r| Ok(HiddenRepo { github_id: r.get(0)?, name_with_owner: r.get(1)?, hidden_at: r.get(2)? }))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Lets sync bring the repo back as a new project.
+    pub fn unhide_repo(&mut self, name_with_owner: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM hidden_repos WHERE lower(name_with_owner) = lower(?1)", [name_with_owner])?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct SyncReport {
     pub added: usize,
@@ -166,7 +188,16 @@ fn apply(db: &mut Db, repos: &[Repo], now: i64) -> Result<SyncReport> {
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<rusqlite::Result<_>>()?;
     let id_of = |p: &crate::model::Project| ids.iter().find(|(pid, _)| *pid == p.id).map(|(_, g)| g.as_str());
+    let hidden = db.list_hidden_repos()?;
+    let is_hidden = |r: &Repo| {
+        hidden.iter().any(|h| {
+            (h.github_id.is_some() && h.github_id == r.id) || h.name_with_owner.to_lowercase() == r.name_with_owner.to_lowercase()
+        })
+    };
     for repo in repos {
+        if is_hidden(repo) {
+            continue;
+        }
         let facts = (&repo.url, &repo.description, &repo.pushed_at, repo.is_private, repo.is_archived, &repo.language);
         let known = repo
             .id

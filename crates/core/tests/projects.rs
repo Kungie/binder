@@ -76,7 +76,7 @@ fn deleting_project_keeps_its_tasks() {
     let mut db = Db::in_memory().unwrap();
     let p = project(&mut db, "dawn");
     let t = db.create_task(NewTask { title: "t".into(), project_id: Some(p.id), ..Default::default() }, 1).unwrap();
-    db.delete_project(p.id).unwrap();
+    db.delete_project(p.id, 0).unwrap();
     let after = db.get_task(t.id).unwrap();
     assert_eq!((after.project_id, after.key.as_str()), (None, "DAW-1"));
     assert!(matches!(db.get_project(p.id), Err(Error::NotFound("project", _))));

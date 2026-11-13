@@ -14,7 +14,7 @@ fn recreated_project_keeps_unique_keys() {
     let mut db = Db::in_memory().unwrap();
     let p = project(&mut db, "dawn").unwrap();
     assert_eq!(task_in(&mut db, p.id).unwrap().key, "DAW-1");
-    db.delete_project(p.id).unwrap();
+    db.delete_project(p.id, 0).unwrap();
     let again = project(&mut db, "dawn").unwrap();
     assert_eq!(again.prefix, "DAW");
     assert_eq!(task_in(&mut db, again.id).unwrap().key, "DAW-2");

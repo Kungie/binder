@@ -85,6 +85,10 @@ const MIGRATIONS: &[&str] = &[
     // v4: GitHub's repo id, which survives renames and transfers
     "ALTER TABLE projects ADD COLUMN github_id TEXT;
     CREATE UNIQUE INDEX projects_github_id ON projects(github_id);",
+    // v5: repos the owner deleted, done line times, small settings
+    "CREATE TABLE hidden_repos (id INTEGER PRIMARY KEY, github_id TEXT UNIQUE, name_with_owner TEXT NOT NULL, hidden_at INTEGER NOT NULL);
+    ALTER TABLE pending_done ADD COLUMN time TEXT;
+    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
 ];
 
 impl Db {
@@ -110,5 +114,16 @@ impl Db {
             conn.execute_batch(&format!("BEGIN; {sql}; PRAGMA user_version = {}; COMMIT;", i + 1))?;
         }
         Ok(Db { conn })
+    }
+
+    /// A small stored setting, such as `last_done`.
+    pub fn meta(&self, key: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        Ok(self.conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0)).optional()?)
+    }
+
+    pub fn set_meta(&mut self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute("INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = ?2", [key, value])?;
+        Ok(())
     }
 }
