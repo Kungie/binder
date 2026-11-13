@@ -23,6 +23,7 @@ pub enum Error {
     Remote(String),
 }
 
+pub mod agent;
 pub mod config;
 pub mod db;
 pub mod devices;
