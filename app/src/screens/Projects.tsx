@@ -8,7 +8,7 @@ import { Button, Notice } from "../components/ui";
 import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
-import { type DoneLine, type Project, type ProjectState, type RepoStatus, isClosed } from "../lib/types";
+import { type DoneLine, type HiddenRepo, type Project, type ProjectState, type RepoStatus, isClosed } from "../lib/types";
 import { useVault, vaultNotice } from "../lib/useVault";
 
 function DoneLog({ project }: { project: Project }) {
@@ -228,7 +228,9 @@ function Detail({ project }: { project: Project }) {
       <div className="mt-auto flex items-center gap-2 pt-4">
         {confirm ? (
           <>
-            <span className="text-[12px] text-text-2">Delete {project.name}? Its tasks stay, without a project. The note stays in the vault.</span>
+            <span className="text-[12px] text-text-2">
+              {`Delete ${project.name}? Its tasks stay, without a project. The note stays in the vault.${project.github ? " Sync won't bring the repo back." : ""}`}
+            </span>
             <Button variant="ghost" onClick={() => setConfirm(false)}>
               Keep
             </Button>
@@ -260,6 +262,55 @@ function Row({ project, current, open }: { project: Project; current: boolean; o
         <span className="w-5 text-right font-mono text-[11px] text-text-3">{open}</span>
       </button>
     </li>
+  );
+}
+
+/** Repos the owner deleted, folded under the list, each with Bring back. */
+function HiddenRepos() {
+  const { api, projects, syncGithub } = useStore();
+  const [repos, setRepos] = useState<HiddenRepo[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void api.hiddenRepos().then((r) => live && setRepos(r), () => live && setRepos([]));
+    return () => {
+      live = false;
+    };
+  }, [api, projects]);
+  if (repos.length === 0) return null;
+  const bringBack = async (name: string) => {
+    await api.unhideRepo(name);
+    setRepos((r) => r.filter((x) => x.name_with_owner !== name));
+    await syncGithub();
+  };
+  return (
+    <div className="border-t border-line px-2 py-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-7 w-full items-center rounded-control px-2 text-left text-[11px] text-text-3 hover:text-text-2"
+      >
+        {`Hidden from GitHub (${repos.length})`}
+      </button>
+      {open && (
+        <ul aria-label="Hidden from GitHub" className="flex flex-col gap-px">
+          {repos.map((r) => (
+            <li key={r.name_with_owner} className="flex h-7 items-center gap-2 px-2 text-[11px]">
+              <span className="min-w-0 flex-1 truncate font-mono text-text-3">{r.name_with_owner}</span>
+              <button
+                type="button"
+                aria-label={`Bring back ${r.name_with_owner}`}
+                onClick={() => void bringBack(r.name_with_owner)}
+                className="shrink-0 text-text-2 hover:text-text"
+              >
+                Bring back
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -309,6 +360,7 @@ export function Projects() {
           )}
           {showArchived && archived.map((p) => <Row key={p.id} project={p} current={p.id === current?.id} open={openCount(p.id)} />)}
         </ul>
+        <HiddenRepos />
       </div>
       {current ? (
         <Detail key={current.id} project={current} />

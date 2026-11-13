@@ -251,6 +251,14 @@ export interface Repo {
   language: string | null;
 }
 
+/** A repo the owner deleted as a project; sync leaves it out until it's brought back. */
+export interface HiddenRepo {
+  github_id: string | null;
+  name_with_owner: string;
+  /** Unix seconds */
+  hidden_at: number;
+}
+
 /** The last GitHub sync: when it ran and, if it failed, why. */
 export interface GithubSync {
   /** Unix seconds */

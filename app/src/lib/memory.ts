@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -113,6 +113,8 @@ export function memoryApi(
   };
 
   const opened: string[] = [];
+  let hidden: HiddenRepo[] = [];
+  const isHidden = (r: Repo) => hidden.some((h) => h.name_with_owner.toLowerCase() === r.name_with_owner.toLowerCase());
   const cloud = memoryCloud(seed.cloud, { mounted: () => options.cloudMounted ?? true, share: () => config.cloud_share });
 
   /** The core's sync rules: link by name, add new as active or paused, update facts only, archive what's gone. */
@@ -121,6 +123,7 @@ export function memoryApi(
     if (repos === null) throw new Error("Sign in with gh auth login to bring in your GitHub repos.");
     const report: SyncReport = { added: 0, linked: 0, updated: 0, archived: 0 };
     for (const r of repos) {
+      if (isHidden(r)) continue;
       let p = projects.find((x) => x.github === r.name_with_owner);
       if (p) {
         const same = p.url === r.url && p.description === r.description && p.pushed_at === r.pushed_at && p.private === r.is_private && p.archived === r.is_archived && p.language === r.language;
@@ -155,6 +158,12 @@ export function memoryApi(
     },
     opened,
     githubSync,
+    async hiddenRepos() {
+      return hidden.map((h) => ({ ...h }));
+    },
+    async unhideRepo(nameWithOwner) {
+      hidden = hidden.filter((h) => h.name_with_owner.toLowerCase() !== nameWithOwner.toLowerCase());
+    },
     async openRepoPage(projectId) {
       const p = project(projectId);
       if (!p.url) throw new Error("This project isn't on GitHub.");
@@ -274,7 +283,9 @@ export function memoryApi(
       return { ...p };
     },
     async deleteProject(id) {
-      projects.splice(projects.indexOf(project(id)), 1);
+      const p = project(id);
+      if (p.github) hidden.unshift({ github_id: null, name_with_owner: p.github, hidden_at: now() });
+      projects.splice(projects.indexOf(p), 1);
       for (const t of tasks) if (t.project_id === id) t.project_id = null;
     },
     async startProject(id) {

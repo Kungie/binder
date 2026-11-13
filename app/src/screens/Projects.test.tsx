@@ -137,4 +137,40 @@ describe("Claude Code", () => {
     expect(screen.getByText("pushed 1 day ago")).toBeInTheDocument();
     expect(screen.getByText("Local folder")).toBeInTheDocument();
   });
+
+  it("delete prompt says sync won't bring the repo back", async () => {
+    const { user } = await setup();
+    await pick(user, "orbit");
+    await user.click(screen.getByRole("button", { name: "Delete project" }));
+    expect(screen.getByText("Delete orbit? Its tasks stay, without a project. The note stays in the vault. Sync won't bring the repo back.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Keep" }));
+    await pick(user, "homelab");
+    await user.click(screen.getByRole("button", { name: "Delete project" }));
+    expect(screen.getByText("Delete homelab? Its tasks stay, without a project. The note stays in the vault.")).toBeInTheDocument();
+  });
+
+  it("hidden repos list and bring back", async () => {
+    const { user } = await setup();
+    expect(screen.queryByRole("button", { name: /^Hidden from GitHub/ })).toBeNull();
+    await pick(user, "tidepool");
+    await user.click(screen.getByRole("button", { name: "Delete project" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const list = screen.getByRole("list", { name: "Projects" });
+    await waitFor(() => expect(within(list).queryByRole("button", { name: /^tidepool/ })).toBeNull());
+    await user.click(await screen.findByRole("button", { name: "Hidden from GitHub (1)" }));
+    expect(screen.getByText("demo-dev/tidepool")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Bring back demo-dev/tidepool" }));
+    expect(await within(list).findByRole("button", { name: /^tidepool/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Hidden from GitHub/ })).toBeNull();
+  });
+
+  it("sync skips a deleted github project", async () => {
+    const { user } = await setup();
+    await pick(user, "tidepool");
+    await user.click(screen.getByRole("button", { name: "Delete project" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Sync" }));
+    await screen.findByText(/^Synced/);
+    expect(within(screen.getByRole("list", { name: "Projects" })).queryByRole("button", { name: /^tidepool/ })).toBeNull();
+  });
 });

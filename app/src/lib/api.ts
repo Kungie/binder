@@ -13,6 +13,7 @@ import type {
   Device,
   DevicePatch,
   GithubSync,
+  HiddenRepo,
   DoneLine,
   NewDevice,
   NewProject,
@@ -71,6 +72,10 @@ export interface Api {
   /** Whether Binder's hooks are in ~/.claude/settings.json. */
   claudeHooks(): Promise<boolean>;
   setClaudeHooks(on: boolean): Promise<boolean>;
+  /** Repos whose projects the owner deleted, newest first. */
+  hiddenRepos(): Promise<HiddenRepo[]>;
+  /** Lets the next sync bring a hidden repo back as a new project. */
+  unhideRepo(nameWithOwner: string): Promise<void>;
   /** Opens a project's GitHub page in the browser. */
   openRepoPage(projectId: number): Promise<void>;
   /** Brings the owner's GitHub repos in as projects, through gh's own login. */
@@ -149,6 +154,8 @@ export const tauriApi: Api = {
   setClaudeHooks: (on) => call("set_claude_hooks", { on }),
   onPrinter: (cb) => subscribe<PrinterView>("printer://state", cb),
   openRepoPage: (projectId) => call("open_repo_page", { projectId }),
+  hiddenRepos: () => call("hidden_repos"),
+  unhideRepo: (nameWithOwner) => call("unhide_repo", { nameWithOwner }),
   githubSync: () => call("github_sync"),
   onProjectsChanged: (cb) => subscribe<GithubSync>("projects://changed", cb),
   cloudStatus: () => call("cloud_status"),
