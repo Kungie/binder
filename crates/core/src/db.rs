@@ -72,11 +72,15 @@ const MIGRATIONS: &[&str] = &[
 ];
 
 impl Db {
+    /// The app and `binder-cli` share the file, so it uses WAL and waits up to 5 s for the other's lock.
     pub fn open(path: &Path) -> Result<Db> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        Db::setup(Connection::open(path)?)
+        let conn = Connection::open(path)?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        Db::setup(conn)
     }
 
     pub fn in_memory() -> Result<Db> {

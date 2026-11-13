@@ -79,3 +79,16 @@ describe("Repo", () => {
     for (const t of ["main", "3 changed", "↑1 ↓0", "Fix the toolbar spacing"]) expect(within(row).getByText(t)).toBeInTheDocument();
   });
 });
+
+describe("Claude Code", () => {
+  it("connect_toggles_in_settings", async () => {
+    const { api, user } = await setup({}, "settings");
+    const panel = await screen.findByRole("region", { name: "Claude Code" });
+    await user.click(await within(panel).findByRole("button", { name: "Connect" }));
+    expect(await within(panel).findByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(await api.claudeHooks()).toBe(true);
+    await user.click(within(panel).getByRole("button", { name: "Disconnect" }));
+    expect(await within(panel).findByRole("button", { name: "Connect" })).toBeInTheDocument();
+    expect(await api.claudeHooks()).toBe(false);
+  });
+});

@@ -293,6 +293,13 @@ export function memoryApi(
     onPrinter() {
       return () => {};
     },
+    async claudeHooks() {
+      return config.claude_hooks;
+    },
+    async setClaudeHooks(on) {
+      config = { ...config, claude_hooks: on };
+      return on;
+    },
     async repoStatus(projectId) {
       const p = project(projectId);
       return p.repo ? (seed.repos?.[projectId] ?? null) : null;

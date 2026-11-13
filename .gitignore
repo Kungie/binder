@@ -4,3 +4,4 @@ app/dist/
 .DS_Store
 .superpowers/
 app/src-tauri/gen/
+app/src-tauri/binaries/

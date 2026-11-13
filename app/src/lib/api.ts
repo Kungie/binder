@@ -61,6 +61,9 @@ export interface Api {
   printerCommand(serial: string, kind: PrinterCommand): Promise<void>;
   /** Calls back with each printer update. Returns the unsubscribe. */
   onPrinter(cb: (view: PrinterView) => void): () => void;
+  /** Whether Binder's hooks are in ~/.claude/settings.json. */
+  claudeHooks(): Promise<boolean>;
+  setClaudeHooks(on: boolean): Promise<boolean>;
 }
 
 /** Tauri sends a command's error as a string; make it an Error so callers handle one shape. */
@@ -104,6 +107,8 @@ export const tauriApi: Api = {
   addPrinter: ({ name, address, serial, accessCode }) => call("add_printer", { name, address, serial, accessCode }),
   removePrinter: (serial) => call("remove_printer", { serial }),
   printerCommand: (serial, kind) => call("printer_command", { serial, kind }),
+  claudeHooks: () => call("claude_hooks"),
+  setClaudeHooks: (on) => call("set_claude_hooks", { on }),
   onPrinter(cb) {
     const off = listen<PrinterView>("printer://state", (e) => cb(e.payload));
     return () => void off.then((f) => f());

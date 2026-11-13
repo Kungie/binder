@@ -12,7 +12,7 @@ use binder_core::remote::SshRemote;
 use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
 use binder_core::agent::{self, Access, AgentRun};
-use binder_core::{Db, Error, devices, repo, server};
+use binder_core::{Db, Error, devices, hooks, repo, server};
 use std::path::Path;
 use tauri::State;
 use tauri_plugin_opener::OpenerExt;
@@ -275,4 +275,33 @@ pub async fn remove_printer(state: State<'_, AppState>, serial: String) -> Res<(
 #[tauri::command]
 pub async fn printer_command(app: tauri::AppHandle, serial: String, kind: PrinterCommand) -> Res<()> {
     printer::send(&app, &serial, kind).await
+}
+
+fn claude_settings() -> Res<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".claude/settings.json")).ok_or_else(|| "HOME isn't set.".into())
+}
+
+#[tauri::command]
+pub async fn claude_hooks() -> Res<bool> {
+    Ok(hooks::installed(&claude_settings()?))
+}
+
+/// binder-cli sits beside the app's own executable, in the bundle and in a dev build alike.
+#[tauri::command]
+pub async fn set_claude_hooks(state: State<'_, AppState>, on: bool) -> Res<bool> {
+    let settings = claude_settings()?;
+    if on {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let cli = exe.with_file_name("binder-cli");
+        if !cli.is_file() {
+            return Err(format!("binder-cli is missing at {}", cli.display()));
+        }
+        hooks::install(&settings, &cli).map_err(text)?;
+    } else {
+        hooks::uninstall(&settings).map_err(text)?;
+    }
+    let mut c = state.config.lock().unwrap();
+    c.claude_hooks = on;
+    c.save(&state.config_path).map_err(text)?;
+    Ok(hooks::installed(&settings))
 }

@@ -29,6 +29,12 @@ pub fn run() {
             for p in printers {
                 printer::start(app.handle(), p);
             }
+            // Done lines that waited for the vault get written now, off the main thread in case the share is slow.
+            let data = dir.clone();
+            std::thread::spawn(move || {
+                let (Ok(config), Ok(mut db)) = (Config::load(&data.join("config.toml")), Db::open(&data.join("binder.db"))) else { return };
+                let _ = binder_core::session::flush_pending(&mut db, &config.vault);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,6 +69,8 @@ pub fn run() {
             commands::add_printer,
             commands::remove_printer,
             commands::printer_command,
+            commands::claude_hooks,
+            commands::set_claude_hooks,
         ])
         .run(tauri::generate_context!())
         .expect("Binder could not start");

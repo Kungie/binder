@@ -6,6 +6,43 @@ import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
 import { useVault } from "../lib/useVault";
 
+function ClaudeCode() {
+  const { api } = useStore();
+  const [on, setOn] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void api.claudeHooks().then(setOn);
+  }, [api]);
+  const toggle = async () => {
+    setError(null);
+    try {
+      setOn(await api.setClaudeHooks(!on));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <Panel title="Claude Code" label="Claude Code">
+      <div className="flex flex-col gap-3 border-t border-line p-3">
+        <div className="flex items-center gap-2 text-[12px]">
+          <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-text" : "border border-text-3"}`} aria-hidden="true" />
+          <span className="text-text-2">{on ? "Connected" : "Not connected"}</span>
+          {on !== null && (
+            <Button className="ml-auto" onClick={() => void toggle()}>
+              {on ? "Disconnect" : "Connect"}
+            </Button>
+          )}
+        </div>
+        {error && <Notice>{error}</Notice>}
+        <Notice>
+          Adds three hooks to ~/.claude/settings.json. When a session in a project's repo has new talk, Haiku picks out up to three key decisions for the
+          project's done log. It runs with your own Claude plan, after secrets are masked.
+        </Notice>
+      </div>
+    </Panel>
+  );
+}
+
 export function Settings() {
   const { api } = useStore();
   const vault = useVault();
@@ -55,6 +92,7 @@ export function Settings() {
             <Notice>The vault lives on the home server. Connect to its share in Finder once, save the password in the Keychain and add it to Login Items so it mounts at login.</Notice>
           </div>
         </Panel>
+        <ClaudeCode />
         <Panel title="Home server">
           <div className="flex flex-col gap-3 border-t border-line p-3">
             {server !== undefined && <ServerTargetForm initial={server ?? ""} onSaved={() => setServerSaved(true)} />}
