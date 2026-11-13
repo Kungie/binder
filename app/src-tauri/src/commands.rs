@@ -1,4 +1,6 @@
 //! The commands the interface calls. Each one locks what it needs, calls the core and turns errors into text.
+//! Commands that touch the vault are `async`, so Tauri runs them off the main thread: a slow or stalled
+//! SMB share must not freeze the window.
 
 use crate::AppState;
 use binder_core::config::Config;
@@ -79,9 +81,8 @@ pub fn delete_project(state: State<AppState>, id: i64) -> Res<()> {
 }
 
 /// Makes the note if needed and opens it in Obsidian.
-#[tauri::command]
-pub fn start_project(app: tauri::AppHandle, state: State<AppState>, id: i64) -> Res<Project> {
-    let vault = vault(&state);
+fn start(app: &tauri::AppHandle, state: &State<AppState>, id: i64) -> Res<Project> {
+    let vault = vault(state);
     let p = note_for(&mut state.db.lock().unwrap(), &vault, id).map_err(text)?;
     let note = p.note.clone().expect("note_for sets the note");
     app.opener().open_url(notes::obsidian_url(Path::new(&note)), None::<&str>).map_err(|e| e.to_string())?;
@@ -89,12 +90,17 @@ pub fn start_project(app: tauri::AppHandle, state: State<AppState>, id: i64) -> 
 }
 
 #[tauri::command]
-pub fn open_note(app: tauri::AppHandle, state: State<AppState>, id: i64) -> Res<()> {
-    start_project(app, state, id).map(|_| ())
+pub async fn start_project(app: tauri::AppHandle, state: State<'_, AppState>, id: i64) -> Res<Project> {
+    start(&app, &state, id)
 }
 
 #[tauri::command]
-pub fn log_done(state: State<AppState>, project_id: i64, text: String) -> Res<bool> {
+pub async fn open_note(app: tauri::AppHandle, state: State<'_, AppState>, id: i64) -> Res<()> {
+    start(&app, &state, id).map(|_| ())
+}
+
+#[tauri::command]
+pub async fn log_done(state: State<'_, AppState>, project_id: i64, text: String) -> Res<bool> {
     let vault = vault(&state);
     let p = note_for(&mut state.db.lock().unwrap(), &vault, project_id).map_err(self::text)?;
     let note = p.note.expect("note_for sets the note");
@@ -102,7 +108,7 @@ pub fn log_done(state: State<AppState>, project_id: i64, text: String) -> Res<bo
 }
 
 #[tauri::command]
-pub fn read_done(state: State<AppState>, project_id: i64) -> Res<Vec<DoneLine>> {
+pub async fn read_done(state: State<'_, AppState>, project_id: i64) -> Res<Vec<DoneLine>> {
     let p = state.db.lock().unwrap().get_project(project_id).map_err(text)?;
     match p.note {
         Some(note) => notes::read_done(Path::new(&note)).map_err(text),
@@ -111,7 +117,7 @@ pub fn read_done(state: State<AppState>, project_id: i64) -> Res<Vec<DoneLine>> 
 }
 
 #[tauri::command]
-pub fn done_today(state: State<AppState>) -> Res<Vec<(String, DoneLine)>> {
+pub async fn done_today(state: State<'_, AppState>) -> Res<Vec<(String, DoneLine)>> {
     let projects = state.db.lock().unwrap().list_projects().map_err(text)?;
     Ok(notes::done_on(&projects, &today()))
 }
@@ -129,6 +135,6 @@ pub fn set_config(state: State<AppState>, config: Config) -> Res<()> {
 }
 
 #[tauri::command]
-pub fn vault_connected(state: State<AppState>) -> bool {
-    vault(&state).is_dir()
+pub async fn vault_connected(state: State<'_, AppState>) -> Res<bool> {
+    Ok(vault(&state).is_dir())
 }

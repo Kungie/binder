@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../lib/store";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, type Task } from "../lib/types";
 import { Button, Field, fieldClass } from "./ui";
 
 /** The side sheet for one task. Text saves on blur, menus save on change. */
-export function TaskSheet({ task, onClose }: { task: Task; onClose(): void }) {
+export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): void; onStatus(status: Task["status"]): void }) {
   const { projects, updateTask, deleteTask } = useStore();
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
@@ -16,17 +16,30 @@ export function TaskSheet({ task, onClose }: { task: Task; onClose(): void }) {
     setConfirm(false);
   }, [task.id, task.title, task.notes]);
 
+  // Closing doesn't blur the fields, so text typed since the last blur is saved here.
+  const latest = useRef({ title, notes, task });
+  latest.current = { title, notes, task };
+  const close = useRef(() => {});
+  close.current = () => {
+    const { title: t, notes: n, task: current } = latest.current;
+    const patch: { title?: string; notes?: string } = {};
+    if (t.trim() && t !== current.title) patch.title = t;
+    if (n !== current.notes) patch.notes = n;
+    if (patch.title !== undefined || patch.notes !== undefined) void updateTask(current.id, patch);
+    onClose();
+  };
+
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && close.current();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   return (
     <aside role="dialog" aria-label={task.key} className="fade-in absolute inset-y-0 right-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel shadow-menu">
       <header className="flex h-11 items-center gap-2 border-b border-line px-4">
         <span className="font-mono text-[11px] text-text-3">{task.key}</span>
-        <Button variant="ghost" className="ml-auto" onClick={onClose} aria-label="Close">
+        <Button variant="ghost" className="ml-auto" onClick={() => close.current()} aria-label="Close">
           Esc
         </Button>
       </header>
@@ -39,7 +52,7 @@ export function TaskSheet({ task, onClose }: { task: Task; onClose(): void }) {
           className="bg-transparent text-[15px] font-medium text-text focus:outline-none"
         />
         <Field label="Status">
-          <select className={fieldClass} value={task.status} onChange={(e) => void updateTask(task.id, { status: e.target.value as Task["status"] })}>
+          <select className={fieldClass} value={task.status} onChange={(e) => onStatus(e.target.value as Task["status"])}>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABEL[s]}

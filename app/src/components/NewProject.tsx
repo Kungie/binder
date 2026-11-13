@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { derivePrefix } from "../lib/memory";
 import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
@@ -12,12 +12,6 @@ export function NewProject() {
   const [error, setError] = useState<string | null>(null);
   const close = () => setCreatingProject(false);
   const derived = derivePrefix(name, projects.map((p) => p.prefix));
-
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
 
   const submit = async () => {
     if (!name.trim()) return setError("Give it a name.");
@@ -39,6 +33,7 @@ export function NewProject() {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();
+          if (e.key === "Escape") return close();
           if (e.key === "Enter") {
             e.preventDefault();
             void submit();

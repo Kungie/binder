@@ -38,7 +38,7 @@ export function TaskBoard({ tasks, compact, label, empty }: { tasks: Task[]; com
         onAssign={(id, assignee) => void store.updateTask(id, { assignee })}
       />
       {prompt && <DonePrompt key={prompt.projectId + prompt.text} projectId={prompt.projectId} projectName={prompt.name} initial={prompt.text} onClose={() => setPrompt(null)} />}
-      {open && <TaskSheet task={open} onClose={close} />}
+      {open && <TaskSheet task={open} onClose={close} onStatus={(s) => void onStatus([open.id], s)} />}
     </>
   );
 }

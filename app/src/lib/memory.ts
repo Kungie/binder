@@ -113,11 +113,12 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
       const name = np.name.trim();
       if (!name) throw new Error("A project needs a name.");
       if (projects.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new Error(`There is already a project called ${name}.`);
-      const taken = projects.map((p) => p.prefix);
+      const taken = [...projects.map((p) => p.prefix), "TSK"];
       let prefix = derivePrefix(name, taken);
       if (np.prefix?.trim()) {
         prefix = np.prefix.trim().toUpperCase();
         if (!/^[A-Z0-9]{2,5}$/.test(prefix)) throw new Error("A prefix is 2 to 5 letters or digits.");
+        if (prefix === "TSK") throw new Error("TSK is kept for tasks without a project.");
         if (taken.includes(prefix)) throw new Error(`The prefix ${prefix} is taken.`);
       }
       const p: Project = { id: nextId++, name, prefix, repo: np.repo ?? null, note: null, state: "active", created: now() };

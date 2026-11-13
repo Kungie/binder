@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useStore } from "../lib/store";
 import type { Assignee } from "../lib/types";
 import { Button, fieldClass } from "./ui";
@@ -12,12 +12,6 @@ export function NewTask() {
   const [assignee, setAssignee] = useState<Assignee>(view.kind === "agent" ? "agent" : "me");
   const [error, setError] = useState<string | null>(null);
   const close = () => setCreatingTask(false);
-
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
 
   const submit = async () => {
     if (!title.trim()) return setError("Give it a title.");
@@ -38,6 +32,7 @@ export function NewTask() {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();
+          if (e.key === "Escape") return close();
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             void submit();

@@ -18,6 +18,11 @@ const MAX_CHARS: usize = 200;
 
 /// `vault/Projects/<name>.md`, with characters a file name or Obsidian link can't hold replaced by `-`.
 pub fn note_path(vault: &Path, project_name: &str) -> PathBuf {
+    vault.join("Projects").join(format!("{}.md", note_stem(project_name)))
+}
+
+/// The note's file name without `.md`. Two projects with the same stem (ignoring case) would share a note.
+pub fn note_stem(project_name: &str) -> String {
     let replaced: String = project_name
         .chars()
         .map(|c| if "/\\:*?\"<>|#^[]".contains(c) || c.is_control() { '-' } else { c })
@@ -30,7 +35,7 @@ pub fn note_path(vault: &Path, project_name: &str) -> PathBuf {
         collapsed.push(c);
     }
     let safe = collapsed.trim_matches(|c| c == ' ' || c == '-');
-    vault.join("Projects").join(format!("{}.md", if safe.is_empty() { "Untitled" } else { safe }))
+    if safe.is_empty() { "Untitled".into() } else { safe.into() }
 }
 
 fn need_vault(vault: &Path) -> Result<()> {

@@ -1,6 +1,7 @@
 //! Projects: names, task prefixes, state and the note path.
 
 use crate::model::*;
+use crate::notes::note_stem;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
@@ -44,8 +45,14 @@ pub fn derive_prefix(name: &str, taken: &[String]) -> String {
     candidate
 }
 
+/// Tasks without a project are `TSK-n`, so no project may use that prefix.
+const RESERVED: &str = "TSK";
+
 fn checked_prefix(given: &str) -> Result<String> {
     let p = given.trim().to_ascii_uppercase();
+    if p == RESERVED {
+        return Err(Error::Invalid("TSK is kept for tasks without a project.".into()));
+    }
     if (2..=5).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()) {
         Ok(p)
     } else {
@@ -64,21 +71,29 @@ impl Db {
         Ok(stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?)
     }
 
+    /// Whether another project has this name, or one that would share its note file, ignoring case in any script.
     fn name_taken(&self, name: &str, except: Option<i64>) -> Result<bool> {
-        let n: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM projects WHERE name = ?1 COLLATE NOCASE AND id IS NOT ?2",
-            params![name, except],
-            |r| r.get(0),
-        )?;
-        Ok(n > 0)
+        let (lower, stem) = (name.to_lowercase(), note_stem(name).to_lowercase());
+        let mut stmt = self.conn.prepare("SELECT id, name FROM projects")?;
+        let others = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(others.into_iter().any(|(id, other)| Some(id) != except && (other.to_lowercase() == lower || note_stem(&other).to_lowercase() == stem)))
+    }
+
+    /// One past the highest number tasks already use with this prefix, so a recreated project never reuses a key.
+    fn next_free_number(&self, prefix: &str) -> Result<i64> {
+        let mut stmt = self.conn.prepare("SELECT key FROM tasks WHERE key LIKE ?1")?;
+        let keys = stmt.query_map([format!("{prefix}-%")], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let max = keys.iter().filter_map(|k| k.strip_prefix(prefix)?.strip_prefix('-')?.parse::<i64>().ok()).max().unwrap_or(0);
+        Ok(max + 1)
     }
 
     pub fn create_project(&mut self, p: NewProject, now: i64) -> Result<Project> {
         let name = checked_name(&p.name)?;
         if self.name_taken(&name, None)? {
-            return Err(Error::Invalid(format!("There is already a project called {name}.")));
+            return Err(Error::Invalid(format!("There is already a project called {name}, or one whose note would share its file.")));
         }
-        let taken = self.prefixes()?;
+        let mut taken = self.prefixes()?;
+        taken.push(RESERVED.to_string());
         let prefix = match p.prefix.as_deref().filter(|s| !s.trim().is_empty()) {
             Some(given) => {
                 let prefix = checked_prefix(given)?;
@@ -89,9 +104,10 @@ impl Db {
             }
             None => derive_prefix(&name, &taken),
         };
+        let next = self.next_free_number(&prefix)?;
         self.conn.execute(
-            "INSERT INTO projects (name, prefix, repo, state, created) VALUES (?1, ?2, ?3, 'active', ?4)",
-            params![name, prefix, p.repo, now],
+            "INSERT INTO projects (name, prefix, repo, state, next_number, created) VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            params![name, prefix, p.repo, next, now],
         )?;
         self.get_project(self.conn.last_insert_rowid())
     }
@@ -116,7 +132,7 @@ impl Db {
         if let Some(name) = patch.name {
             let name = checked_name(&name)?;
             if self.name_taken(&name, Some(id))? {
-                return Err(Error::Invalid(format!("There is already a project called {name}.")));
+                return Err(Error::Invalid(format!("There is already a project called {name}, or one whose note would share its file.")));
             }
             p.name = name;
         }

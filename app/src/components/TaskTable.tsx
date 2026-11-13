@@ -43,7 +43,9 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
     gridRef.current?.querySelector(`[data-id="${focused?.id}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [focused?.id]);
 
-  const targets = () => (selected.size > 0 ? [...selected] : focused ? [focused.id] : []);
+  // Only rows still shown count: a view change must not act on tasks that left it.
+  const shown = [...selected].filter((id) => tasks.some((t) => t.id === id));
+  const targets = () => (shown.length > 0 ? shown : focused ? [focused.id] : []);
   const pick = (status: Status) => {
     const ids = targets();
     setMenu(null);
@@ -138,7 +140,7 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
       {tasks.length === 0 && <p className="px-3 py-6 text-[12px] text-text-3">{empty}</p>}
       {tasks.map((t, i) => {
         const isFocused = i === index;
-        const isSelected = selected.has(t.id);
+        const isSelected = shown.includes(t.id);
         const closed = isClosed(t.status);
         return (
           <div key={t.id} className="relative">
