@@ -99,7 +99,7 @@ function Detail({ project }: { project: Project }) {
       <div className="flex items-center gap-2 text-[12px]">
         <span className="w-20 text-text-3">Repo</span>
         <span className="truncate font-mono text-[11px] text-text-2">{project.repo ?? "None"}</span>
-        <Button variant="ghost" onClick={() => void pickFolder().then((f) => f && updateProject(project.id, { repo: f }))}>
+        <Button variant="ghost" onClick={() => void pickFolder().then((f) => (f ? updateProject(project.id, { repo: f }) : null))}>
           Choose
         </Button>
       </div>
