@@ -5,7 +5,7 @@ use crate::notes::note_stem;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
-const COLUMNS: &str = "id, name, prefix, repo, note, state, created";
+const COLUMNS: &str = "id, name, prefix, repo, note, state, created, agent_dir";
 
 fn row_to_project(r: &Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -16,6 +16,7 @@ fn row_to_project(r: &Row) -> rusqlite::Result<Project> {
         note: r.get(4)?,
         state: ProjectState::parse(&r.get::<_, String>(5)?),
         created: r.get(6)?,
+        agent_dir: r.get(7)?,
     })
 }
 
@@ -144,9 +145,12 @@ impl Db {
         if let Some(state) = patch.state {
             p.state = state;
         }
+        if let Some(dir) = patch.agent_dir {
+            p.agent_dir = Some(dir.trim().to_string()).filter(|d| !d.is_empty());
+        }
         self.conn.execute(
-            "UPDATE projects SET name = ?2, repo = ?3, state = ?4 WHERE id = ?1",
-            params![id, p.name, p.repo, p.state.as_str()],
+            "UPDATE projects SET name = ?2, repo = ?3, state = ?4, agent_dir = ?5 WHERE id = ?1",
+            params![id, p.name, p.repo, p.state.as_str(), p.agent_dir],
         )?;
         self.get_project(id)
     }

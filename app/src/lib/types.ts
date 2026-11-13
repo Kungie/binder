@@ -51,6 +51,7 @@ export interface Project {
   note: string | null;
   state: ProjectState;
   created: number;
+  agent_dir: string | null;
 }
 
 export interface NewProject {
@@ -64,6 +65,8 @@ export interface ProjectPatch {
   repo?: string;
   clear_repo?: boolean;
   state?: ProjectState;
+  /** Blank clears it. */
+  agent_dir?: string;
 }
 
 export interface DoneLine {
@@ -136,6 +139,20 @@ export interface ServerStatus {
   disk_used: number;
   temp_c: number | null;
   at: number;
+}
+
+export type Access = "edits_only" | "full";
+
+export interface AgentRun {
+  id: number;
+  task_id: number;
+  run: string;
+  dir: string;
+  access: Access;
+  started: number;
+  ended: number | null;
+  exit_code: number | null;
+  tail: string;
 }
 
 export interface RepoStatus {

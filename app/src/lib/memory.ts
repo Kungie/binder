@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
+import type { AgentRun, Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
 import { localDay, oneLine, viewTasks } from "./tasks";
 
 export interface Seed {
@@ -41,6 +41,12 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
   const done: Record<number, DoneLine[]> = Object.fromEntries(Object.entries(seed.done).map(([k, v]) => [k, [...v]]));
   const counters: Record<string, number> = {};
   const devices = (seed.devices ?? []).map((d) => ({ ...d }));
+  const runs: AgentRun[] = [];
+  const findRun = (run: string) => {
+    const r = runs.find((x) => x.run === run);
+    if (!r) throw new Error(`No run called ${run}.`);
+    return r;
+  };
   const offline = options.offline ?? ["10.0.7.30"];
   let reachable = true;
   let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: false };
@@ -143,7 +149,7 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
         if (prefix === "TSK") throw new Error("TSK is kept for tasks without a project.");
         if (taken.includes(prefix)) throw new Error(`The prefix ${prefix} is taken.`);
       }
-      const p: Project = { id: nextId++, name, prefix, repo: np.repo ?? null, note: null, state: "active", created: now() };
+      const p: Project = { id: nextId++, name, prefix, repo: np.repo ?? null, note: null, state: "active", created: now(), agent_dir: null };
       projects.push(p);
       return { ...p };
     },
@@ -153,6 +159,7 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
       if (patch.clear_repo) p.repo = null;
       else if (patch.repo !== undefined) p.repo = patch.repo;
       if (patch.state) p.state = patch.state;
+      if (patch.agent_dir !== undefined) p.agent_dir = patch.agent_dir.trim() || null;
       return { ...p };
     },
     async deleteProject(id) {
@@ -223,6 +230,34 @@ export function memoryApi(seed: Seed, options: MemoryOptions = {}): Api & { done
     async probeDevices() {
       return devices.map((d) => [d.id, !offline.includes(d.address)] as [number, boolean]);
     },
+    // A demo run finishes on its first poll.
+    async startRun(taskId, dir, access) {
+      if (!config.server) throw new Error("No server set.");
+      const t = task(taskId);
+      const r: AgentRun = { id: nextId++, task_id: taskId, run: `${t.key.toLowerCase()}-${now()}`, dir, access, started: now(), ended: null, exit_code: null, tail: "" };
+      runs.unshift(r);
+      t.status = "in_progress";
+      return { ...r };
+    },
+    async pollRun(run) {
+      const r = findRun(run);
+      if (r.ended === null) {
+        Object.assign(r, { ended: now(), exit_code: 0, tail: "Pruned 4 images.\nFreed 2.1 GB." });
+        task(r.task_id).status = "done";
+      }
+      return { ...r };
+    },
+    async stopRun(run) {
+      const r = findRun(run);
+      if (r.ended === null) {
+        Object.assign(r, { ended: now(), exit_code: 143 });
+        task(r.task_id).status = "todo";
+      }
+      return { ...r };
+    },
+    async runsFor(taskId) {
+      return runs.filter((r) => r.task_id === taskId).map((r) => ({ ...r }));
+    },
     async repoStatus(projectId) {
       const p = project(projectId);
       return p.repo ? (seed.repos?.[projectId] ?? null) : null;
@@ -235,8 +270,8 @@ export function demoSeed(): Seed {
   const t = Math.floor(Date.now() / 1000);
   const day = localDay();
   const projects: Project[] = [
-    { id: 1, name: "orbit", prefix: "ORB", repo: "~/code/orbit", note: "/Volumes/vault/Projects/orbit.md", state: "active", created: t - 864000 },
-    { id: 2, name: "homelab", prefix: "LAB", repo: null, note: null, state: "active", created: t - 432000 },
+    { id: 1, name: "orbit", prefix: "ORB", repo: "~/code/orbit", note: "/Volumes/vault/Projects/orbit.md", state: "active", created: t - 864000, agent_dir: null },
+    { id: 2, name: "homelab", prefix: "LAB", repo: null, note: null, state: "active", created: t - 432000, agent_dir: "~/homelab" },
   ];
   const mk = (id: number, key: string, title: string, extra: Partial<Task>): Task => ({
     id: id + 10,

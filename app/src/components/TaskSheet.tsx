@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../lib/store";
 import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, type Task } from "../lib/types";
+import { AgentRun } from "./AgentRun";
 import { Button, Field, fieldClass } from "./ui";
 
 /** The side sheet for one task. Text saves on blur, menus save on change. */
@@ -97,6 +98,7 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
             onChange={(e) => void updateTask(task.id, e.target.value ? { due: e.target.value } : { clear_due: true })}
           />
         </Field>
+        {task.assignee === "agent" && <AgentRun key={task.id} task={task} />}
         <textarea
           aria-label="Notes"
           placeholder="Notes, in Markdown"

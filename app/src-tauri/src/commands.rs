@@ -9,6 +9,7 @@ use binder_core::notes::{self, DoneLine};
 use binder_core::remote::SshRemote;
 use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
+use binder_core::agent::{self, Access, AgentRun};
 use binder_core::{Db, Error, devices, repo, server};
 use std::path::Path;
 use tauri::State;
@@ -196,4 +197,32 @@ fn expand_home(path: &str) -> std::path::PathBuf {
 pub async fn repo_status(state: State<'_, AppState>, project_id: i64) -> Res<Option<RepoStatus>> {
     let p = state.db.lock().unwrap().get_project(project_id).map_err(text)?;
     Ok(p.repo.and_then(|r| repo::repo_status(&expand_home(&r)).ok()))
+}
+
+fn remote(state: &State<AppState>) -> Res<SshRemote> {
+    Ok(SshRemote { target: server_target(state)? })
+}
+
+// The agent commands hold the database lock through one SSH call. Other commands wait for it, the window doesn't.
+#[tauri::command]
+pub async fn start_run(state: State<'_, AppState>, task_id: i64, dir: String, access: Access) -> Res<AgentRun> {
+    let r = remote(&state)?;
+    agent::start_run(&mut state.db.lock().unwrap(), &r, task_id, &dir, access, now()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn poll_run(state: State<'_, AppState>, run: String) -> Res<AgentRun> {
+    let r = remote(&state)?;
+    agent::poll_run(&mut state.db.lock().unwrap(), &r, &run, now()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn stop_run(state: State<'_, AppState>, run: String) -> Res<AgentRun> {
+    let r = remote(&state)?;
+    agent::stop_run(&mut state.db.lock().unwrap(), &r, &run, now()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn runs_for(state: State<'_, AppState>, task_id: i64) -> Res<Vec<AgentRun>> {
+    agent::list_runs(&state.db.lock().unwrap(), task_id).map_err(text)
 }

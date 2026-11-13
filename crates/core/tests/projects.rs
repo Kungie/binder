@@ -110,3 +110,14 @@ fn set_note_is_stored() {
     db.set_project_note(p.id, "/Volumes/vault/Projects/dawn.md").unwrap();
     assert_eq!(db.get_project(p.id).unwrap().note.as_deref(), Some("/Volumes/vault/Projects/dawn.md"));
 }
+
+#[test]
+fn agent_dir_is_set_and_cleared() {
+    let mut db = Db::in_memory().unwrap();
+    let p = project(&mut db, "homelab");
+    assert_eq!(p.agent_dir, None);
+    let p = db.update_project(p.id, ProjectPatch { agent_dir: Some("~/homelab".into()), ..Default::default() }).unwrap();
+    assert_eq!(p.agent_dir.as_deref(), Some("~/homelab"));
+    let p = db.update_project(p.id, ProjectPatch { agent_dir: Some("  ".into()), ..Default::default() }).unwrap();
+    assert_eq!(p.agent_dir, None);
+}

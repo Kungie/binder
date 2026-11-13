@@ -81,6 +81,26 @@ function GitRow({ project }: { project: Project }) {
   );
 }
 
+function AgentDir({ project }: { project: Project }) {
+  const { updateProject } = useStore();
+  const [dir, setDir] = useState(project.agent_dir ?? "");
+  useEffect(() => setDir(project.agent_dir ?? ""), [project.agent_dir]);
+  const save = () => dir !== (project.agent_dir ?? "") && void updateProject(project.id, { agent_dir: dir });
+  return (
+    <label className="flex items-center gap-2 text-[12px]">
+      <span className="w-20 shrink-0 text-text-3">Agent folder</span>
+      <input
+        value={dir}
+        placeholder="~ on the server"
+        onChange={(e) => setDir(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => e.key === "Enter" && save()}
+        className="h-6 min-w-0 flex-1 bg-transparent font-mono text-[11px] text-text-2 placeholder:text-text-3 focus:text-text focus:outline-none"
+      />
+    </label>
+  );
+}
+
 function Detail({ project }: { project: Project }) {
   const { api, tasks, updateProject, deleteProject, reload } = useStore();
   const vault = useVault();
@@ -128,6 +148,7 @@ function Detail({ project }: { project: Project }) {
         </Button>
       </div>
       <GitRow project={project} />
+      <AgentDir project={project} />
       {project.note && (
         <div className="flex items-center gap-2 text-[12px]">
           <span className="w-20 text-text-3">Note</span>

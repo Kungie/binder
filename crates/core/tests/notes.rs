@@ -6,6 +6,7 @@ use std::path::Path;
 
 fn project(name: &str, repo: Option<&str>, note: Option<&Path>) -> Project {
     Project {
+        agent_dir: None,
         id: 1,
         name: name.into(),
         prefix: "P".into(),

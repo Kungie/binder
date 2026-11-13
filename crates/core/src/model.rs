@@ -167,6 +167,8 @@ pub struct Project {
     pub note: Option<String>,
     pub state: ProjectState,
     pub created: i64,
+    /// The folder on the home server where the agent runs this project's tasks.
+    pub agent_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -184,6 +186,8 @@ pub struct ProjectPatch {
     pub repo: Option<String>,
     pub clear_repo: bool,
     pub state: Option<ProjectState>,
+    /// Blank clears it.
+    pub agent_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

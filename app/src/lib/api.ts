@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  Access,
+  AgentRun,
   Config,
   Device,
   DevicePatch,
@@ -43,6 +45,11 @@ export interface Api {
   /** Each device's id with whether it answered on its port. */
   probeDevices(): Promise<[number, boolean][]>;
   repoStatus(projectId: number): Promise<RepoStatus | null>;
+  startRun(taskId: number, dir: string, access: Access): Promise<AgentRun>;
+  pollRun(run: string): Promise<AgentRun>;
+  stopRun(run: string): Promise<AgentRun>;
+  /** A task's runs, newest first. */
+  runsFor(taskId: number): Promise<AgentRun[]>;
 }
 
 /** Tauri sends a command's error as a string; make it an Error so callers handle one shape. */
@@ -78,6 +85,10 @@ export const tauriApi: Api = {
   deleteDevice: (id) => call("delete_device", { id }),
   probeDevices: () => call("probe_devices"),
   repoStatus: (projectId) => call("repo_status", { projectId }),
+  startRun: (taskId, dir, access) => call("start_run", { taskId, dir, access }),
+  pollRun: (run) => call("poll_run", { run }),
+  stopRun: (run) => call("stop_run", { run }),
+  runsFor: (taskId) => call("runs_for", { taskId }),
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
