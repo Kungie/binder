@@ -25,6 +25,7 @@ pub enum Error {
 
 pub mod agent;
 pub mod cloud;
+pub mod cloud_fast;
 pub mod config;
 pub mod db;
 pub mod devices;
@@ -39,6 +40,7 @@ pub mod remote;
 pub mod repo;
 pub mod server;
 pub mod session;
+pub mod shell;
 pub mod tasks;
 
 pub use db::Db;

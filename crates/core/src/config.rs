@@ -18,6 +18,8 @@ pub struct Config {
     pub cloud: PathBuf,
     /// The share's address, for Connect: `smb://host/cloud`.
     pub cloud_share: Option<String>,
+    /// The shared folder's path on the server, for the SSH fast path.
+    pub cloud_remote: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -32,7 +34,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into() }
     }
 }
 

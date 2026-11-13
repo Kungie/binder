@@ -184,7 +184,7 @@ fn size_of(path: &Path) -> Result<u64> {
     }
 }
 
-fn remove(path: &Path) -> std::io::Result<()> {
+pub(crate) fn remove(path: &Path) -> std::io::Result<()> {
     match fs::symlink_metadata(path) {
         Ok(m) if m.is_dir() => fs::remove_dir_all(path),
         Ok(_) => fs::remove_file(path),
@@ -582,10 +582,15 @@ impl<W: Write + std::io::Seek> Zipper<'_, W> {
     }
 }
 
-/// Zips items from one folder into that folder: one item makes `<its name>.zip`, several make `Archive.zip`, with a
-/// free name when taken. Written to a partial and landed at the end; links are stored as links. Progress counts
-/// items. This is the fallback when the server can't run `zip` itself.
-pub fn compress_local(root: &Path, rels: &[String], cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+/// Where a zip of `rels` goes: their shared folder, each item's path, and the zip's name before a free one is picked.
+pub(crate) struct ZipPlan {
+    pub rel_dir: String,
+    pub dir: PathBuf,
+    pub items: Vec<PathBuf>,
+    pub name: String,
+}
+
+pub(crate) fn zip_plan(root: &Path, rels: &[String]) -> Result<ZipPlan> {
     let parent_of = |rel: &str| rel.trim_matches('/').rsplit_once('/').map_or(String::new(), |(dir, _)| dir.to_string());
     let first = rels.first().ok_or_else(|| Error::Invalid("Nothing to compress.".into()))?;
     let rel_dir = parent_of(first);
@@ -594,10 +599,21 @@ pub fn compress_local(root: &Path, rels: &[String], cancel: &AtomicBool, progres
     }
     let dir = resolve(root, &rel_dir)?;
     let items: Vec<PathBuf> = rels.iter().map(|r| resolve(root, r)).collect::<Result<_>>()?;
+    for item in &items {
+        fs::symlink_metadata(item)?;
+    }
     let name = match items.as_slice() {
         [one] => format!("{}.zip", one.file_name().expect("not the root").to_string_lossy()),
         _ => "Archive.zip".into(),
     };
+    Ok(ZipPlan { rel_dir, dir, items, name })
+}
+
+/// Zips items from one folder into that folder: one item makes `<its name>.zip`, several make `Archive.zip`, with a
+/// free name when taken. Written to a partial and landed at the end; links are stored as links. Progress counts
+/// items. This is the fallback when the server can't run `zip` itself.
+pub fn compress_local(root: &Path, rels: &[String], cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+    let ZipPlan { dir, items, name, .. } = zip_plan(root, rels)?;
     let total = items.iter().map(|p| count(p)).sum::<Result<u64>>()?;
     let partial = dir.join(partial_name(&name));
     let made = (|| -> Result<()> {
@@ -621,11 +637,12 @@ pub fn compress_local(root: &Path, rels: &[String], cancel: &AtomicBool, progres
     }
 }
 
-fn leaves(name: &str) -> bool {
+/// True for a zip entry name that is absolute or climbs out with `..`.
+pub(crate) fn leaves(name: &str) -> bool {
     name.starts_with('/') || name.starts_with('\\') || name.split(['/', '\\']).any(|part| part == "..")
 }
 
-fn escapes() -> Error {
+pub(crate) fn escapes() -> Error {
     Error::Invalid("This zip has paths that leave its folder.".into())
 }
 

@@ -15,3 +15,11 @@ fn config_round_trips() {
     Config { vault: "/tmp/v".into(), ..Config::default() }.save(&path).unwrap();
     assert_eq!(Config::load(&path).unwrap().vault, Path::new("/tmp/v"));
 }
+
+#[test]
+fn cloud_remote_defaults_to_srv_cloud() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(Config::load(&dir.path().join("config.toml")).unwrap().cloud_remote, "/srv/cloud");
+    std::fs::write(dir.path().join("old.toml"), "vault = \"/v\"\n").unwrap();
+    assert_eq!(Config::load(&dir.path().join("old.toml")).unwrap().cloud_remote, "/srv/cloud", "a 2.1 file gets the default");
+}
