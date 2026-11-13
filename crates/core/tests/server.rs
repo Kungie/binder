@@ -44,6 +44,14 @@ fn fetch_splits_sections_from_one_call() {
     assert_eq!((s.containers.len(), s.services.len(), s.at), (2, 3, 1_700_000_000));
     assert_eq!(s.disk_used, 50840000000);
     assert_eq!(s.temp_c, Some(48.312));
+    assert_eq!(s.cores, 4);
+}
+
+#[test]
+fn parses_cores() {
+    assert_eq!(parse_cores("4\n"), 4);
+    assert_eq!(parse_cores(""), 0);
+    assert_eq!(parse_cores("x"), 0);
 }
 
 #[test]

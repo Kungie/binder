@@ -2,6 +2,9 @@ import { Dot, Metric } from "../components/Metric";
 import { Panel } from "../components/Panel";
 import { ServerTargetForm } from "../components/ServerTargetForm";
 import { Button, Notice } from "../components/ui";
+import { useState } from "react";
+import { loadPercent } from "../lib/load";
+import type { Service } from "../lib/types";
 import { clock, gb, percent, useServer } from "../lib/useServer";
 
 export function Server() {
@@ -42,7 +45,7 @@ export function Server() {
           {status && (
             <>
               <div className={`grid grid-cols-4 gap-3 ${error ? "opacity-60" : ""}`}>
-                <Metric title="Load" value={status.load[0].toFixed(2)} detail={`${status.load[1].toFixed(2)}  ${status.load[2].toFixed(2)}`} />
+                <LoadMetric load={status.load} cores={status.cores} />
                 <Metric
                   title="Memory"
                   value={percent(status.mem_total - status.mem_available, status.mem_total)}
@@ -53,17 +56,7 @@ export function Server() {
               </div>
               <div className={`grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start gap-3 ${error ? "opacity-60" : ""}`}>
                 <Containers status={status} />
-                <Panel title="Services" action={<span className="font-mono text-[11px] text-text-3">{status.services.length}</span>}>
-                  <ul aria-label="Running services" className="border-t border-line">
-                    {status.services.map((s) => (
-                      <li key={s.name} className="flex flex-col gap-0.5 border-b border-line px-3 py-2 text-[12px] last:border-b-0">
-                        <span className="font-mono text-[11px] text-text">{s.name}</span>
-                        <span className="truncate text-text-3">{s.description}</span>
-                      </li>
-                    ))}
-                    {status.services.length === 0 && <li className="px-3 py-3 text-[12px] text-text-3">No services read.</li>}
-                  </ul>
-                </Panel>
+                <Services services={status.services} />
               </div>
             </>
           )}
@@ -101,6 +94,41 @@ function Containers({ status }: { status: NonNullable<ReturnType<typeof useServe
         </tbody>
       </table>
       {rows.length === 0 && <p className="border-t border-line px-3 py-3 text-[12px] text-text-3">No containers, or Docker isn't readable.</p>}
+    </Panel>
+  );
+}
+
+export const SERVICES_SHOWN = 13;
+
+/** The 1-minute load over the cores, with 5 and 15 minutes under it; the raw numbers without a core count. */
+function LoadMetric({ load, cores }: { load: [number, number, number]; cores: number }) {
+  const pct = loadPercent(load[0], cores);
+  if (pct === null) return <Metric title="Load" value={load[0].toFixed(2)} detail={`${load[1].toFixed(2)}  ${load[2].toFixed(2)}`} />;
+  return <Metric title="Load" value={pct} detail={`5 min ${loadPercent(load[1], cores)}  15 min ${loadPercent(load[2], cores)}`} />;
+}
+
+/** Running services: the first 13, then all of them on request. The count stays the total. */
+function Services({ services }: { services: Service[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? services : services.slice(0, SERVICES_SHOWN);
+  return (
+    <Panel title="Services" label="Services" action={<span className="font-mono text-[11px] text-text-3">{services.length}</span>}>
+      <ul aria-label="Running services" className="border-t border-line">
+        {shown.map((s) => (
+          <li key={s.name} className="flex flex-col gap-0.5 border-b border-line px-3 py-2 text-[12px] last:border-b-0">
+            <span className="font-mono text-[11px] text-text">{s.name}</span>
+            <span className="truncate text-text-3">{s.description}</span>
+          </li>
+        ))}
+        {services.length === 0 && <li className="px-3 py-3 text-[12px] text-text-3">No services read.</li>}
+        {services.length > SERVICES_SHOWN && (
+          <li>
+            <button type="button" onClick={() => setAll(!all)} className="w-full px-3 py-2 text-left text-[12px] text-text-3 hover:text-text">
+              {all ? "Show fewer" : `Show all (${services.length})`}
+            </button>
+          </li>
+        )}
+      </ul>
     </Panel>
   );
 }

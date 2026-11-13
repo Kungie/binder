@@ -615,6 +615,7 @@ export function demoSeed(): Seed {
         { name: "tailscaled", description: "Tailscale node agent" },
       ],
       load: [0.42, 0.37, 0.3],
+      cores: 4,
       mem_total: 8 * GB,
       mem_available: 3.9 * GB,
       disk_size: 58 * GB,

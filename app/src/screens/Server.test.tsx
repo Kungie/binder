@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import { Shell } from "../App";
 import { StoreProvider } from "../lib/store";
 import { type MemoryOptions, demoSeed, memoryApi } from "../lib/memory";
+import type { ServerStatus } from "../lib/types";
 
-function setup(options: MemoryOptions = {}) {
-  const api = memoryApi(demoSeed(), options);
+function setup(options: MemoryOptions = {}, change?: (s: ServerStatus) => void) {
+  const seed = demoSeed();
+  if (change) change(seed.server!);
+  const api = memoryApi(seed, options);
   const user = userEvent.setup();
   render(
     <StoreProvider api={api} initialScreen="server">
@@ -42,5 +45,57 @@ describe("Server", () => {
     await user.click(screen.getByRole("button", { name: "Connect" }));
     await waitFor(async () => expect((await api.getConfig()).server).toBe("lab"));
     expect(await screen.findByRole("table", { name: "Containers" })).toBeInTheDocument();
+  });
+
+  it("load shows as a percentage", async () => {
+    setup({}, (s) => ((s.load = [0.74, 0.8, 0.62]), (s.cores = 2)));
+    const load = await screen.findByRole("group", { name: /^Load:/ });
+    expect(load).toHaveTextContent("37%");
+    expect(load).toHaveTextContent(/5 min 40%\s+15 min 31%/);
+  });
+
+  it("load falls back to raw numbers without cores", async () => {
+    setup({}, (s) => ((s.load = [0.74, 0.8, 0.62]), (s.cores = 0)));
+    const load = await screen.findByRole("group", { name: /^Load:/ });
+    expect(load).toHaveTextContent("0.74");
+    expect(load).toHaveTextContent(/0\.80\s+0\.62/);
+  });
+
+  const many = (n: number) => (s: ServerStatus) => (s.services = Array.from({ length: n }, (_, i) => ({ name: `svc${i}.service`, description: `Service ${i}` })));
+
+  it("shows 13 services and Show all", async () => {
+    setup({}, many(20));
+    const list = await screen.findByRole("list", { name: "Running services" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem").filter((l) => l.textContent?.startsWith("svc"))).toHaveLength(13));
+    expect(within(list).getByRole("button", { name: "Show all (20)" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Services" })).toHaveTextContent("20");
+  });
+
+  it("Show all lists every service and Show fewer folds it", async () => {
+    const { user } = setup({}, many(20));
+    const list = await screen.findByRole("list", { name: "Running services" });
+    await user.click(await within(list).findByRole("button", { name: "Show all (20)" }));
+    expect(within(list).getAllByRole("listitem").filter((l) => l.textContent?.startsWith("svc"))).toHaveLength(20);
+    await user.click(within(list).getByRole("button", { name: "Show fewer" }));
+    expect(within(list).getAllByRole("listitem").filter((l) => l.textContent?.startsWith("svc"))).toHaveLength(13);
+  });
+
+  it("no button with 13 or fewer", async () => {
+    setup({}, many(13));
+    const list = await screen.findByRole("list", { name: "Running services" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(13));
+    expect(within(list).queryByRole("button")).toBeNull();
+  });
+
+  it("overview says load in percent", async () => {
+    const seed = demoSeed();
+    seed.server!.load = [0.74, 0.8, 0.62];
+    seed.server!.cores = 2;
+    render(
+      <StoreProvider api={memoryApi(seed)} initialScreen="overview">
+        <Shell />
+      </StoreProvider>,
+    );
+    expect(await screen.findByText("load 37%")).toBeInTheDocument();
   });
 });

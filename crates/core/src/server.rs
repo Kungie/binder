@@ -28,6 +28,8 @@ pub struct ServerStatus {
     pub disk_size: u64,
     pub disk_used: u64,
     pub temp_c: Option<f32>,
+    /// From `nproc`; 0 when unknown.
+    pub cores: u32,
     pub at: i64,
 }
 
@@ -38,6 +40,7 @@ echo --binder:load--; cat /proc/loadavg 2>/dev/null
 echo --binder:mem--; cat /proc/meminfo 2>/dev/null
 echo --binder:disk--; df -B1 / 2>/dev/null
 echo --binder:temp--; cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null
+echo --binder:cores--; nproc 2>/dev/null
 exit 0
 "#;
 
@@ -55,6 +58,7 @@ pub fn fetch(remote: &dyn Remote, now: i64) -> Result<ServerStatus> {
         disk_size,
         disk_used,
         temp_c: parse_temp(part("temp")),
+        cores: parse_cores(part("cores")),
         at: now,
     })
 }
@@ -112,6 +116,11 @@ pub fn parse_df(s: &str) -> (u64, u64) {
             Some((w.get(1)?.parse().ok()?, w.get(2)?.parse().ok()?))
         })
         .unwrap_or((0, 0))
+}
+
+/// The core count `nproc` printed; 0 when it's missing or not a number.
+pub fn parse_cores(s: &str) -> u32 {
+    s.trim().parse().unwrap_or(0)
 }
 
 pub fn parse_temp(s: &str) -> Option<f32> {

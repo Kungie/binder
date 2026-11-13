@@ -12,6 +12,7 @@ import { isPrinting } from "../lib/types";
 import { minutes, usePrinters } from "../lib/usePrinters";
 import { bytes } from "../lib/format";
 import { ago } from "../lib/time";
+import { loadPercent } from "../lib/load";
 import type { CloudEntry, CloudStatus } from "../lib/types";
 
 const WEEK = 7 * 24 * 3600;
@@ -183,7 +184,7 @@ function ServerPanel() {
         <div className="flex items-center gap-2">
           <Dot on={!error && !!status} />
           <span className="font-mono text-[11px] text-text-2">{target}</span>
-          {status && <span className="ml-auto font-mono text-[11px] text-text-3">load {status.load[0].toFixed(2)}</span>}
+          {status && <span className="ml-auto font-mono text-[11px] text-text-3">load {loadPercent(status.load[0], status.cores) ?? status.load[0].toFixed(2)}</span>}
         </div>
         {status && <span className="text-text-2">{`${up} of ${status.containers.length} containers up`}</span>}
         {error && <span className="text-text-3">Can't reach it.{status ? ` Last read ${clock(status.at)}.` : ""}</span>}

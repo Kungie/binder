@@ -17,3 +17,5 @@ Filesystem        1B-blocks        Used   Available Use% Mounted on
 /dev/mmcblk0p2 62000000000 50840000000 8600000000  86% /
 --binder:temp--
 48312
+--binder:cores--
+4

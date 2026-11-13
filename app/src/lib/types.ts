@@ -170,6 +170,8 @@ export interface ServerStatus {
   disk_size: number;
   disk_used: number;
   temp_c: number | null;
+  /** From nproc; 0 when unknown. */
+  cores: number;
   at: number;
 }
 
