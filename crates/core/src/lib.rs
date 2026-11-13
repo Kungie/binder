@@ -20,3 +20,10 @@ pub enum Error {
     #[error("Vault not connected: {}", .0.display())]
     VaultMissing(PathBuf),
 }
+
+pub mod db;
+pub mod model;
+pub mod projects;
+pub mod tasks;
+
+pub use db::Db;
