@@ -7,7 +7,7 @@ use binder_core::config::{Config, PrinterConfig};
 use binder_core::printer::PrinterCommand;
 use crate::printer::{self, PrinterView};
 use binder_core::model::*;
-use binder_core::notes::{self, DoneLine};
+use binder_core::notes::{self, DoneItem, DoneLine};
 use binder_core::remote::SshRemote;
 use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
@@ -38,14 +38,9 @@ fn vault(state: &State<AppState>) -> std::path::PathBuf {
     state.config.lock().unwrap().vault.clone()
 }
 
-/// The project with its note, made from the template first when it has none (or it went missing).
+/// The project with its note in its vault folder, moved there or made from the template first when needed.
 fn note_for(db: &mut Db, vault: &Path, id: i64) -> Result<Project, Error> {
-    let p = db.get_project(id)?;
-    if p.note.as_deref().is_some_and(|n| Path::new(n).exists()) {
-        return Ok(p);
-    }
-    let (path, _) = notes::ensure_note(vault, &p, &today())?;
-    db.set_project_note(id, &path.to_string_lossy())?;
+    binder_core::session::note_for(db, vault, id, &today())?;
     db.get_project(id)
 }
 
@@ -121,24 +116,34 @@ pub async fn open_note(app: tauri::AppHandle, state: State<'_, AppState>, id: i6
 #[tauri::command]
 pub async fn log_done(state: State<'_, AppState>, project_id: i64, text: String) -> Res<bool> {
     let vault = vault(&state);
-    let p = note_for(&mut state.db.lock().unwrap(), &vault, project_id).map_err(self::text)?;
+    let mut db = state.db.lock().unwrap();
+    let p = note_for(&mut db, &vault, project_id).map_err(self::text)?;
     let note = p.note.expect("note_for sets the note");
-    notes::append_done(Path::new(&note), &today(), &text).map_err(self::text)
+    let at = chrono::Local::now();
+    let (date, time) = (at.format("%Y-%m-%d").to_string(), at.format("%H:%M").to_string());
+    binder_core::session::write_line(&mut db, Path::new(&note), &p.name, &date, Some(&time), &text).map_err(self::text)
 }
 
 #[tauri::command]
 pub async fn read_done(state: State<'_, AppState>, project_id: i64) -> Res<Vec<DoneLine>> {
     let p = state.db.lock().unwrap().get_project(project_id).map_err(text)?;
     match p.note {
-        Some(note) => notes::read_done(Path::new(&note)).map_err(text),
+        Some(note) => notes::read_history(Path::new(&note)).map_err(text),
         None => Ok(vec![]),
     }
 }
 
 #[tauri::command]
-pub async fn done_today(state: State<'_, AppState>) -> Res<Vec<(String, DoneLine)>> {
+pub async fn done_today(state: State<'_, AppState>) -> Res<Vec<DoneItem>> {
     let projects = state.db.lock().unwrap().list_projects().map_err(text)?;
     Ok(notes::done_on(&projects, &today()))
+}
+
+/// When a done line was last written, in Unix seconds. The overview refreshes Done today when it changes.
+#[tauri::command]
+pub async fn last_done(state: State<'_, AppState>) -> Res<Option<i64>> {
+    let value = state.db.lock().unwrap().meta("last_done").map_err(text)?;
+    Ok(value.and_then(|v| v.parse().ok()))
 }
 
 #[tauri::command]

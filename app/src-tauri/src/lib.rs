@@ -63,6 +63,7 @@ pub fn run() {
             commands::log_done,
             commands::read_done,
             commands::done_today,
+            commands::last_done,
             commands::get_config,
             commands::set_config,
             commands::vault_connected,

@@ -49,10 +49,11 @@ fn claude() -> PathBuf {
 fn summarize(session_id: &str) -> Result<()> {
     let config = Config::load(&data_dir().join("config.toml"))?;
     let mut db = Db::open(&data_dir().join("binder.db"))?;
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let now = chrono::Local::now();
+    let (today, time) = (now.format("%Y-%m-%d").to_string(), now.format("%H:%M").to_string());
     session::flush_pending(&mut db, &config.vault)?;
     let summarizer = ClaudeSummarizer { claude: claude(), scratch: home().join("Library/Caches/Binder/scratch") };
-    session::summarize(&mut db, &config.vault, &summarizer, session_id, &today)?;
+    session::summarize(&mut db, &config.vault, &summarizer, session_id, &today, &time)?;
     Ok(())
 }
 

@@ -128,9 +128,9 @@ fn two_sessions_keep_own_cursors() {
     w.hook("sb", &b, "SessionEnd");
     let s = Fake::new(vec![vec![], vec![], vec![]]);
     let vault = w.vault();
-    summarize(&mut w.db, &vault, &s, "sa", "2026-11-13").unwrap();
-    summarize(&mut w.db, &vault, &s, "sb", "2026-11-13").unwrap();
-    summarize(&mut w.db, &vault, &s, "sa", "2026-11-13").unwrap();
+    summarize(&mut w.db, &vault, &s, "sa", "2026-11-13", "14:32").unwrap();
+    summarize(&mut w.db, &vault, &s, "sb", "2026-11-13", "14:32").unwrap();
+    summarize(&mut w.db, &vault, &s, "sa", "2026-11-13", "14:32").unwrap();
     let seen = s.seen.borrow();
     assert_eq!(seen.len(), 2, "the third call had nothing new and didn't reach the model");
     assert_eq!(seen[0].1, "User: Decision A\n");
@@ -144,13 +144,13 @@ fn summarize_appends_new_lines_and_skips_repeats() {
     let p = w.transcript("a.jsonl", FIXTURE);
     w.hook("s1", &p, "SessionEnd");
     let s = Fake::new(vec![vec!["Sync runs in a worker."], vec!["sync runs in a worker", "Keep the main thread for input."]]);
-    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-13").unwrap(), 1);
+    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-13", "14:32").unwrap(), 1);
     w.transcript("a.jsonl", &talk_line("user", "And input?"));
     w.hook("s1", &p, "SessionEnd");
-    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-14").unwrap(), 1);
+    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-14", "14:32").unwrap(), 1);
     let note = w.note();
-    let lines: Vec<String> = notes::read_done(&note).unwrap().into_iter().map(|l| l.text).collect();
-    assert_eq!(lines, ["Sync runs in a worker.", "Keep the main thread for input."]);
+    let lines: Vec<String> = notes::read_history(&note).unwrap().into_iter().map(|l| l.text).collect();
+    assert_eq!(lines, ["Keep the main thread for input.", "Sync runs in a worker."]);
     assert_eq!(s.seen.borrow()[1].0, ["Sync runs in a worker."], "the model saw the log");
 }
 
@@ -161,7 +161,7 @@ fn at_most_three_lines() {
     let p = w.transcript("a.jsonl", FIXTURE);
     w.hook("s1", &p, "SessionEnd");
     let s = Fake::new(vec![vec!["One.", "Two.", "Three.", "Four."]]);
-    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-13").unwrap(), 3);
+    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-13", "14:32").unwrap(), 3);
 }
 
 #[test]
@@ -171,13 +171,13 @@ fn vault_missing_queues_then_flushes_once() {
     let p = w.transcript("a.jsonl", FIXTURE);
     w.hook("s1", &p, "SessionEnd");
     let s = Fake::new(vec![vec!["Sync runs in a worker."]]);
-    assert_eq!(summarize(&mut w.db, &missing, &s, "s1", "2026-11-13").unwrap(), 1);
+    assert_eq!(summarize(&mut w.db, &missing, &s, "s1", "2026-11-13", "14:32").unwrap(), 1);
     assert_eq!(flush_pending(&mut w.db, &missing).unwrap(), 0);
     std::fs::create_dir_all(&missing).unwrap();
     assert_eq!(flush_pending(&mut w.db, &missing).unwrap(), 1);
     assert_eq!(flush_pending(&mut w.db, &missing).unwrap(), 0);
     let note = w.note();
-    let done = notes::read_done(&note).unwrap();
+    let done = notes::read_history(&note).unwrap();
     assert_eq!(done.len(), 1);
     assert_eq!((done[0].date.as_str(), done[0].text.as_str()), ("2026-11-13", "Sync runs in a worker."));
 }
@@ -244,7 +244,7 @@ fn concurrent_flushes_write_each_line_once() {
     let written: usize = handles.into_iter().map(|h| h.join().unwrap()).sum();
     assert_eq!(written, 40);
     let note = PathBuf::from(db.get_project(p.id).unwrap().note.unwrap());
-    let lines = notes::read_done(&note).unwrap();
+    let lines = notes::read_history(&note).unwrap();
     assert_eq!(lines.len(), 40, "each line exactly once");
 }
 
@@ -284,11 +284,63 @@ fn concurrent_summaries_read_the_talk_once() {
                 std::thread::spawn(move || {
                     let mut db = Db::open(&path).unwrap();
                     barrier.wait();
-                    summarize(&mut db, &vault, &Slow(calls), "s1", "2026-11-13").unwrap()
+                    summarize(&mut db, &vault, &Slow(calls), "s1", "2026-11-13", "14:32").unwrap()
                 })
             })
             .collect();
         hs.into_iter().for_each(|h| { h.join().unwrap(); });
         assert_eq!(calls.load(Ordering::SeqCst) - before, 1, "the same talk reached the model twice");
     }
+}
+
+#[test]
+fn summary_writes_daily_file() {
+    let mut w = World::new();
+    let vault = w.vault();
+    let p = w.transcript("a.jsonl", FIXTURE);
+    w.hook("s1", &p, "SessionEnd");
+    assert_eq!(w.db.meta("last_done").unwrap(), None);
+    let s = Fake::new(vec![vec!["Sync runs in a worker."]]);
+    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-13", "14:32").unwrap(), 1);
+    let note = w.note();
+    assert_eq!(note, vault.join("Projects/orbit/orbit.md"));
+    let daily = std::fs::read_to_string(vault.join("Projects/orbit/Daily/2026-11-13.md")).unwrap();
+    assert!(daily.ends_with("\n- 14:32 · Sync runs in a worker.\n"), "{daily}");
+    assert!(!std::fs::read_to_string(&note).unwrap().contains("Sync runs"), "the note itself is left alone");
+    let last: i64 = w.db.meta("last_done").unwrap().expect("last_done set").parse().unwrap();
+    assert!(last > 1_700_000_000);
+}
+
+#[test]
+fn pending_lines_land_in_their_own_day() {
+    let mut w = World::new();
+    let vault = w.dir.path().join("later");
+    let p = w.transcript("a.jsonl", FIXTURE);
+    w.hook("s1", &p, "SessionEnd");
+    let s = Fake::new(vec![vec!["Queued on the 12th."]]);
+    assert_eq!(summarize(&mut w.db, &vault, &s, "s1", "2026-11-12", "23:10").unwrap(), 1);
+    std::fs::create_dir_all(&vault).unwrap();
+    // The flush runs on the 13th; the line still belongs to the 12th.
+    assert_eq!(flush_pending(&mut w.db, &vault).unwrap(), 1);
+    let note = w.note();
+    assert_eq!(notes::read_daily(&note, "2026-11-12").unwrap(), vec![notes::DoneLine { date: "2026-11-12".into(), time: Some("23:10".into()), text: "Queued on the 12th.".into() }]);
+    assert!(notes::read_daily(&note, "2026-11-13").unwrap().is_empty());
+    assert!(w.db.meta("last_done").unwrap().is_some());
+}
+
+#[test]
+fn stored_loose_note_moves_into_its_folder() {
+    // The project was renamed after its note was made, so the note keeps its own name.
+    let mut w = World::new();
+    let vault = w.vault();
+    let loose = vault.join("Projects/old orbit.md");
+    std::fs::create_dir_all(loose.parent().unwrap()).unwrap();
+    std::fs::write(&loose, "# orbit\n\n## Done\n- 2026-11-01 · old\n").unwrap();
+    w.db.set_project_note(w.project.id, &loose.to_string_lossy()).unwrap();
+    let path = note_for(&mut w.db, &vault, w.project.id, "2026-11-13").unwrap();
+    assert_eq!(path, vault.join("Projects/old orbit/old orbit.md"));
+    assert_eq!(w.note(), path, "the new path is stored");
+    assert!(!vault.join("Projects/orbit").exists(), "no second note");
+    assert!(!loose.exists());
+    assert_eq!(notes::read_history(&path).unwrap()[0].text, "old");
 }

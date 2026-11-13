@@ -1,5 +1,5 @@
 //! Done lines from Claude Code sessions. Hooks report a session's transcript; once enough new talk waits,
-//! a small model picks out the key decisions and they're appended to the project's note.
+//! a small model picks out the key decisions and they're appended to the project's daily file in the vault.
 
 use crate::model::Project;
 use crate::notes::{self, one_line};
@@ -194,15 +194,36 @@ fn norm(s: &str) -> String {
     s.split_whitespace().map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ")
 }
 
-/// The project with a note in the vault, made from the template when it has none or it went missing.
+/// The project's note in its vault folder: the stored one when it's already there, a loose pre-2.2 note moved in,
+/// or one made from the template.
 pub fn note_for(db: &mut Db, vault: &Path, project_id: i64, today: &str) -> Result<PathBuf> {
     let p = db.get_project(project_id)?;
-    if let Some(n) = p.note.as_deref().filter(|n| Path::new(n).exists()) {
-        return Ok(PathBuf::from(n));
+    if let Some(stored) = p.note.as_deref().map(PathBuf::from).filter(|n| n.exists()) {
+        let moved = notes::move_into_folder(&stored)?;
+        if in_folder(&moved) {
+            if moved != stored {
+                db.set_project_note(project_id, &moved.to_string_lossy())?;
+            }
+            return Ok(moved);
+        }
     }
     let (path, _) = notes::ensure_note(vault, &p, today)?;
     db.set_project_note(project_id, &path.to_string_lossy())?;
     Ok(path)
+}
+
+/// True for `.../<stem>/<stem>.md`, the 2.2 layout.
+fn in_folder(note: &Path) -> bool {
+    note.parent().and_then(Path::file_name).is_some_and(|d| Some(d) == note.file_stem())
+}
+
+/// Writes one done line into the day's file and records when.
+pub fn write_line(db: &mut Db, note: &Path, project_name: &str, date: &str, time: Option<&str>, text: &str) -> Result<bool> {
+    let wrote = notes::append_daily(note, project_name, date, time, text)?;
+    if wrote {
+        db.set_meta("last_done", &chrono::Utc::now().timestamp().to_string())?;
+    }
+    Ok(wrote)
 }
 
 fn pending_for(db: &Db, project_id: i64) -> Result<Vec<String>> {
@@ -211,7 +232,8 @@ fn pending_for(db: &Db, project_id: i64) -> Result<Vec<String>> {
 }
 
 /// Summarizes a session's new talk into at most 3 done lines. Returns how many were written or queued.
-pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session_id: &str, today: &str) -> Result<usize> {
+/// `today` is `YYYY-MM-DD` and `time` `HH:MM`, both local.
+pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session_id: &str, today: &str, time: &str) -> Result<usize> {
     let Some(s) = get_session(db, session_id)? else { return Ok(0) };
     let (talk, end) = new_talk(Path::new(&s.transcript), s.offset)?;
     // Claim the talk before the slow model call. The claim only moves a cursor nobody else moved, so when two
@@ -227,9 +249,11 @@ pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session
     let chars: Vec<char> = talk.chars().collect();
     let talk: String = chars[chars.len().saturating_sub(MAX_TALK)..].iter().collect();
 
-    let note = db.get_project(s.project_id)?.note.map(PathBuf::from).filter(|n| n.exists());
+    let project = db.get_project(s.project_id)?;
+    let note = project.note.as_deref().map(PathBuf::from).filter(|n| n.exists());
+    // Oldest first, so the newest lines are the ones kept below.
     let mut known: Vec<String> = match &note {
-        Some(n) => notes::read_done(n)?.into_iter().map(|l| l.text).collect(),
+        Some(n) => notes::read_history(n)?.into_iter().rev().map(|l| l.text).collect(),
         None => vec![],
     };
     known.extend(pending_for(db, s.project_id)?);
@@ -255,13 +279,16 @@ pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session
         exclusive(db, |db| {
             let path = note_for(db, vault, s.project_id, today)?;
             for line in &fresh {
-                notes::append_done(&path, today, line)?;
+                write_line(db, &path, &project.name, today, Some(time), line)?;
             }
             Ok(())
         })?;
     } else {
         for line in &fresh {
-            db.conn.execute("INSERT INTO pending_done (project_id, date, text) VALUES (?1, ?2, ?3)", params![s.project_id, today, line])?;
+            db.conn.execute(
+                "INSERT INTO pending_done (project_id, date, time, text) VALUES (?1, ?2, ?3, ?4)",
+                params![s.project_id, today, time, line],
+            )?;
         }
     }
     Ok(fresh.len())
@@ -291,17 +318,18 @@ pub fn flush_pending(db: &mut Db, vault: &Path) -> Result<usize> {
     let mut written = 0;
     loop {
         let done = exclusive(db, |db| {
-            let row: Option<(i64, i64, String, String)> = db
+            let row: Option<(i64, i64, String, Option<String>, String)> = db
                 .conn
-                .query_row("SELECT id, project_id, date, text FROM pending_done ORDER BY id LIMIT 1", [], |r| {
-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                .query_row("SELECT id, project_id, date, time, text FROM pending_done ORDER BY id LIMIT 1", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
                 })
                 .optional()?;
-            let Some((id, project_id, date, text)) = row else { return Ok(true) };
+            let Some((id, project_id, date, time, text)) = row else { return Ok(true) };
             db.conn.execute("DELETE FROM pending_done WHERE id = ?1", [id])?;
             match note_for(db, vault, project_id, &date) {
                 Ok(path) => {
-                    notes::append_done(&path, &date, &text)?;
+                    let name = db.get_project(project_id)?.name;
+                    write_line(db, &path, &name, &date, time.as_deref(), &text)?;
                     written += 1;
                 }
                 // The project was deleted since; its line has nowhere to go.
