@@ -209,3 +209,188 @@ fn a_name_taken_during_the_copy_is_kept_both() {
     assert_eq!(fs::read_to_string(&target).unwrap(), "other");
     assert_eq!(fs::metadata(&landed).unwrap().len(), 3 * 1024 * 1024);
 }
+
+fn partials(dir: &Path) -> Vec<String> {
+    fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with(".binder-partial-")).collect()
+}
+
+#[test]
+fn duplicate_names_like_finder() {
+    let d = root();
+    let r = d.path();
+    fs::write(r.join("a.txt"), "a").unwrap();
+    assert_eq!(copy_name(r, "a.txt"), r.join("a copy.txt"));
+    let never = AtomicBool::new(false);
+    let first = copy_into_as(&r.join("a.txt"), r, "a copy.txt", Conflict::KeepBoth, Some(r), &never, &mut |_, _| {}).unwrap().unwrap();
+    assert_eq!(first, r.join("a copy.txt"));
+    assert_eq!(fs::read_to_string(&first).unwrap(), "a");
+    assert_eq!(copy_name(r, "a.txt"), r.join("a copy 2.txt"));
+    assert_eq!(copy_name(r, "Photos"), r.join("Photos copy"));
+    fs::create_dir(r.join("v1.2")).unwrap();
+    assert_eq!(copy_name(r, "v1.2"), r.join("v1.2 copy"), "a folder never splits at its dot");
+    assert_eq!(copy_name(r, "Makefile"), r.join("Makefile copy"));
+}
+
+#[test]
+fn info_has_created_and_mac_path() {
+    let d = root();
+    let i = info(d.path(), "Photos/a.jpg").unwrap();
+    assert_eq!((i.entry.name.as_str(), i.entry.kind, i.entry.size), ("a.jpg", Kind::File, 3));
+    assert_eq!(i.path, d.path().join("Photos/a.jpg").to_string_lossy());
+    assert!(i.created > 1_600_000_000, "{}", i.created);
+    assert!(info(d.path(), "../x").is_err());
+}
+
+#[test]
+fn tree_size_counts_bytes_and_items() {
+    let d = root();
+    fs::write(d.path().join("Photos/2026/b.jpg"), "12345").unwrap();
+    std::os::unix::fs::symlink("/etc", d.path().join("Photos/link")).unwrap();
+    // a.jpg, 2026, 2026/b.jpg and the link; the link isn't followed.
+    assert_eq!(tree_size(d.path(), "Photos").unwrap(), (8 + "/etc".len() as u64, 4));
+    assert_eq!(tree_size(d.path(), "notes.txt").unwrap(), (2, 1));
+}
+
+#[test]
+fn compress_one_and_many() {
+    let d = root();
+    let never = AtomicBool::new(false);
+    let mut seen = vec![];
+    let one = compress_local(d.path(), &["notes.txt".into()], &never, &mut |a, b| seen.push((a, b))).unwrap();
+    assert_eq!(one, d.path().join("notes.txt.zip"));
+    assert_eq!(seen.last(), Some(&(1, 1)));
+    let many = || compress_local(d.path(), &["notes.txt".into(), "Photos".into()], &never, &mut |_, _| {}).unwrap();
+    assert_eq!(many(), d.path().join("Archive.zip"));
+    assert_eq!(many(), d.path().join("Archive 2.zip"));
+    assert!(partials(d.path()).is_empty());
+    let mixed = compress_local(d.path(), &["notes.txt".into(), "Photos/a.jpg".into()], &never, &mut |_, _| {});
+    assert!(matches!(mixed, Err(Error::Invalid(_))), "items from two folders");
+}
+
+#[test]
+fn extract_round_trip() {
+    let d = root();
+    let r = d.path();
+    fs::create_dir_all(r.join("Proj/sub")).unwrap();
+    fs::create_dir_all(r.join("Proj/empty")).unwrap();
+    fs::write(r.join("Proj/a.txt"), "alpha").unwrap();
+    let bytes: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    fs::write(r.join("Proj/sub/b.bin"), &bytes).unwrap();
+    std::os::unix::fs::symlink("a.txt", r.join("Proj/link")).unwrap();
+    let never = AtomicBool::new(false);
+    let zip = compress_local(r, &["Proj".into()], &never, &mut |_, _| {}).unwrap();
+    let mut seen = vec![];
+    let out = extract_local(r, "Proj.zip", &never, &mut |a, b| seen.push((a, b))).unwrap();
+    assert_eq!(zip, r.join("Proj.zip"));
+    assert_eq!(out, r.join("Proj 2"), "Proj is taken, so a free name");
+    let back = out.join("Proj");
+    assert_eq!(fs::read_to_string(back.join("a.txt")).unwrap(), "alpha");
+    assert_eq!(fs::read(back.join("sub/b.bin")).unwrap(), bytes);
+    assert!(back.join("empty").is_dir());
+    assert!(fs::symlink_metadata(back.join("link")).unwrap().file_type().is_symlink(), "the link stays a link");
+    assert_eq!(fs::read_link(back.join("link")).unwrap(), Path::new("a.txt"));
+    let (done, total) = *seen.last().unwrap();
+    assert_eq!(done, total);
+    assert!(partials(r).is_empty());
+}
+
+fn evil_zip(path: &Path, name: &str) {
+    let mut w = zip::ZipWriter::new(fs::File::create(path).unwrap());
+    w.start_file("fine.txt", zip::write::SimpleFileOptions::default()).unwrap();
+    std::io::Write::write_all(&mut w, b"ok").unwrap();
+    w.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+    std::io::Write::write_all(&mut w, b"evil").unwrap();
+    w.finish().unwrap();
+}
+
+#[test]
+fn extract_refuses_dotdot_entries() {
+    let d = root();
+    let cloud = d.path().join("cloud");
+    fs::create_dir(&cloud).unwrap();
+    let never = AtomicBool::new(false);
+    for (zip, name) in [("a.zip", "../evil"), ("b.zip", "/evil"), ("c.zip", "x/../../evil")] {
+        evil_zip(&cloud.join(zip), name);
+        let r = extract_local(&cloud, zip, &never, &mut |_, _| {});
+        assert!(matches!(&r, Err(Error::Invalid(m)) if m == "This zip has paths that leave its folder."), "{zip}: {r:?}");
+    }
+    assert!(!d.path().join("evil").exists());
+    assert!(!cloud.join("a").exists());
+    assert!(partials(&cloud).is_empty());
+}
+
+#[test]
+fn extract_refuses_writing_through_a_link() {
+    let d = root();
+    let cloud = d.path().join("cloud");
+    fs::create_dir(&cloud).unwrap();
+    let mut w = zip::ZipWriter::new(fs::File::create(cloud.join("l.zip")).unwrap());
+    w.add_symlink("up", "..", zip::write::SimpleFileOptions::default()).unwrap();
+    w.start_file("up/escaped.txt", zip::write::SimpleFileOptions::default()).unwrap();
+    std::io::Write::write_all(&mut w, b"x").unwrap();
+    w.finish().unwrap();
+    let never = AtomicBool::new(false);
+    assert!(extract_local(&cloud, "l.zip", &never, &mut |_, _| {}).is_err());
+    assert!(!cloud.join("escaped.txt").exists());
+    assert!(partials(&cloud).is_empty());
+}
+
+#[test]
+fn cancel_leaves_no_partial() {
+    let d = root();
+    let never = AtomicBool::new(false);
+    compress_local(d.path(), &["Photos".into()], &never, &mut |_, _| {}).unwrap();
+    let cancel = AtomicBool::new(true);
+    assert!(compress_local(d.path(), &["notes.txt".into()], &cancel, &mut |_, _| {}).is_err());
+    assert!(!d.path().join("notes.txt.zip").exists());
+    assert!(extract_local(d.path(), "Photos.zip", &cancel, &mut |_, _| {}).is_err());
+    assert!(!d.path().join("Photos 2").exists());
+    assert!(partials(d.path()).is_empty());
+}
+
+#[test]
+fn sweep_moves_dead_partials_to_trash_keeps_live() {
+    let d = root();
+    fs::write(d.path().join(".binder-partial-111-0-report.pdf"), "half").unwrap();
+    fs::create_dir(d.path().join(".binder-partial-222-1-live")).unwrap();
+    fs::write(d.path().join("Photos/.binder-partial-111-2-deep.jpg"), "x").unwrap();
+    assert_eq!(sweep_partials(d.path(), "", &|pid| pid == 222).unwrap(), 1);
+    assert!(d.path().join(".binder-partial-222-1-live").exists());
+    assert!(d.path().join("Photos/.binder-partial-111-2-deep.jpg").exists(), "only the given folder");
+    let t = list_trash(d.path()).unwrap();
+    assert_eq!(t.len(), 1);
+    assert!(t[0].unfinished);
+    assert_eq!(t[0].entry.name, "report.pdf");
+    assert_eq!(sweep_partials(d.path(), "", &|_| false).unwrap(), 1);
+}
+
+#[test]
+fn unfinished_upload_cannot_be_restored() {
+    let d = root();
+    fs::write(d.path().join(".binder-partial-111-0-report.pdf"), "half").unwrap();
+    sweep_partials(d.path(), "", &|_| false).unwrap();
+    let id = list_trash(d.path()).unwrap()[0].id.clone();
+    assert!(matches!(restore(d.path(), &id), Err(Error::Invalid(m)) if m == "An unfinished upload can't be restored."));
+    let tid = trash(d.path(), "notes.txt").unwrap();
+    assert!(!list_trash(d.path()).unwrap().iter().find(|t| t.id == tid).unwrap().unfinished);
+}
+
+#[test]
+fn land_waits_for_a_partial_the_share_hasnt_shown_yet() {
+    let d = root();
+    let dir = d.path().to_path_buf();
+    let partial = dir.join(partial_name("late.txt"));
+    let writer = {
+        let partial = partial.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            fs::write(partial, "late").unwrap();
+        })
+    };
+    let landed = land(&partial, &dir, "late.txt", Conflict::KeepBoth, None).unwrap();
+    writer.join().unwrap();
+    assert_eq!(landed, Some(dir.join("late.txt")));
+    assert_eq!(fs::read_to_string(dir.join("late.txt")).unwrap(), "late");
+    let never = dir.join(partial_name("never.txt"));
+    assert!(land(&never, &dir, "never.txt", Conflict::KeepBoth, None).is_err());
+}

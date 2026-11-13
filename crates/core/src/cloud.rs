@@ -40,7 +40,19 @@ pub struct TrashEntry {
     pub origin: String,
     /// Unix seconds.
     pub deleted: i64,
+    /// A copy that never finished, swept from a folder. Its entry carries the name it would have had.
+    pub unfinished: bool,
     pub entry: Entry,
+}
+
+/// What Get info shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Info {
+    pub entry: Entry,
+    /// Unix seconds; 0 when the share doesn't say.
+    pub created: i64,
+    /// The item's path on this Mac.
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +158,19 @@ pub fn free_name(dir: &Path, name: &str) -> PathBuf {
     (2..).map(|n| dir.join(format!("{stem} {n}{ext}"))).find(|p| fs::symlink_metadata(p).is_err()).expect("some number is free")
 }
 
+/// Finder's name for a duplicate: `name copy.ext`, then `name copy 2.ext`. Folders and names without an
+/// extension get `name copy`, `name copy 2`.
+pub fn copy_name(dir: &Path, name: &str) -> PathBuf {
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 && !dir.join(name).is_dir() => (&name[..i], &name[i..]),
+        _ => (name, ""),
+    };
+    std::iter::once(dir.join(format!("{stem} copy{ext}")))
+        .chain((2..).map(|n| dir.join(format!("{stem} copy {n}{ext}"))))
+        .find(|p| fs::symlink_metadata(p).is_err())
+        .expect("some number is free")
+}
+
 fn size_of(path: &Path) -> Result<u64> {
     let meta = fs::symlink_metadata(path)?;
     if meta.is_dir() {
@@ -227,6 +252,20 @@ pub fn copy_into(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Option<PathBuf>> {
     let name = src.file_name().ok_or_else(|| Error::Invalid("Nothing to copy.".into()))?.to_string_lossy().into_owned();
+    copy_into_as(src, dst_dir, &name, conflict, trash_root, cancel, progress)
+}
+
+/// `copy_into` under another name, as Duplicate does.
+pub fn copy_into_as(
+    src: &Path,
+    dst_dir: &Path,
+    name: &str,
+    conflict: Conflict,
+    trash_root: Option<&Path>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<Option<PathBuf>> {
+    let name = checked_name(name)?.to_string();
     if conflict == Conflict::Replace && trash_root.is_none() {
         return Err(Error::Invalid("Replace only works inside Cloud.".into()));
     }
@@ -251,16 +290,24 @@ pub fn copy_into(
     landed
 }
 
-/// A partial name no other copy, in this process or another, can pick.
-fn partial_name(name: &str) -> String {
+/// A partial name no other copy, in this process or another, can pick: `.binder-partial-<pid>-<n>-<name>`.
+pub fn partial_name(name: &str) -> String {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = NEXT.fetch_add(1, Ordering::SeqCst);
     format!("{PARTIAL}{}-{n}-{name}", std::process::id())
 }
 
 /// Moves a finished partial to its name, deciding the conflict now. A replaced item goes to the trash first and
-/// comes back if the rename fails.
-fn land(partial: &Path, dst_dir: &Path, name: &str, conflict: Conflict, trash_root: Option<&Path>) -> Result<Option<PathBuf>> {
+/// comes back if the rename fails. A partial written over SSH can take a moment to show through the SMB mount,
+/// so a missing one is looked for again every 100 ms for up to 2 s.
+pub fn land(partial: &Path, dst_dir: &Path, name: &str, conflict: Conflict, trash_root: Option<&Path>) -> Result<Option<PathBuf>> {
+    for _ in 0..20 {
+        if fs::symlink_metadata(partial).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    fs::symlink_metadata(partial)?;
     let target = dst_dir.join(name);
     if fs::symlink_metadata(&target).is_err() {
         fs::rename(partial, &target)?;
@@ -370,7 +417,12 @@ pub fn list_trash(root: &Path) -> Result<Vec<TrashEntry>> {
         };
         let deleted = id.split('-').next().and_then(|ms| ms.parse::<i64>().ok()).map_or(0, |ms| ms / 1000);
         let name = item.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        out.push(TrashEntry { entry: entry_of(&item, format!("{id}/{name}"))?, id, origin, deleted });
+        let mut entry = entry_of(&item, format!("{id}/{name}"))?;
+        let unfinished = unfinished_name(&name).is_some();
+        if let Some(real) = unfinished_name(&name) {
+            entry.name = real.to_string();
+        }
+        out.push(TrashEntry { entry, id, origin, deleted, unfinished });
     }
     out.sort_by(|a, b| b.id.cmp(&a.id));
     Ok(out)
@@ -379,6 +431,9 @@ pub fn list_trash(root: &Path) -> Result<Vec<TrashEntry>> {
 /// Puts a trashed item back where it was, recreating its folders, and keeps both on a clash.
 pub fn restore(root: &Path, id: &str) -> Result<PathBuf> {
     let item = list_trash(root)?.into_iter().find(|t| t.id == id).ok_or_else(|| Error::Invalid("That's no longer in the trash.".into()))?;
+    if item.unfinished {
+        return Err(Error::Invalid("An unfinished upload can't be restored.".into()));
+    }
     let origin = resolve(root, &item.origin)?;
     let parent = origin.parent().ok_or_else(outside)?;
     fs::create_dir_all(parent)?;
@@ -407,4 +462,253 @@ pub fn space(root: &Path) -> Result<Space> {
     }
     let unit = s.f_frsize as u64;
     Ok(Space { total: s.f_blocks as u64 * unit, free: s.f_bavail as u64 * unit })
+}
+
+/// The name a partial would have landed as, and the process that writes it.
+fn partial_parts(name: &str) -> Option<(u32, &str)> {
+    let rest = name.strip_prefix(PARTIAL)?;
+    let (pid, rest) = rest.split_once('-')?;
+    let (_, real) = rest.split_once('-')?;
+    Some((pid.parse().ok()?, real))
+}
+
+fn unfinished_name(name: &str) -> Option<&str> {
+    partial_parts(name).map(|(_, real)| real)
+}
+
+/// Moves the partials in one folder whose process has ended to the trash, where they show as unfinished uploads.
+/// Partials of copies still running are left alone. Returns how many were moved.
+pub fn sweep_partials(root: &Path, rel_dir: &str, alive: &dyn Fn(u32) -> bool) -> Result<usize> {
+    let dir = resolve(root, rel_dir)?;
+    let mut moved = 0;
+    for item in fs::read_dir(&dir)? {
+        let name = item?.file_name().to_string_lossy().into_owned();
+        let Some((pid, _)) = partial_parts(&name) else { continue };
+        if !alive(pid) {
+            trash(root, &join_rel(rel_dir, &name))?;
+            moved += 1;
+        }
+    }
+    Ok(moved)
+}
+
+pub fn info(root: &Path, rel: &str) -> Result<Info> {
+    let path = resolve(root, rel)?;
+    let entry = entry_of(&path, rel.trim_matches('/').to_string())?;
+    let meta = fs::symlink_metadata(&path)?;
+    let created = meta.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
+    Ok(Info { entry, created, path: path.to_string_lossy().into_owned() })
+}
+
+fn walk(path: &Path, bytes: &mut u64, items: &mut u64) -> Result<()> {
+    let meta = fs::symlink_metadata(path)?;
+    if meta.is_dir() {
+        for item in fs::read_dir(path)? {
+            *items += 1;
+            walk(&item?.path(), bytes, items)?;
+        }
+    } else {
+        *bytes += meta.len();
+    }
+    Ok(())
+}
+
+/// A file's size, or a folder's total bytes and how many items it holds, links not followed. A file counts as one.
+pub fn tree_size(root: &Path, rel: &str) -> Result<(u64, u64)> {
+    let path = resolve(root, rel)?;
+    let (mut bytes, mut items) = (0, 0);
+    walk(&path, &mut bytes, &mut items)?;
+    if !fs::symlink_metadata(&path)?.is_dir() {
+        items = 1;
+    }
+    Ok((bytes, items))
+}
+
+fn cancelled(cancel: &AtomicBool) -> Result<()> {
+    if cancel.load(Ordering::SeqCst) { Err(Error::Invalid("Cancelled.".into())) } else { Ok(()) }
+}
+
+fn count(path: &Path) -> Result<u64> {
+    let (mut bytes, mut items) = (0, 1);
+    walk(path, &mut bytes, &mut items)?;
+    Ok(items)
+}
+
+struct Zipper<'a, W: Write + std::io::Seek> {
+    zip: zip::ZipWriter<W>,
+    cancel: &'a AtomicBool,
+    progress: &'a mut dyn FnMut(u64, u64),
+    done: u64,
+    total: u64,
+}
+
+impl<W: Write + std::io::Seek> Zipper<'_, W> {
+    fn add(&mut self, path: &Path, name: &str) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        cancelled(self.cancel)?;
+        let meta = fs::symlink_metadata(path)?;
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .unix_permissions(meta.permissions().mode() & 0o777)
+            .large_file(meta.len() >= u32::MAX as u64);
+        let bad = |e: zip::result::ZipError| Error::Invalid(format!("Couldn't write the zip: {e}"));
+        if meta.file_type().is_symlink() {
+            self.zip.add_symlink(name, fs::read_link(path)?.to_string_lossy(), options).map_err(bad)?;
+        } else if meta.is_dir() {
+            self.zip.add_directory(format!("{name}/"), options).map_err(bad)?;
+        } else {
+            self.zip.start_file(name, options).map_err(bad)?;
+            let mut src = fs::File::open(path)?;
+            let mut buf = vec![0u8; CHUNK];
+            loop {
+                cancelled(self.cancel)?;
+                let n = src.read(&mut buf)?;
+                if n == 0 {
+                    break;
+                }
+                self.zip.write_all(&buf[..n])?;
+            }
+        }
+        self.done += 1;
+        (self.progress)(self.done, self.total);
+        if meta.is_dir() && !meta.file_type().is_symlink() {
+            let mut children: Vec<_> = fs::read_dir(path)?.collect::<std::io::Result<_>>()?;
+            children.sort_by_key(|c| c.file_name());
+            for c in children {
+                self.add(&c.path(), &format!("{name}/{}", c.file_name().to_string_lossy()))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Zips items from one folder into that folder: one item makes `<its name>.zip`, several make `Archive.zip`, with a
+/// free name when taken. Written to a partial and landed at the end; links are stored as links. Progress counts
+/// items. This is the fallback when the server can't run `zip` itself.
+pub fn compress_local(root: &Path, rels: &[String], cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+    let parent_of = |rel: &str| rel.trim_matches('/').rsplit_once('/').map_or(String::new(), |(dir, _)| dir.to_string());
+    let first = rels.first().ok_or_else(|| Error::Invalid("Nothing to compress.".into()))?;
+    let rel_dir = parent_of(first);
+    if rels.iter().any(|r| parent_of(r) != rel_dir || r.trim_matches('/').is_empty()) {
+        return Err(Error::Invalid("Compress items from one folder.".into()));
+    }
+    let dir = resolve(root, &rel_dir)?;
+    let items: Vec<PathBuf> = rels.iter().map(|r| resolve(root, r)).collect::<Result<_>>()?;
+    let name = match items.as_slice() {
+        [one] => format!("{}.zip", one.file_name().expect("not the root").to_string_lossy()),
+        _ => "Archive.zip".into(),
+    };
+    let total = items.iter().map(|p| count(p)).sum::<Result<u64>>()?;
+    let partial = dir.join(partial_name(&name));
+    let made = (|| -> Result<()> {
+        let file = fs::File::create_new(&partial)?;
+        let mut z = Zipper { zip: zip::ZipWriter::new(std::io::BufWriter::new(file)), cancel, progress, done: 0, total };
+        for item in &items {
+            z.add(item, &item.file_name().expect("not the root").to_string_lossy())?;
+        }
+        let mut out = z.zip.finish().map_err(|e| Error::Invalid(format!("Couldn't write the zip: {e}")))?;
+        out.flush()?;
+        Ok(())
+    })();
+    let landed = made.and_then(|()| land(&partial, &dir, &name, Conflict::KeepBoth, None));
+    match landed {
+        Ok(Some(path)) => Ok(path),
+        Ok(None) => unreachable!("KeepBoth always lands"),
+        Err(e) => {
+            let _ = remove(&partial);
+            Err(e)
+        }
+    }
+}
+
+fn leaves(name: &str) -> bool {
+    name.starts_with('/') || name.starts_with('\\') || name.split(['/', '\\']).any(|part| part == "..")
+}
+
+fn escapes() -> Error {
+    Error::Invalid("This zip has paths that leave its folder.".into())
+}
+
+/// True when some folder between `base` and `path` is a link, so writing there would land somewhere else.
+fn through_link(base: &Path, path: &Path) -> bool {
+    let mut at = path.parent();
+    while let Some(dir) = at {
+        if dir == base {
+            return false;
+        }
+        if fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+            return true;
+        }
+        at = dir.parent();
+    }
+    false
+}
+
+fn unpack(zip: &mut zip::ZipArchive<fs::File>, into: &Path, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    const S_IFMT: u32 = 0o170000;
+    const S_IFLNK: u32 = 0o120000;
+    let bad = |e: zip::result::ZipError| Error::Invalid(format!("Couldn't read the zip: {e}"));
+    let total = zip.len() as u64;
+    for i in 0..zip.len() {
+        cancelled(cancel)?;
+        let mut file = zip.by_index(i).map_err(bad)?;
+        let name = file.name().to_string();
+        let path = into.join(name.trim_end_matches('/'));
+        if through_link(into, &path) {
+            return Err(escapes());
+        }
+        let mode = file.unix_mode();
+        if file.is_dir() {
+            fs::create_dir_all(&path)?;
+        } else {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            if mode.is_some_and(|m| m & S_IFMT == S_IFLNK) {
+                let mut target = String::new();
+                file.read_to_string(&mut target)?;
+                std::os::unix::fs::symlink(target, &path)?;
+            } else {
+                let mut dst = fs::File::create_new(&path)?;
+                let mut buf = vec![0u8; CHUNK];
+                loop {
+                    cancelled(cancel)?;
+                    let n = file.read(&mut buf)?;
+                    if n == 0 {
+                        break;
+                    }
+                    dst.write_all(&buf[..n])?;
+                }
+                if let Some(m) = mode {
+                    let _ = fs::set_permissions(&path, fs::Permissions::from_mode(m & 0o777));
+                }
+            }
+        }
+        progress(i as u64 + 1, total);
+    }
+    Ok(())
+}
+
+/// Unzips into a folder beside the zip named after it (a free name when taken), through a partial folder landed at
+/// the end. Refuses a zip with any entry that is absolute or holds `..`. Progress counts entries. This is the
+/// fallback when the server can't run `unzip` itself.
+pub fn extract_local(root: &Path, rel: &str, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<PathBuf> {
+    let path = resolve(root, rel)?;
+    let dir = path.parent().ok_or_else(outside)?.to_path_buf();
+    let stem = path.file_stem().ok_or_else(|| Error::Invalid("Nothing to extract.".into()))?.to_string_lossy().into_owned();
+    let mut zip = zip::ZipArchive::new(fs::File::open(&path)?).map_err(|e| Error::Invalid(format!("Couldn't read the zip: {e}")))?;
+    if zip.file_names().any(leaves) {
+        return Err(escapes());
+    }
+    let partial = dir.join(partial_name(&stem));
+    let made = fs::create_dir(&partial).map_err(Error::from).and_then(|()| unpack(&mut zip, &partial, cancel, progress));
+    match made.and_then(|()| land(&partial, &dir, &stem, Conflict::KeepBoth, None)) {
+        Ok(Some(out)) => Ok(out),
+        Ok(None) => unreachable!("KeepBoth always lands"),
+        Err(e) => {
+            let _ = remove(&partial);
+            Err(e)
+        }
+    }
 }
