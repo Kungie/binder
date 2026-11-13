@@ -19,7 +19,7 @@ function DoneLog({ project }: { project: Project }) {
 
   useEffect(() => {
     let live = true;
-    void api.readDone(project.id).then((l) => live && setLines([...l].reverse()));
+    void api.readDone(project.id).then((l) => live && setLines(l));
     return () => {
       live = false;
     };
@@ -49,8 +49,8 @@ function DoneLog({ project }: { project: Project }) {
       </div>
       <ul aria-label="Done log" className="max-h-[320px] overflow-y-auto">
         {lines.map((l, i) => (
-          <li key={`${l.date}-${i}`} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 border-t border-line px-3 py-2 text-[12px]">
-            <span className="font-mono text-[11px] text-text-3">{l.date}</span>
+          <li key={`${l.date}-${i}`} className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 border-t border-line px-3 py-2 text-[12px]">
+            <span className="font-mono text-[11px] text-text-3">{l.time ? `${l.date} ${l.time}` : l.date}</span>
             <span className="text-text-2">{l.text}</span>
           </li>
         ))}

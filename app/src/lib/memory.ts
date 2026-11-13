@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -7,7 +7,10 @@ import { PALETTE, colorFor } from "./colors";
 export interface Seed {
   projects: Project[];
   tasks: Task[];
+  /** Each project's done lines, oldest first. */
   done: Record<number, DoneLine[]>;
+  /** When a done line was last written, Unix seconds. */
+  lastDone?: number | null;
   devices?: Device[];
   server?: ServerStatus;
   repos?: Record<number, RepoStatus>;
@@ -21,6 +24,8 @@ export interface MemoryOptions {
   /** Whether the Cloud share is mounted. Defaults to true. */
   cloudMounted?: boolean;
   vaultConnected?: boolean;
+  /** Whether Settings › Claude Code starts on. */
+  claudeHooks?: boolean;
   /** The SSH target in the config. Defaults to "lab"; null means none is set. */
   server?: string | null;
   /** Device addresses that don't answer a probe. */
@@ -76,7 +81,8 @@ export function memoryApi(
   };
   const offline = options.offline ?? ["10.0.7.30"];
   let reachable = true;
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: false, cloud: "/Volumes/cloud", cloud_share: null };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null };
+  let lastDone: number | null = seed.lastDone ?? null;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
   const device = (id: number) => {
     const d = devices.find((x) => x.id === id);
@@ -298,15 +304,26 @@ export function memoryApi(
       const p = withNote(project(projectId));
       const line = oneLine(text);
       if (!line) return false;
-      done[p.id].push({ date: localDay(), text: line });
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      done[p.id].push({ date: localDay(), time, text: line });
+      lastDone = Math.floor(now.getTime() / 1000);
       return true;
     },
     async readDone(projectId) {
-      return [...(done[projectId] ?? [])];
+      const lines = [...(done[projectId] ?? [])];
+      // Dated lines newest day first; within a day the later line is newer.
+      return lines.map((l, i) => ({ l, i })).sort((a, b) => b.l.date.localeCompare(a.l.date) || b.i - a.i).map(({ l }) => ({ ...l }));
     },
     async doneToday() {
       const day = localDay();
-      return projects.flatMap((p) => (done[p.id] ?? []).filter((l) => l.date === day).map((l) => [p.name, l] as [string, DoneLine]));
+      const items: DoneItem[] = projects.flatMap((p) =>
+        (done[p.id] ?? []).filter((l) => l.date === day).map((l) => ({ project_id: p.id, project: p.name, color: p.color, line: { ...l } })),
+      );
+      return items.reverse().sort((a, b) => (b.line.time ?? "").localeCompare(a.line.time ?? ""));
+    },
+    async lastDone() {
+      return lastDone;
     },
     async getConfig() {
       return { ...config };
@@ -565,7 +582,7 @@ export function demoSeed(): Seed {
   return {
     projects,
     tasks,
-    done: { 1: [{ date: day, text: "Keep sync off by default until conflicts are handled." }] },
+    done: { 1: [{ date: day, time: "10:42", text: "Keep sync off by default until conflicts are handled." }] },
     devices: [
       { id: 101, name: "studio", kind: "mac", address: "10.0.7.10", port: 22, note: "" },
       { id: 102, name: "lab", kind: "server", address: "10.0.7.2", port: 22, note: "Raspberry Pi 5, 8 GB" },

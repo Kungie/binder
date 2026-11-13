@@ -14,6 +14,7 @@ import type {
   DevicePatch,
   GithubSync,
   HiddenRepo,
+  DoneItem,
   DoneLine,
   NewDevice,
   NewProject,
@@ -44,8 +45,12 @@ export interface Api {
   startProject(id: number): Promise<Project>;
   openNote(id: number): Promise<void>;
   logDone(projectId: number, text: string): Promise<boolean>;
+  /** Newest first: daily files, then the note's old `## Done` lines. */
   readDone(projectId: number): Promise<DoneLine[]>;
-  doneToday(): Promise<[string, DoneLine][]>;
+  /** Today's lines across projects, newest first. */
+  doneToday(): Promise<DoneItem[]>;
+  /** When a done line was last written, Unix seconds. */
+  lastDone(): Promise<number | null>;
   getConfig(): Promise<Config>;
   setConfig(config: Config): Promise<void>;
   vaultConnected(): Promise<boolean>;
@@ -132,6 +137,7 @@ export const tauriApi: Api = {
   logDone: (projectId, text) => call("log_done", { projectId, text }),
   readDone: (projectId) => call("read_done", { projectId }),
   doneToday: () => call("done_today"),
+  lastDone: () => call("last_done"),
   getConfig: () => call("get_config"),
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),

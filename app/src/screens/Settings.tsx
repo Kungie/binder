@@ -5,13 +5,16 @@ import { Button, Field, Notice, fieldClass } from "../components/ui";
 import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
 import { useVault } from "../lib/useVault";
+import { ago } from "../lib/time";
 
 function ClaudeCode() {
   const { api } = useStore();
   const [on, setOn] = useState<boolean | null>(null);
+  const [last, setLast] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     void api.claudeHooks().then(setOn);
+    void api.lastDone().then(setLast, () => {});
   }, [api]);
   const toggle = async () => {
     setError(null);
@@ -26,7 +29,7 @@ function ClaudeCode() {
       <div className="flex flex-col gap-3 border-t border-line p-3">
         <div className="flex items-center gap-2 text-[12px]">
           <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-text" : "border border-text-3"}`} aria-hidden="true" />
-          <span className="text-text-2">{on ? "Connected" : "Not connected"}</span>
+          <span className="text-text-2">{on ? (last ? `On, last line ${ago(last)}` : "On, no lines yet") : "Off"}</span>
           {on !== null && (
             <Button className="ml-auto" onClick={() => void toggle()}>
               {on ? "Disconnect" : "Connect"}

@@ -50,6 +50,21 @@ describe("Projects", () => {
     expect(screen.getByLabelText("Add a done line")).toHaveValue("");
   });
 
+  it("done list shows daily lines newest first with time", async () => {
+    const seed = demoSeed();
+    seed.done = { 1: [{ date: "2026-11-01", time: null, text: "From the old note." }, { date: "2026-11-12", time: "10:05", text: "Older day." }, { date: "2026-11-13", time: "14:32", text: "Newest." }] };
+    const { user } = await setup({}, "projects", seed);
+    await pick(user, "orbit");
+    const log = await screen.findByRole("list", { name: "Done log" });
+    await waitFor(() => expect(within(log).getAllByRole("listitem")).toHaveLength(3));
+    const rows = within(log).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("2026-11-13 14:32");
+    expect(rows[0]).toHaveTextContent("Newest.");
+    expect(rows[1]).toHaveTextContent("2026-11-12 10:05");
+    expect(rows[2]).toHaveTextContent("2026-11-01");
+    expect(rows[2]).toHaveTextContent("From the old note.");
+  });
+
   it("disconnected_vault_shows_notice", async () => {
     const { user } = await setup({ vaultConnected: false });
     await pick(user, "homelab");
@@ -60,6 +75,13 @@ describe("Projects", () => {
 });
 
 describe("Settings", () => {
+  it("Claude Code line shows the last line time", async () => {
+    const seed = { ...demoSeed(), lastDone: Math.floor(Date.now() / 1000) - 300 };
+    await setup({ claudeHooks: true }, "settings", seed);
+    const panel = await screen.findByRole("region", { name: "Claude Code" });
+    expect(await within(panel).findByText("On, last line 5 min ago")).toBeInTheDocument();
+  });
+
   it("saves_the_vault_path", async () => {
     const { api, user } = await setup({}, "settings");
     const field = await screen.findByLabelText("Vault folder");

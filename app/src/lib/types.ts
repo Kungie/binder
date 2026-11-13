@@ -89,7 +89,17 @@ export interface ProjectPatch {
 
 export interface DoneLine {
   date: string;
+  /** `HH:MM`, local. Lines from a note's old `## Done` section have none. */
+  time: string | null;
   text: string;
+}
+
+/** A done line with its project, for Overview's Done today. */
+export interface DoneItem {
+  project_id: number;
+  project: string;
+  color: string;
+  line: DoneLine;
 }
 
 export interface PrinterConfig {

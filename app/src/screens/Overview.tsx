@@ -5,7 +5,7 @@ import { TaskBoard } from "../components/TaskBoard";
 import { Button } from "../components/ui";
 import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
-import type { DoneLine } from "../lib/types";
+import type { DoneItem } from "../lib/types";
 import { clock, useServer } from "../lib/useServer";
 import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
@@ -18,7 +18,9 @@ const WEEK = 7 * 24 * 3600;
 
 export function Overview() {
   const { api, tasks, setScreen, setCreatingTask, doneVersion } = useStore();
-  const [doneToday, setDoneToday] = useState<[string, DoneLine][]>([]);
+  const [doneToday, setDoneToday] = useState<DoneItem[]>([]);
+  // Bumps when a hook writes a line in the background, so Done today refetches.
+  const [lastDone, setLastDone] = useState<number | null>(null);
   const now = Math.floor(Date.now() / 1000);
   const open = viewTasks(tasks, { kind: "all" }, false);
   const doing = open.filter((t) => t.status === "in_progress").length;
@@ -31,7 +33,14 @@ export function Overview() {
     return () => {
       live = false;
     };
-  }, [api, doneVersion, tasks]);
+  }, [api, doneVersion, tasks, lastDone]);
+
+  useEffect(() => {
+    const check = () => void api.lastDone().then(setLastDone, () => {});
+    check();
+    const timer = window.setInterval(check, 30_000);
+    return () => window.clearInterval(timer);
+  }, [api]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -63,21 +72,41 @@ export function Overview() {
           <ServerPanel />
           <CloudPanel />
           <PrinterPanel />
-          <Panel title="Done today" action={<span className="font-mono text-[11px] text-text-3">{doneToday.length}</span>}>
-            <ul className="border-t border-line">
-              {doneToday.map(([project, line], i) => (
-                <li key={i} className="flex flex-col gap-0.5 border-b border-line px-3 py-2 text-[12px] last:border-b-0">
-                  <span className="text-text-3">{project}</span>
-                  <span className="text-text-2">{line.text}</span>
-                </li>
-              ))}
-              {doneToday.length === 0 && <li className="px-3 py-3 text-[12px] text-text-3">Nothing logged today.</li>}
-            </ul>
-          </Panel>
+          <DoneToday items={doneToday} />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+const DONE_SHOWN = 8;
+
+/** Today's done lines across projects, newest first: the newest 8, then all of them on request. */
+function DoneToday({ items }: { items: DoneItem[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, DONE_SHOWN);
+  return (
+    <Panel title="Done today" action={<span className="font-mono text-[11px] text-text-3">{items.length}</span>}>
+      <ul aria-label="Done today" className="border-t border-line">
+        {shown.map((d, i) => (
+          <li key={`${d.project_id}-${i}`} className="flex flex-col gap-0.5 border-b border-line px-3 py-2 text-[12px] last:border-b-0">
+            <span className="flex items-center gap-2 text-text-3">
+              {d.line.time && <span className="font-mono text-[11px]">{d.line.time}</span>}
+              <span data-dot className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} aria-hidden="true" />
+              <span className="truncate">{d.project}</span>
+            </span>
+            <span className="text-text-2">{d.line.text}</span>
+          </li>
+        ))}
+      </ul>
+      {items.length === 0 && <p className="border-t border-line px-3 py-3 text-[12px] text-text-3">Nothing logged today.</p>}
+      {items.length > DONE_SHOWN && (
+        <button type="button" className="w-full border-t border-line px-3 py-2 text-left text-[12px] text-text-3 hover:text-text" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all (${items.length})`}
+        </button>
+      )}
+    </Panel>
   );
 }
 
