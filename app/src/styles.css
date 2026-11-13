@@ -51,44 +51,46 @@
   }
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 400;
-  -webkit-font-smoothing: antialiased;
-  user-select: none;
-  cursor: default;
-}
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
 
-input,
-textarea,
-select,
-button {
-  font: inherit;
-  color: inherit;
-}
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
 
-input,
-textarea {
-  user-select: text;
-}
+  input,
+  textarea {
+    user-select: text;
+  }
 
-::selection {
-  background: var(--color-line-strong);
-}
+  ::selection {
+    background: var(--color-line-strong);
+  }
 
-:focus-visible {
-  outline: 1px solid var(--color-text-2);
-  outline-offset: 1px;
+  :focus-visible {
+    outline: 1px solid var(--color-text-2);
+    outline-offset: 1px;
+  }
 }
 
 .fade-in {
