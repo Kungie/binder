@@ -52,6 +52,7 @@ export function TaskBoard({ tasks, compact, label, empty }: { tasks: Task[]; com
         onCreate={() => store.setCreatingTask(true)}
         onStatus={(ids, s) => void flow.setStatus(ids, s)}
         onAssign={(id, assignee) => void store.updateTask(id, { assignee })}
+        onPriority={(ids, priority) => void Promise.all(ids.map((id) => store.updateTask(id, { priority })))}
       />
       {flow.overlays}
     </>

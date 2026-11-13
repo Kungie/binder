@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../lib/store";
-import type { Assignee } from "../lib/types";
+import { type Assignee, PRIORITIES, type Priority } from "../lib/types";
+import { PRIORITY_SHORT } from "./PriorityIcon";
 import { Button, fieldClass } from "./ui";
 
 /** The new-task dialog: a title, then project and assignee. Enter creates, Esc cancels. */
@@ -9,6 +10,7 @@ export function NewTask() {
   const preset = view.kind === "project" ? view.id : screen === "projects" ? selectedProject : null;
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<number | "">(preset ?? "");
+  const [priority, setPriority] = useState<Priority>("none");
   const [assignee, setAssignee] = useState<Assignee>(view.kind === "agent" ? "agent" : "me");
   const [error, setError] = useState<string | null>(null);
   const close = () => setCreatingTask(false);
@@ -16,7 +18,7 @@ export function NewTask() {
   const submit = async () => {
     if (!title.trim()) return setError("Give it a title.");
     try {
-      await createTask({ title, project_id: projectId === "" ? undefined : projectId, assignee, status: newTaskStatus ?? undefined });
+      await createTask({ title, project_id: projectId === "" ? undefined : projectId, assignee, priority, status: newTaskStatus ?? undefined });
       close();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -62,6 +64,13 @@ export function NewTask() {
           <select aria-label="Assignee" className={`${fieldClass} w-28`} value={assignee} onChange={(e) => setAssignee(e.target.value as Assignee)}>
             <option value="me">Me</option>
             <option value="agent">Agent</option>
+          </select>
+          <select aria-label="Priority" className={`${fieldClass} w-32`} value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
+            {[...PRIORITIES].reverse().map((p) => (
+              <option key={p} value={p}>
+                {PRIORITY_SHORT[p]}
+              </option>
+            ))}
           </select>
           {error && <span className="text-[12px] text-text-2">{error}</span>}
           <Button variant="primary" className="ml-auto" onClick={() => void submit()}>

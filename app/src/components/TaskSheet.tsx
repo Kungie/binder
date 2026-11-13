@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../lib/store";
-import { PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, type Task } from "../lib/types";
+import { STATUSES, STATUS_LABEL, type Task } from "../lib/types";
 import { AgentRun } from "./AgentRun";
+import { PRIORITY_SHORT, PriorityChip } from "./PriorityIcon";
+import { PriorityMenu } from "./PriorityMenu";
 import { Button, Field, fieldClass } from "./ui";
 
 /** The side sheet for one task. Text saves on blur, menus save on change. */
@@ -10,6 +12,7 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
   const [confirm, setConfirm] = useState(false);
+  const [prioMenu, setPrioMenu] = useState(false);
 
   useEffect(() => {
     setTitle(task.title);
@@ -69,13 +72,28 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
           </select>
         </Field>
         <Field label="Priority">
-          <select className={fieldClass} value={task.priority} onChange={(e) => void updateTask(task.id, { priority: e.target.value as Task["priority"] })}>
-            {PRIORITIES.map((p) => (
-              <option key={p} value={p}>
-                {PRIORITY_LABEL[p]}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <button
+              type="button"
+              aria-label={`Priority: ${PRIORITY_SHORT[task.priority]}`}
+              onClick={() => setPrioMenu((v) => !v)}
+              className="flex h-7 items-center rounded-control text-[12px] text-text-3 hover:text-text"
+            >
+              {task.priority === "none" ? <span className="px-1">No priority</span> : <PriorityChip priority={task.priority} />}
+            </button>
+            {prioMenu && (
+              <div className="absolute left-0 top-8">
+                <PriorityMenu
+                  value={task.priority}
+                  onPick={(priority) => {
+                    setPrioMenu(false);
+                    void updateTask(task.id, { priority });
+                  }}
+                  onClose={() => setPrioMenu(false)}
+                />
+              </div>
+            )}
+          </div>
         </Field>
         <Field label="Project">
           <select

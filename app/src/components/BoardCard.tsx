@@ -1,7 +1,8 @@
-import type { DragEvent, KeyboardEvent } from "react";
+import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import { dueLabel, localDay, plainText } from "../lib/tasks";
 import { type Project, STATUS_LABEL, type Task } from "../lib/types";
 import { Chip } from "./Chip";
+import { PriorityChip } from "./PriorityIcon";
 import { ProjectDot } from "./ProjectDot";
 import { StatusIcon } from "./StatusIcon";
 
@@ -31,6 +32,8 @@ export interface BoardCardProps {
   project: Project | undefined;
   focused: boolean;
   dropping: boolean;
+  /** A menu drawn under the card, such as the priority picker. */
+  menu?: ReactNode;
   onOpen(): void;
   onFocus(): void;
   onKeyDown(e: KeyboardEvent): void;
@@ -41,7 +44,7 @@ export interface BoardCardProps {
 }
 
 /** One soft card: the title, two lines of notes, then chips for status, due, project and the agent. */
-export function BoardCard({ task, project, focused, dropping, onOpen, onFocus, onKeyDown, onDragStart, onDragEnd, onDragOver, onDrop }: BoardCardProps) {
+export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFocus, onKeyDown, onDragStart, onDragEnd, onDragOver, onDrop }: BoardCardProps) {
   const notes = plainText(task.notes);
   const due = task.due ? dueLabel(task.due, task.due_time, localDay()) : null;
   return (
@@ -70,6 +73,7 @@ export function BoardCard({ task, project, focused, dropping, onOpen, onFocus, o
         {notes && <p className="line-clamp-2 text-[12px] leading-[18px] text-text-2">{notes}</p>}
         <div className="mt-0.5 flex flex-wrap items-center gap-1">
           <Chip icon={<StatusIcon status={task.status} size={12} />}>{STATUS_LABEL[task.status]}</Chip>
+          <PriorityChip priority={task.priority} />
           {due && (
             <Chip icon={task.due_time ? <Clock /> : <Calendar />} tone={due.overdue ? "warn" : "default"}>
               {due.text}
@@ -79,6 +83,7 @@ export function BoardCard({ task, project, focused, dropping, onOpen, onFocus, o
           {task.assignee === "agent" && <Chip icon={<ClaudeMark />}>Claude</Chip>}
         </div>
       </div>
+      {menu && <div className="absolute left-2 top-full z-30 mt-1">{menu}</div>}
     </li>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Board } from "../components/Board";
 import { TaskBoard } from "../components/TaskBoard";
 import { Button } from "../components/ui";
@@ -21,7 +21,13 @@ function readLayout(v: TaskView): Layout {
 }
 
 export function Tasks() {
-  const { tasks, projects, view, setView, setCreatingTask } = useStore();
+  const { tasks, view, setView, setCreatingTask } = useStore();
+  // Project views live on the project page; Tasks opens on All.
+  useEffect(() => {
+    if (view.kind === "project") setView({ kind: "all" });
+    // Only when Tasks opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [showClosed, setShowClosed] = useState(false);
   const [query, setQuery] = useState("");
   const [layouts, setLayouts] = useState<Record<string, Layout>>({});
@@ -38,14 +44,13 @@ export function Tasks() {
     [{ kind: "all" }, "All"],
     [{ kind: "mine" }, "Mine"],
     [{ kind: "agent" }, "Agent"],
-    ...projects.filter((p) => p.state === "active" && !p.archived).map((p): [TaskView, string] => [{ kind: "project", id: p.id }, p.name]),
   ];
   const found = (list: typeof tasks) => list.filter((t) => matches(t, query));
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1 px-5" data-tauri-drag-region>
         <h1 className="mr-3 text-[13px] font-medium">Tasks</h1>
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+        <div role="group" aria-label="Task views" className="flex min-w-0 items-center gap-1 overflow-x-auto">
           {views.map(([v, label]) => (
             <button
               key={label}

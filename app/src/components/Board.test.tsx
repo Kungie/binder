@@ -64,8 +64,8 @@ describe("Board", () => {
     const c = card("ORB-4");
     expect(within(c).getByText("Show the sync state beside the title, with the last error on hover.")).toHaveClass("line-clamp-2");
     const chips = [...c.querySelectorAll("[data-chip]")].map((x) => x.textContent);
-    expect(chips).toEqual(["In progress", "orbit"]);
-    expect([...card("LAB-2").querySelectorAll("[data-chip]")].map((x) => x.textContent)).toEqual(["Todo", "Tomorrow 9 AM", "homelab", "Claude"]);
+    expect(chips).toEqual(["In progress", "High", "orbit"]);
+    expect([...card("LAB-2").querySelectorAll("[data-chip]")].map((x) => x.textContent)).toEqual(["Todo", "Medium", "Tomorrow 9 AM", "homelab", "Claude"]);
   });
 
   it("drop_on_done_sets_status_and_prompts_once", async () => {
@@ -122,6 +122,17 @@ describe("Board", () => {
     await user.click(within(column("Backlog")).getByRole("button", { name: "New Backlog task" }));
     await user.type(within(screen.getByRole("dialog", { name: "New task" })).getByLabelText("Task title"), "Sketch a stand{Enter}");
     await waitFor(async () => expect((await api.listTasks({ kind: "all" }, true)).find((t) => t.title === "Sketch a stand")?.status).toBe("backlog"));
+  });
+
+  it("p_opens_the_priority_menu_on_a_focused_card_and_sets_it", async () => {
+    const { api, user } = await setup();
+    const first = cards("Backlog")[0]!;
+    first.focus();
+    await user.keyboard("p");
+    const menu = screen.getByRole("listbox", { name: "Set priority" });
+    await user.click(within(menu).getByRole("option", { name: /High/ }));
+    await waitFor(async () => expect((await byKey(api, "ORB-2")).priority).toBe("high"));
+    expect(screen.queryByRole("listbox", { name: "Set priority" })).toBeNull();
   });
 
   it("keys_move_across_cards_and_columns", async () => {

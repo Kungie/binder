@@ -21,3 +21,6 @@ export function colorFor(name: string): string {
   }
   return PALETTE[h % PALETTE.length];
 }
+
+/** Priority colours: urgent in the orange of urgency, the rest a grey scale. */
+export const PRIORITY_COLOR = { urgent: "#F2994A", high: "#E5E5E5", medium: "#A1A1A1", low: "#6B6B6B" } as const;

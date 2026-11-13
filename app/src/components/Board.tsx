@@ -2,6 +2,7 @@ import { type DragEvent, type KeyboardEvent, useMemo, useRef, useState } from "r
 import { useStore } from "../lib/store";
 import { STATUS_LABEL, type Status, type Task } from "../lib/types";
 import { BoardCard } from "./BoardCard";
+import { PriorityMenu } from "./PriorityMenu";
 import { StatusIcon } from "./StatusIcon";
 import { useTaskFlow } from "./TaskBoard";
 
@@ -18,6 +19,7 @@ export function Board({ tasks }: { tasks: Task[] }) {
   const flow = useTaskFlow();
   const [showAllDone, setShowAllDone] = useState(false);
   const [focusId, setFocusId] = useState<number | null>(null);
+  const [prioFor, setPrioFor] = useState<number | null>(null);
   const [over, setOver] = useState<{ status: Status; before: number | null } | null>(null);
   const dragging = useRef<number | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -85,6 +87,7 @@ export function Board({ tasks }: { tasks: Task[] }) {
       ArrowRight: () => sideways(1),
       Enter: () => flow.open(task.id),
       c: () => store.setCreatingTask(true, status),
+      p: () => setPrioFor(task.id),
     };
     keys.j = keys.ArrowDown;
     keys.k = keys.ArrowUp;
@@ -138,6 +141,19 @@ export function Board({ tasks }: { tasks: Task[] }) {
                   project={store.projects.find((p) => p.id === task.project_id)}
                   focused={(focusId ?? firstId) === task.id}
                   dropping={over?.status === status && over.before === task.id}
+                  menu={
+                    prioFor === task.id && (
+                      <PriorityMenu
+                        value={task.priority}
+                        onPick={(priority) => {
+                          setPrioFor(null);
+                          void store.updateTask(task.id, { priority });
+                          focusCard(task);
+                        }}
+                        onClose={() => setPrioFor(null)}
+                      />
+                    )
+                  }
                   onOpen={() => flow.open(task.id)}
                   onFocus={() => setFocusId(task.id)}
                   onKeyDown={(e) => onKey(e, status, index, task)}

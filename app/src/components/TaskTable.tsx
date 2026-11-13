@@ -1,7 +1,8 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { type Assignee, type Project, STATUSES, type Status, type Task, isClosed } from "../lib/types";
+import { type Assignee, type Priority, type Project, STATUSES, type Status, type Task, isClosed } from "../lib/types";
 import { PriorityIcon } from "./PriorityIcon";
 import { StatusIcon } from "./StatusIcon";
+import { PriorityMenu } from "./PriorityMenu";
 import { StatusMenu } from "./StatusMenu";
 
 export interface TaskTableProps {
@@ -11,6 +12,7 @@ export interface TaskTableProps {
   onCreate(): void;
   onStatus(ids: number[], status: Status): void;
   onAssign(id: number, assignee: Assignee): void;
+  onPriority?(ids: number[], priority: Priority): void;
   compact?: boolean;
   label?: string;
   empty?: string;
@@ -29,10 +31,11 @@ function shortDate(day: string) {
 }
 
 /** The Linear-style task table. Keys: j/k move, Enter opens, c creates, s status, a assignee, x select. */
-export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssign, compact = false, label = "Tasks", empty = "No tasks here." }: TaskTableProps) {
+export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssign, onPriority, compact = false, label = "Tasks", empty = "No tasks here." }: TaskTableProps) {
   const [focusId, setFocusId] = useState<number | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [menu, setMenu] = useState<number | null>(null);
+  const [prioMenu, setPrioMenu] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const names = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
 
@@ -94,6 +97,12 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
         if (focused) {
           handled();
           setMenu(STATUSES.indexOf(focused.status));
+        }
+        break;
+      case "p":
+        if (focused && onPriority) {
+          handled();
+          setPrioMenu(true);
         }
         break;
       case "a":
@@ -183,6 +192,24 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
                 </>
               )}
             </div>
+            {isFocused && prioMenu && onPriority && (
+              <div className="absolute right-0 top-9 z-20">
+                <PriorityMenu
+                  value={t.priority}
+                  onPick={(p) => {
+                    const ids = targets();
+                    setPrioMenu(false);
+                    setSelected(new Set());
+                    onPriority(ids, p);
+                    gridRef.current?.focus();
+                  }}
+                  onClose={() => {
+                    setPrioMenu(false);
+                    gridRef.current?.focus();
+                  }}
+                />
+              </div>
+            )}
             {isFocused && menu !== null && (
               <div className="absolute right-0 top-9">
                 <StatusMenu active={menu} onPick={pick} />

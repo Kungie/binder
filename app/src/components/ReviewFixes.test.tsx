@@ -74,4 +74,32 @@ describe("review fixes", () => {
     await user.selectOptions(within(sheet).getByLabelText("Status"), "done");
     expect(await screen.findByLabelText("Log to orbit")).toHaveValue("Wire the sync status into the toolbar");
   });
+
+  it("sheet_priority_field_shows_the_chip_and_opens_the_menu", async () => {
+    const { api, user } = await setup();
+    await user.keyboard("{Enter}");
+    const sheet = await screen.findByRole("dialog", { name: "ORB-4" });
+    const field = within(sheet).getByRole("button", { name: "Priority: High" });
+    expect(field.querySelector("[data-chip]")?.textContent).toBe("High");
+    await user.click(field);
+    await user.click(within(screen.getByRole("listbox", { name: "Set priority" })).getByRole("option", { name: /Urgent/ }));
+    await waitFor(async () => expect((await find(api, "ORB-4")).priority).toBe("urgent"));
+  });
+
+  it("new_task_takes_a_priority", async () => {
+    const { api, user } = await setup();
+    await user.keyboard("c");
+    const dialog = screen.getByRole("dialog", { name: "New task" });
+    await user.type(within(dialog).getByLabelText("Task title"), "Fix the hinge");
+    await user.selectOptions(within(dialog).getByLabelText("Priority"), "urgent");
+    await user.click(within(dialog).getByRole("button", { name: "Create task" }));
+    await waitFor(async () => expect((await api.listTasks({ kind: "all" }, true)).find((t) => t.title === "Fix the hinge")?.priority).toBe("urgent"));
+  });
+
+  it("p_in_the_list_sets_priority", async () => {
+    const { api, user } = await setup();
+    await user.keyboard("p");
+    await user.click(within(screen.getByRole("listbox", { name: "Set priority" })).getByRole("option", { name: /Low/ }));
+    await waitFor(async () => expect((await find(api, "ORB-4")).priority).toBe("low"));
+  });
 });
