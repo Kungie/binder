@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { COLOR_NAMES, PALETTE } from "../lib/colors";
+import { ago } from "../lib/time";
 import { Panel } from "../components/Panel";
 import { ProjectDot } from "../components/ProjectDot";
 import { TaskBoard } from "../components/TaskBoard";
@@ -102,6 +104,67 @@ function AgentDir({ project }: { project: Project }) {
   );
 }
 
+function Lock() {
+  return (
+    <svg role="img" aria-label="Private" viewBox="0 0 12 12" className="size-3 shrink-0 text-text-3" fill="none" stroke="currentColor" strokeWidth="1.2">
+      <rect x="2.5" y="5.5" width="7" height="5" rx="1" />
+      <path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" />
+    </svg>
+  );
+}
+
+function ColorPicker({ project }: { project: Project }) {
+  const { updateProject } = useStore();
+  return (
+    <div role="radiogroup" aria-label="Colour" className="flex items-center gap-1">
+      {PALETTE.map((c) => (
+        <button
+          key={c}
+          type="button"
+          role="radio"
+          aria-label={COLOR_NAMES[c]}
+          aria-checked={project.color === c}
+          onClick={() => void updateProject(project.id, { color: c })}
+          className={`grid size-5 place-items-center rounded-full ${project.color === c ? "ring-1 ring-text-2" : "hover:ring-1 hover:ring-line-strong"}`}
+        >
+          <span className="size-2.5 rounded-full" style={{ background: c }} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Where the project lives on GitHub: the link, privacy, language and last push. */
+function GithubLine({ project }: { project: Project }) {
+  const { api } = useStore();
+  if (!project.github || !project.url) return null;
+  const pushed = project.pushed_at ? Date.parse(project.pushed_at) / 1000 : NaN;
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center gap-3 text-[12px] text-text-2">
+        <a
+          href={project.url}
+          onClick={(e) => {
+            e.preventDefault();
+            void api.openRepoPage(project.id);
+          }}
+          className="font-mono text-[11px] text-text hover:underline"
+        >
+          {project.github}
+        </a>
+        <span className="flex items-center gap-1">
+          {project.private && <Lock />}
+          {project.private ? "Private" : "Public"}
+        </span>
+        {project.language && <span>{project.language}</span>}
+        {!Number.isNaN(pushed) && <span className="text-text-3">{`pushed ${ago(pushed)}`}</span>}
+        {project.archived && <span className="text-text-3">Archived</span>}
+      </div>
+      {project.description && <p className="text-[12px] text-text-3">{project.description}</p>}
+    </div>
+  );
+}
+
 function Detail({ project }: { project: Project }) {
   const { api, tasks, updateProject, deleteProject, reload } = useStore();
   const vault = useVault();
@@ -126,6 +189,7 @@ function Detail({ project }: { project: Project }) {
       <header className="flex items-center gap-3">
         <h1 className="text-[15px] font-medium">{project.name}</h1>
         <span className="font-mono text-[11px] text-text-3">{project.prefix}</span>
+        <ColorPicker project={project} />
         <select
           aria-label="State"
           value={project.state}
@@ -140,9 +204,10 @@ function Detail({ project }: { project: Project }) {
           {project.note ? "Open note" : "Start project"}
         </Button>
       </header>
+      <GithubLine project={project} />
       {(vault.connected === false || error) && <Notice>{error && !error.startsWith("Vault not connected") ? error : vaultNotice(vault.path)}</Notice>}
       <div className="flex items-center gap-2 text-[12px]">
-        <span className="w-20 text-text-3">Repo</span>
+        <span className="w-20 text-text-3">Local folder</span>
         <span className="truncate font-mono text-[11px] text-text-2">{project.repo ?? "None"}</span>
         <Button variant="ghost" onClick={() => void pickFolder().then((f) => (f ? updateProject(project.id, { repo: f }) : null))}>
           Choose
@@ -179,34 +244,70 @@ function Detail({ project }: { project: Project }) {
   );
 }
 
+function Row({ project, current, open }: { project: Project; current: boolean; open: number }) {
+  const { openProject } = useStore();
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => openProject(project.id)}
+        className={`flex h-8 w-full items-center gap-2 rounded-control px-2 text-left text-[12px] ${current ? "bg-raised text-text" : "text-text-2 hover:bg-raised/60"}`}
+      >
+        <ProjectDot color={project.color} />
+        <span className="truncate">{project.name}</span>
+        {project.private && <Lock />}
+        <span className="ml-auto font-mono text-[11px] text-text-3">{project.prefix}</span>
+        <span className="w-5 text-right font-mono text-[11px] text-text-3">{open}</span>
+      </button>
+    </li>
+  );
+}
+
+function SyncLine() {
+  const { github } = useStore();
+  if (github?.error) return <p className="px-4 pb-2 text-[11px] text-urgent">{github.error}</p>;
+  return <p className="px-4 pb-2 text-[11px] text-text-3">{github ? `Synced ${ago(github.at)}` : "Not synced yet"}</p>;
+}
+
 export function Projects() {
-  const { projects, tasks, selectedProject, openProject, setCreatingProject } = useStore();
-  const current = projects.find((p) => p.id === selectedProject) ?? projects[0];
+  const { projects, tasks, selectedProject, setCreatingProject, syncGithub, syncing } = useStore();
+  const [showArchived, setShowArchived] = useState(false);
+  const live = projects.filter((p) => !p.archived);
+  const archived = projects.filter((p) => p.archived);
+  const current = projects.find((p) => p.id === selectedProject) ?? live[0] ?? projects[0];
   const openCount = (id: number) => tasks.filter((t) => t.project_id === id && !isClosed(t.status)).length;
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-[240px] shrink-0 flex-col border-r border-line">
-        <header className="flex h-12 items-center px-4" data-tauri-drag-region>
+        <header className="flex h-12 items-center gap-1 px-4" data-tauri-drag-region>
           <h1 className="text-[13px] font-medium">Projects</h1>
-          <Button variant="ghost" className="ml-auto" onClick={() => setCreatingProject(true)}>
+          <Button variant="ghost" className="ml-auto" disabled={syncing} onClick={() => void syncGithub()}>
+            Sync
+          </Button>
+          <Button variant="ghost" onClick={() => setCreatingProject(true)}>
             New project
           </Button>
         </header>
-        <ul aria-label="Projects" className="flex flex-col gap-px overflow-y-auto px-2">
-          {projects.map((p) => (
-            <li key={p.id}>
+        <SyncLine />
+        <ul aria-label="Projects" className="flex flex-col gap-px overflow-y-auto px-2 pb-2">
+          {live.map((p) => (
+            <Row key={p.id} project={p} current={p.id === current?.id} open={openCount(p.id)} />
+          ))}
+          {archived.length > 0 && (
+            <li className="mt-2">
               <button
                 type="button"
-                onClick={() => openProject(p.id)}
-                className={`flex h-8 w-full items-center gap-2 rounded-control px-2 text-left text-[12px] ${p.id === current?.id ? "bg-raised text-text" : "text-text-2 hover:bg-raised/60"}`}
+                aria-label={`Archived ${archived.length}`}
+                aria-expanded={showArchived}
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex h-7 w-full items-center gap-2 rounded-control px-2 text-left text-[11px] text-text-3 hover:text-text-2"
               >
-                <ProjectDot color={p.color} />
-                <span className="truncate">{p.name}</span>
-                <span className="ml-auto font-mono text-[11px] text-text-3">{p.prefix}</span>
-                <span className="w-5 text-right font-mono text-[11px] text-text-3">{openCount(p.id)}</span>
+                <span>Archived</span>
+                <span className="ml-auto font-mono">{archived.length}</span>
               </button>
             </li>
-          ))}
+          )}
+          {showArchived && archived.map((p) => <Row key={p.id} project={p} current={p.id === current?.id} open={openCount(p.id)} />)}
         </ul>
       </div>
       {current ? (
@@ -214,10 +315,15 @@ export function Projects() {
       ) : (
         <div className="flex flex-1 flex-col items-start gap-3 p-8">
           <h2 className="text-[15px] font-medium">Start your first project</h2>
-          <Notice>Pick a repo folder and Binder keeps its tasks and a note in your vault.</Notice>
-          <Button variant="primary" onClick={() => setCreatingProject(true)}>
-            New project
-          </Button>
+          <Notice>Bring in your GitHub repos, or add a project by hand.</Notice>
+          <div className="flex gap-2">
+            <Button variant="primary" disabled={syncing} onClick={() => void syncGithub()}>
+              Sync GitHub
+            </Button>
+            <Button variant="ghost" onClick={() => setCreatingProject(true)}>
+              New project
+            </Button>
+          </div>
         </div>
       )}
     </div>

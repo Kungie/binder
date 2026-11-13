@@ -316,12 +316,31 @@ pub fn sync_github(data_dir: &Path) -> Result<SyncReport, Error> {
     github::sync(&mut db, &gh, now())
 }
 
+/// Opens a project's GitHub page. Only github.com addresses are opened.
 #[tauri::command]
-pub async fn github_sync(app: tauri::AppHandle, state: State<'_, AppState>) -> Res<SyncReport> {
+pub async fn open_repo_page(app: tauri::AppHandle, state: State<'_, AppState>, project_id: i64) -> Res<()> {
+    let url = state.db.lock().unwrap().get_project(project_id).map_err(text)?.url;
+    let url = url.filter(|u| u.starts_with("https://github.com/")).ok_or_else(|| "This project isn't on GitHub.".to_string())?;
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// What `projects://changed` carries: when a sync ran and, if it failed, why.
+#[derive(Clone, serde::Serialize)]
+pub struct GithubSync {
+    pub at: i64,
+    pub error: Option<String>,
+}
+
+/// Syncs and tells the interface, which reloads its projects. Used at start.
+pub fn sync_and_tell(app: &tauri::AppHandle, data_dir: &Path) {
+    let error = sync_github(data_dir).err().map(text);
+    let _ = app.emit("projects://changed", GithubSync { at: now(), error });
+}
+
+#[tauri::command]
+pub async fn github_sync(state: State<'_, AppState>) -> Res<SyncReport> {
     let dir = state.config_path.parent().expect("config sits in the data folder").to_path_buf();
-    let report = sync_github(&dir).map_err(text)?;
-    let _ = app.emit("projects://changed", ());
-    Ok(report)
+    sync_github(&dir).map_err(text)
 }
 
 #[derive(serde::Serialize)]

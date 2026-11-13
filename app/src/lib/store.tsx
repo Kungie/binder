@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Api } from "./api";
-import type { NewProject, NewTask, Project, ProjectPatch, Task, TaskPatch, TaskView } from "./types";
+import type { GithubSync, NewProject, NewTask, Project, ProjectPatch, Task, TaskPatch, TaskView } from "./types";
 
 export type Screen = "overview" | "tasks" | "projects" | "devices" | "server" | "printer" | "settings";
 
@@ -28,6 +28,10 @@ export interface Store {
   logDone(projectId: number, text: string): Promise<boolean>;
   /** Bumps whenever a done line is written, so lists that read notes refetch. */
   doneVersion: number;
+  /** The last GitHub sync seen this session, null before any. */
+  github: GithubSync | null;
+  syncing: boolean;
+  syncGithub(): Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -41,6 +45,8 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
   const [creatingTask, setCreatingTask] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [doneVersion, setDoneVersion] = useState(0);
+  const [github, setGithub] = useState<GithubSync | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const reload = useCallback(async () => {
     const [t, p] = await Promise.all([api.listTasks({ kind: "all" }, true), api.listProjects()]);
@@ -51,6 +57,29 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // The app syncs GitHub at start; projects reload when it lands.
+  useEffect(
+    () =>
+      api.onProjectsChanged((sync) => {
+        setGithub(sync);
+        void reload();
+      }),
+    [api, reload],
+  );
+
+  const syncGithub = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await api.githubSync();
+      setGithub({ at: Math.floor(Date.now() / 1000), error: null });
+      await reload();
+    } catch (e) {
+      setGithub({ at: Math.floor(Date.now() / 1000), error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSyncing(false);
+    }
+  }, [api, reload]);
 
   const after = useCallback(
     <T,>(run: Promise<T>) =>
@@ -92,8 +121,11 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
           return written;
         }),
       doneVersion,
+      github,
+      syncing,
+      syncGithub,
     }),
-    [api, tasks, projects, screen, view, selectedProject, creatingTask, creatingProject, reload, after, doneVersion],
+    [api, tasks, projects, screen, view, selectedProject, creatingTask, creatingProject, reload, after, doneVersion, github, syncing, syncGithub],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

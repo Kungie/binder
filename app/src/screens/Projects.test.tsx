@@ -5,8 +5,8 @@ import { Shell } from "../App";
 import { StoreProvider } from "../lib/store";
 import { demoSeed, memoryApi } from "../lib/memory";
 
-async function setup(options = {}, initialScreen: "projects" | "settings" = "projects") {
-  const api = memoryApi(demoSeed(), options);
+async function setup(options = {}, initialScreen: "projects" | "settings" = "projects", seed = demoSeed()) {
+  const api = memoryApi(seed, options);
   const user = userEvent.setup();
   render(
     <StoreProvider api={api} initialScreen={initialScreen}>
@@ -90,5 +90,51 @@ describe("Claude Code", () => {
     await user.click(within(panel).getByRole("button", { name: "Disconnect" }));
     expect(await within(panel).findByRole("button", { name: "Connect" })).toBeInTheDocument();
     expect(await api.claudeHooks()).toBe(false);
+  });
+
+  it("sync_button_adds_github_projects", async () => {
+    const { user } = await setup();
+    const list = screen.getByRole("list", { name: "Projects" });
+    expect(within(list).queryByRole("button", { name: /^weather-cli/ })).toBeNull();
+    expect(screen.getByText("Not synced yet")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sync" }));
+    expect(await within(list).findByRole("button", { name: /^weather-cli/ })).toBeInTheDocument();
+    expect(screen.getByText(/^Synced/)).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: /^dotfiles/ }).querySelector("[aria-label='Private']")).not.toBeNull();
+  });
+
+  it("sign_in_line_when_gh_missing", async () => {
+    const { user } = await setup({}, "projects", { ...demoSeed(), github: null });
+    await user.click(screen.getByRole("button", { name: "Sync" }));
+    expect(await screen.findByText("Sign in with gh auth login to bring in your GitHub repos.")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Projects" })).toBeInTheDocument();
+  });
+
+  it("archived_projects_are_grouped", async () => {
+    const { user } = await setup();
+    const list = screen.getByRole("list", { name: "Projects" });
+    expect(within(list).queryByRole("button", { name: /^old-site/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Archived 1" }));
+    expect(within(list).getByRole("button", { name: /^old-site/ })).toBeInTheDocument();
+  });
+
+  it("colour_picker_sets_project_colour", async () => {
+    const { user } = await setup();
+    await pick(user, "orbit");
+    const picker = screen.getByRole("radiogroup", { name: "Colour" });
+    expect(within(picker).getAllByRole("radio")).toHaveLength(8);
+    await user.click(within(picker).getByRole("radio", { name: "Cyan" }));
+    await waitFor(() => expect(within(picker).getByRole("radio", { name: "Cyan" })).toHaveAttribute("aria-checked", "true"));
+    const row = within(screen.getByRole("list", { name: "Projects" })).getByRole("button", { name: /^orbit/ });
+    expect(row.querySelector("[data-color]")?.getAttribute("data-color")).toBe("#26B5CE");
+  });
+
+  it("github_header_links_the_repo", async () => {
+    const { user } = await setup();
+    await pick(user, "orbit");
+    expect(screen.getByRole("link", { name: "demo-dev/orbit" })).toHaveAttribute("href", "https://github.com/demo-dev/orbit");
+    expect(screen.getByText("TypeScript")).toBeInTheDocument();
+    expect(screen.getByText("pushed 1 day ago")).toBeInTheDocument();
+    expect(screen.getByText("Local folder")).toBeInTheDocument();
   });
 });

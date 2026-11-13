@@ -30,7 +30,7 @@ describe("memory Cloud", () => {
     const [id] = await api.cloudUpload(["/tmp/big.iso"], "", "keep_both");
     await api.cloudCancel(id);
     await settle();
-    expect(seen.at(-1)?.state).toBe("cancelled");
+    expect(seen[seen.length - 1]?.state).toBe("cancelled");
     expect((await api.cloudList("", false)).map((e) => e.name)).not.toContain("big.iso");
   });
 
@@ -69,11 +69,11 @@ describe("memory GitHub sync", () => {
   it("adds new repos, links hand projects by name and keeps known ones", async () => {
     const api = memoryApi(demoSeed());
     const report = await api.githubSync();
-    expect(report).toEqual({ added: 2, linked: 1, updated: 0, archived: 0 });
+    expect(report).toEqual({ added: 1, linked: 1, updated: 0, archived: 0 });
     const projects = await api.listProjects();
     expect(projects.find((p) => p.name === "homelab")?.github).toBe("demo-dev/homelab");
-    expect(projects.find((p) => p.name === "pixel-clock")?.state).toBe("paused");
-    expect(projects.find((p) => p.name === "dotfiles")?.state).toBe("active");
+    expect(projects.find((p) => p.name === "weather-cli")?.state).toBe("active");
+    expect(projects.find((p) => p.name === "old-site")?.archived).toBe(true);
   });
 
   it("signed out says how to sign in", async () => {

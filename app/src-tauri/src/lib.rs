@@ -40,11 +40,7 @@ pub fn run() {
             // Repos come in from GitHub at start; the interface reloads projects when this lands.
             let handle = app.handle().clone();
             let data = dir.clone();
-            std::thread::spawn(move || {
-                if commands::sync_github(&data).is_ok() {
-                    let _ = handle.emit("projects://changed", ());
-                }
-            });
+            std::thread::spawn(move || commands::sync_and_tell(&handle, &data));
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -88,6 +84,7 @@ pub fn run() {
             commands::claude_hooks,
             commands::set_claude_hooks,
             commands::github_sync,
+            commands::open_repo_page,
             commands::cloud_status,
             commands::cloud_list,
             commands::cloud_mkdir,

@@ -12,6 +12,7 @@ import type {
   Conflict,
   Device,
   DevicePatch,
+  GithubSync,
   DoneLine,
   NewDevice,
   NewProject,
@@ -70,10 +71,12 @@ export interface Api {
   /** Whether Binder's hooks are in ~/.claude/settings.json. */
   claudeHooks(): Promise<boolean>;
   setClaudeHooks(on: boolean): Promise<boolean>;
+  /** Opens a project's GitHub page in the browser. */
+  openRepoPage(projectId: number): Promise<void>;
   /** Brings the owner's GitHub repos in as projects, through gh's own login. */
   githubSync(): Promise<SyncReport>;
-  /** Calls back when projects changed outside the interface (the sync at start). Returns the unsubscribe. */
-  onProjectsChanged(cb: () => void): () => void;
+  /** Calls back when a sync outside the interface (the one at start) finished. Returns the unsubscribe. */
+  onProjectsChanged(cb: (sync: GithubSync) => void): () => void;
   cloudStatus(): Promise<CloudStatus>;
   cloudList(rel: string, showHidden: boolean): Promise<CloudEntry[]>;
   cloudMkdir(relDir: string, name: string): Promise<void>;
@@ -145,8 +148,9 @@ export const tauriApi: Api = {
   claudeHooks: () => call("claude_hooks"),
   setClaudeHooks: (on) => call("set_claude_hooks", { on }),
   onPrinter: (cb) => subscribe<PrinterView>("printer://state", cb),
+  openRepoPage: (projectId) => call("open_repo_page", { projectId }),
   githubSync: () => call("github_sync"),
-  onProjectsChanged: (cb) => subscribe<null>("projects://changed", () => cb()),
+  onProjectsChanged: (cb) => subscribe<GithubSync>("projects://changed", cb),
   cloudStatus: () => call("cloud_status"),
   cloudList: (rel, showHidden) => call("cloud_list", { rel, showHidden }),
   cloudMkdir: (relDir, name) => call("cloud_mkdir", { relDir, name }),

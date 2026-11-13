@@ -251,6 +251,13 @@ export interface Repo {
   language: string | null;
 }
 
+/** The last GitHub sync: when it ran and, if it failed, why. */
+export interface GithubSync {
+  /** Unix seconds */
+  at: number;
+  error: string | null;
+}
+
 export interface SyncReport {
   added: number;
   linked: number;

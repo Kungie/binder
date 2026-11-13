@@ -51,6 +51,8 @@ export function memoryApi(
   setServerReachable(v: boolean): void;
   printerCommands: [string, PrinterCommand][];
   cloudOpened: string[];
+  /** URLs opened in the browser. */
+  opened: string[];
   readonly cloudConnects: number;
   dropFiles(paths: string[]): void;
 } {
@@ -110,6 +112,7 @@ export function memoryApi(
     return p;
   };
 
+  const opened: string[] = [];
   const cloud = memoryCloud(seed.cloud, { mounted: () => options.cloudMounted ?? true, share: () => config.cloud_share });
 
   /** The core's sync rules: link by name, add new as active or paused, update facts only, archive what's gone. */
@@ -146,7 +149,13 @@ export function memoryApi(
 
   return {
     ...cloud,
+    opened,
     githubSync,
+    async openRepoPage(projectId) {
+      const p = project(projectId);
+      if (!p.url) throw new Error("This project isn't on GitHub.");
+      opened.push(p.url);
+    },
     onProjectsChanged() {
       return () => {};
     },
@@ -413,15 +422,17 @@ function hand(name: string): Omit<Project, "id" | "prefix" | "created"> {
   };
 }
 
-/** A project that came from the made-up developer's GitHub, pushed `days` ago. */
-function gh(name: string, description: string, language: string, days: number): Omit<Project, "id" | "prefix" | "created"> {
+/** A project brought in from one of the made-up developer's repos. */
+function fromRepo(r: Repo): Omit<Project, "id" | "prefix" | "created"> {
   return {
-    ...hand(name),
-    github: `demo-dev/${name}`,
-    url: `https://github.com/demo-dev/${name}`,
-    description,
-    language,
-    pushed_at: new Date(Date.now() - days * 86400000).toISOString(),
+    ...hand(r.name),
+    github: r.name_with_owner,
+    url: r.url,
+    description: r.description,
+    language: r.language,
+    pushed_at: r.pushed_at,
+    private: r.is_private,
+    archived: r.is_archived,
   };
 }
 
@@ -465,9 +476,19 @@ function demoCloud(t: number): CloudSeed {
 export function demoSeed(): Seed {
   const t = Math.floor(Date.now() / 1000);
   const day = localDay();
+  const github: Repo[] = [
+    repo("orbit", "A sync engine for local-first notes", "TypeScript", 1),
+    { ...repo("dotfiles", "Shell, editor and terminal setup", "Shell", 12), is_private: true },
+    repo("tidepool", "A tiny job queue on SQLite", "Rust", 6),
+    repo("pixel-clock", "A tiny e-ink clock", "C++", 140),
+    { ...repo("old-site", "The first personal site", "HTML", 400), is_archived: true },
+    repo("homelab", "Compose files for the home server", "Dockerfile", 3),
+    repo("weather-cli", "Forecasts in the terminal", "Go", 20),
+  ];
+  const [orbit, dotfiles, tidepool, pixel, oldSite] = github;
   const projects: Project[] = [
     {
-      ...gh("orbit", "A sync engine for local-first notes", "TypeScript", 1),
+      ...fromRepo(orbit),
       id: 1,
       prefix: "ORB",
       repo: "~/code/orbit",
@@ -475,6 +496,10 @@ export function demoSeed(): Seed {
       created: t - 864000,
     },
     { ...hand("homelab"), id: 2, prefix: "LAB", created: t - 432000, agent_dir: "~/homelab" },
+    { ...fromRepo(dotfiles), id: 3, prefix: "DOT", created: t - 400000 },
+    { ...fromRepo(tidepool), id: 4, prefix: "TID", created: t - 300000 },
+    { ...fromRepo(pixel), id: 5, prefix: "PIX", created: t - 900000, state: "paused" },
+    { ...fromRepo(oldSite), id: 6, prefix: "OLD", created: t - 990000, state: "paused" },
   ];
   const mk = (id: number, key: string, title: string, extra: Partial<Task>): Task => ({
     due_time: null,
@@ -565,12 +590,7 @@ export function demoSeed(): Seed {
         error: null,
       },
     ],
-    github: [
-      { ...repo("orbit", "A sync engine for local-first notes", "TypeScript", 1), pushed_at: projects[0].pushed_at! },
-      repo("dotfiles", "Shell, editor and terminal setup", "Shell", 12),
-      repo("homelab", "Compose files for the home server", "Dockerfile", 3),
-      repo("pixel-clock", "A tiny e-ink clock", "C++", 140),
-    ],
+    github,
     cloud: demoCloud(t),
     repos: { 1: { branch: "main", changed: 3, ahead: 1, behind: 0, last_subject: "Fix the toolbar spacing", last_date: day } },
   };
