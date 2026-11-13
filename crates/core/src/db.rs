@@ -82,6 +82,9 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '';
     ALTER TABLE projects ADD COLUMN language TEXT;
     CREATE UNIQUE INDEX projects_github ON projects(github);",
+    // v4: GitHub's repo id, which survives renames and transfers
+    "ALTER TABLE projects ADD COLUMN github_id TEXT;
+    CREATE UNIQUE INDEX projects_github_id ON projects(github_id);",
 ];
 
 impl Db {

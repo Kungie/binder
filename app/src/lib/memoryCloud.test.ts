@@ -81,3 +81,13 @@ describe("memory GitHub sync", () => {
     await expect(api.githubSync()).rejects.toThrow("Sign in with gh auth login");
   });
 });
+
+describe("memory Cloud replace", () => {
+  it("replace puts the old file in the trash", async () => {
+    const api = memoryApi(demoSeed());
+    await api.cloudUpload(["/tmp/README.md"], "", "replace");
+    await settle();
+    expect((await api.cloudTrashList()).map((t) => t.origin)).toEqual(["README.md"]);
+    expect((await api.cloudList("", false)).filter((e) => e.name === "README.md")).toHaveLength(1);
+  });
+});

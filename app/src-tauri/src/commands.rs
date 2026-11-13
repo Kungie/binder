@@ -392,7 +392,7 @@ pub async fn cloud_move(state: State<'_, AppState>, rel: String, dest_dir_rel: S
 
 #[tauri::command]
 pub async fn cloud_trash(state: State<'_, AppState>, rel: String) -> Res<()> {
-    cloud::trash(&cloud_root(&state)?, &rel).map_err(text)
+    cloud::trash(&cloud_root(&state)?, &rel).map(|_| ()).map_err(text)
 }
 
 #[tauri::command]
@@ -426,13 +426,22 @@ pub async fn cloud_connect(app: tauri::AppHandle, state: State<'_, AppState>) ->
     app.opener().open_url(share, None::<&str>).map_err(|e| e.to_string())
 }
 
-fn copies(app: &tauri::AppHandle, state: &State<AppState>, jobs: Vec<(std::path::PathBuf, std::path::PathBuf)>, conflict: Conflict) -> Vec<u64> {
+/// `trash_root` is Cloud's root for uploads, where Replace moves the old item to the trash; downloads to the Mac pass
+/// `None`, which refuses Replace.
+fn copies(
+    app: &tauri::AppHandle,
+    state: &State<AppState>,
+    jobs: Vec<(std::path::PathBuf, std::path::PathBuf)>,
+    conflict: Conflict,
+    trash_root: Option<std::path::PathBuf>,
+) -> Vec<u64> {
     jobs.into_iter()
         .map(|(src, dst_dir)| {
             let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let app = app.clone();
+            let trash_root = trash_root.clone();
             state.transfers.spawn(name, move |e| { let _ = app.emit("cloud://transfer", e); }, move |cancel, progress| {
-                cloud::copy_into(&src, &dst_dir, conflict, cancel, progress).map(|_| ())
+                cloud::copy_into(&src, &dst_dir, conflict, trash_root.as_deref(), cancel, progress).map(|_| ())
             })
         })
         .collect()
@@ -441,12 +450,13 @@ fn copies(app: &tauri::AppHandle, state: &State<AppState>, jobs: Vec<(std::path:
 /// Copies files or folders from the Mac into a Cloud folder. Returns the transfer ids.
 #[tauri::command]
 pub async fn cloud_upload(app: tauri::AppHandle, state: State<'_, AppState>, paths: Vec<String>, dest_rel: String, conflict: Conflict) -> Res<Vec<u64>> {
-    let dest = cloud::resolve(&cloud_root(&state)?, &dest_rel).map_err(text)?;
+    let root = cloud_root(&state)?;
+    let dest = cloud::resolve(&root, &dest_rel).map_err(text)?;
     if !dest.is_dir() {
         return Err("Upload into a folder.".into());
     }
     let jobs = paths.into_iter().map(|p| (std::path::PathBuf::from(p), dest.clone())).collect();
-    Ok(copies(&app, &state, jobs, conflict))
+    Ok(copies(&app, &state, jobs, conflict, Some(root)))
 }
 
 /// Copies Cloud items into a folder on the Mac. Returns the transfer ids.
@@ -458,7 +468,7 @@ pub async fn cloud_download(app: tauri::AppHandle, state: State<'_, AppState>, r
         return Err("Save into a folder.".into());
     }
     let jobs = rels.iter().map(|r| cloud::resolve(&root, r).map(|src| (src, dest.clone()))).collect::<Result<Vec<_>, _>>().map_err(text)?;
-    Ok(copies(&app, &state, jobs, conflict))
+    Ok(copies(&app, &state, jobs, conflict, None))
 }
 
 #[tauri::command]

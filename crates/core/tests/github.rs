@@ -21,6 +21,7 @@ impl GitHub for FakeGitHub {
 fn repo(name: &str, days_ago: i64) -> Repo {
     let pushed = chrono::DateTime::from_timestamp(NOW - days_ago * 86_400, 0).unwrap().to_rfc3339();
     Repo {
+        id: Some(format!("R_{name}")),
         name: name.into(),
         name_with_owner: format!("demo-dev/{name}"),
         description: Some(format!("About {name}")),
@@ -151,4 +152,21 @@ fn gh_json_parses() {
     assert_eq!(repos[0].language.as_deref(), Some("Swift"));
     assert_eq!(repos[0].description, None, "an empty description is none");
     assert!(repos[0].is_private);
+}
+
+#[test]
+fn a_renamed_repo_keeps_its_project() {
+    let mut db = Db::in_memory().unwrap();
+    let gh = FakeGitHub(RefCell::new(vec![repo("gut", 1)]));
+    sync(&mut db, &gh, NOW).unwrap();
+    let before = by_name(&db, "gut");
+    *gh.0.borrow_mut() = vec![Repo { id: Some("R_gut".into()), ..repo("gut-cli", 1) }];
+    let report = sync(&mut db, &gh, NOW).unwrap();
+    assert_eq!(report, SyncReport { updated: 1, ..Default::default() });
+    let projects = db.list_projects().unwrap();
+    assert_eq!(projects.len(), 1);
+    let p = &projects[0];
+    assert_eq!((p.id, p.name.as_str(), p.archived), (before.id, "gut", false));
+    assert_eq!(p.github.as_deref(), Some("demo-dev/gut-cli"));
+    assert_eq!(p.url.as_deref(), Some("https://github.com/demo-dev/gut-cli"));
 }

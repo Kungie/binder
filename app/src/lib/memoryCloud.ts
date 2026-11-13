@@ -172,7 +172,12 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
         return transfer(name, size, () => {
           const taken = find(join(destRel, name));
           if (taken && conflict === "skip") return;
-          if (taken && conflict === "replace") entries = entries.filter((e) => !under(e.rel, taken.rel));
+          // Like the core: the replaced item goes to the trash, never away outright.
+          if (taken && conflict === "replace") {
+            const children = entries.filter((e) => e !== taken && under(e.rel, taken.rel));
+            entries = entries.filter((e) => !under(e.rel, taken.rel));
+            trash.unshift({ id: `${Date.now()}-${trash.length}`, origin: taken.rel, deleted: now(), entry: { ...taken }, children });
+          }
           const final = taken && conflict === "keep_both" ? freeName(destRel, name) : name;
           entries.push({ name: final, rel: join(destRel, final), kind: "file", size, modified: now() });
         });

@@ -191,7 +191,8 @@ impl Copy<'_> {
             return Ok(());
         }
         let mut src = fs::File::open(from)?;
-        let mut dst = fs::File::create(to)?;
+        // Never truncate something that is already there.
+        let mut dst = fs::File::create_new(to)?;
         let mut buf = vec![0u8; CHUNK];
         loop {
             if self.cancel.load(Ordering::SeqCst) {
@@ -212,18 +213,28 @@ impl Copy<'_> {
 
 /// Copies a file or folder into `dst_dir`, in 1 MB chunks, reporting `(done, total)` bytes. It writes to a hidden
 /// partial name first and renames at the end, so a cancelled or failed copy leaves nothing behind.
+///
+/// The conflict choice is applied when the copy lands, not when it starts: a name taken meanwhile (another copy,
+/// the phone) is never overwritten. `Replace` moves the old item to the trash of `trash_root`, so nothing is
+/// deleted outright; without a Cloud root to trash into, `Replace` is refused.
 /// Returns where it landed, or `None` when `Skip` met an existing name.
-pub fn copy_into(src: &Path, dst_dir: &Path, conflict: Conflict, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<Option<PathBuf>> {
+pub fn copy_into(
+    src: &Path,
+    dst_dir: &Path,
+    conflict: Conflict,
+    trash_root: Option<&Path>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<Option<PathBuf>> {
     let name = src.file_name().ok_or_else(|| Error::Invalid("Nothing to copy.".into()))?.to_string_lossy().into_owned();
-    let mut target = dst_dir.join(&name);
-    if fs::symlink_metadata(&target).is_ok() {
-        match conflict {
-            Conflict::Skip => return Ok(None),
-            Conflict::KeepBoth => target = free_name(dst_dir, &name),
-            Conflict::Replace => {}
-        }
+    if conflict == Conflict::Replace && trash_root.is_none() {
+        return Err(Error::Invalid("Replace only works inside Cloud.".into()));
     }
-    let partial = free_name(dst_dir, &format!("{PARTIAL}{name}"));
+    let taken = |p: &Path| fs::symlink_metadata(p).is_ok();
+    if conflict == Conflict::Skip && taken(&dst_dir.join(&name)) {
+        return Ok(None);
+    }
+    let partial = dst_dir.join(partial_name(&name));
     let total = size_of(src)?;
     let mut copy = Copy { cancel, progress, done: 0, total };
     if let Err(e) = copy.path(src, &partial) {
@@ -233,11 +244,46 @@ pub fn copy_into(src: &Path, dst_dir: &Path, conflict: Conflict, cancel: &Atomic
     if total == 0 {
         (copy.progress)(0, 0);
     }
-    if conflict == Conflict::Replace {
-        remove(&target)?;
+    let landed = land(&partial, dst_dir, &name, conflict, trash_root);
+    if !matches!(landed, Ok(Some(_))) {
+        let _ = remove(&partial);
     }
-    fs::rename(&partial, &target)?;
-    Ok(Some(target))
+    landed
+}
+
+/// A partial name no other copy, in this process or another, can pick.
+fn partial_name(name: &str) -> String {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, Ordering::SeqCst);
+    format!("{PARTIAL}{}-{n}-{name}", std::process::id())
+}
+
+/// Moves a finished partial to its name, deciding the conflict now. A replaced item goes to the trash first and
+/// comes back if the rename fails.
+fn land(partial: &Path, dst_dir: &Path, name: &str, conflict: Conflict, trash_root: Option<&Path>) -> Result<Option<PathBuf>> {
+    let target = dst_dir.join(name);
+    if fs::symlink_metadata(&target).is_err() {
+        fs::rename(partial, &target)?;
+        return Ok(Some(target));
+    }
+    match conflict {
+        Conflict::Skip => Ok(None),
+        Conflict::KeepBoth => {
+            let target = free_name(dst_dir, name);
+            fs::rename(partial, &target)?;
+            Ok(Some(target))
+        }
+        Conflict::Replace => {
+            let root = trash_root.expect("checked before copying");
+            let rel = target.strip_prefix(root).map_err(|_| outside())?.to_string_lossy().into_owned();
+            let id = trash(root, &rel)?;
+            if let Err(e) = fs::rename(partial, &target) {
+                let _ = restore(root, &id);
+                return Err(e.into());
+            }
+            Ok(Some(target))
+        }
+    }
 }
 
 pub fn mkdir(root: &Path, rel_dir: &str, name: &str) -> Result<PathBuf> {
@@ -289,8 +335,8 @@ fn trash_dir(root: &Path) -> Result<PathBuf> {
     Ok(dir)
 }
 
-/// Moves an item to the trash, remembering where it was.
-pub fn trash(root: &Path, rel: &str) -> Result<()> {
+/// Moves an item to the trash, remembering where it was. Returns its trash id.
+pub fn trash(root: &Path, rel: &str) -> Result<String> {
     let rel = rel.trim_matches('/');
     if rel.is_empty() || rel == TRASH || rel.starts_with(&format!("{TRASH}/")) {
         return Err(Error::Invalid("That can't go to the trash.".into()));
@@ -304,8 +350,11 @@ pub fn trash(root: &Path, rel: &str) -> Result<()> {
         .find(|p| fs::create_dir(p).is_ok())
         .expect("a free slot");
     fs::write(slot.join(ORIGIN), rel)?;
-    fs::rename(&from, slot.join(from.file_name().expect("not the root")))?;
-    Ok(())
+    if let Err(e) = fs::rename(&from, slot.join(from.file_name().expect("not the root"))) {
+        let _ = fs::remove_dir_all(&slot);
+        return Err(e.into());
+    }
+    Ok(slot.file_name().expect("a slot name").to_string_lossy().into_owned())
 }
 
 /// What's in the trash, newest first.

@@ -13,6 +13,8 @@ const SIGN_IN: &str = "Sign in with gh auth login to bring in your GitHub repos.
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Repo {
+    /// GitHub's own id for the repo. It survives renames and transfers, unlike the name.
+    pub id: Option<String>,
     pub name: String,
     pub name_with_owner: String,
     pub description: Option<String>,
@@ -28,6 +30,8 @@ pub struct Repo {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawRepo {
+    #[serde(default)]
+    id: Option<String>,
     name: String,
     name_with_owner: String,
     #[serde(default)]
@@ -51,6 +55,7 @@ struct Language {
 impl From<RawRepo> for Repo {
     fn from(r: RawRepo) -> Repo {
         Repo {
+            id: r.id.filter(|i| !i.is_empty()),
             name: r.name,
             name_with_owner: r.name_with_owner,
             description: r.description.filter(|d| !d.trim().is_empty()),
@@ -112,7 +117,7 @@ impl GitHub for GhCli {
             "--limit",
             "200",
             "--json",
-            "name,nameWithOwner,description,url,isPrivate,isArchived,pushedAt,primaryLanguage",
+            "id,name,nameWithOwner,description,url,isPrivate,isArchived,pushedAt,primaryLanguage",
         ])?;
         let raw: Vec<RawRepo> = serde_json::from_str(&out).map_err(|e| Error::Invalid(format!("gh sent something unexpected: {e}")))?;
         Ok(raw.into_iter().map(Repo::from).collect())
@@ -154,13 +159,24 @@ pub fn sync(db: &mut Db, gh: &dyn GitHub, now: i64) -> Result<SyncReport> {
 fn apply(db: &mut Db, repos: &[Repo], now: i64) -> Result<SyncReport> {
     let mut report = SyncReport::default();
     let projects = db.list_projects()?;
+    // GitHub ids per project, so a renamed or transferred repo finds the project it already has.
+    let ids: Vec<(i64, String)> = db
+        .conn
+        .prepare("SELECT id, github_id FROM projects WHERE github_id IS NOT NULL")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    let id_of = |p: &crate::model::Project| ids.iter().find(|(pid, _)| *pid == p.id).map(|(_, g)| g.as_str());
     for repo in repos {
         let facts = (&repo.url, &repo.description, &repo.pushed_at, repo.is_private, repo.is_archived, &repo.language);
-        let known = projects.iter().find(|p| p.github.as_deref() == Some(repo.name_with_owner.as_str()));
+        let known = repo
+            .id
+            .as_deref()
+            .and_then(|gid| projects.iter().find(|p| id_of(p) == Some(gid)))
+            .or_else(|| projects.iter().find(|p| p.github.as_deref() == Some(repo.name_with_owner.as_str())));
         let id = match known {
             Some(p) => {
-                let same = (p.url.as_ref(), p.description.as_ref(), p.pushed_at.as_ref(), p.private, p.archived, p.language.as_ref())
-                    == (Some(facts.0), facts.1.as_ref(), Some(facts.2), facts.3, facts.4, facts.5.as_ref());
+                let same = (p.github.as_deref(), p.url.as_ref(), p.description.as_ref(), p.pushed_at.as_ref(), p.private, p.archived, p.language.as_ref())
+                    == (Some(repo.name_with_owner.as_str()), Some(facts.0), facts.1.as_ref(), Some(facts.2), facts.3, facts.4, facts.5.as_ref());
                 if !same {
                     if repo.is_archived && !p.archived {
                         report.archived += 1;
@@ -189,13 +205,15 @@ fn apply(db: &mut Db, repos: &[Repo], now: i64) -> Result<SyncReport> {
             },
         };
         db.conn.execute(
-            "UPDATE projects SET github = ?2, url = ?3, description = ?4, pushed_at = ?5, private = ?6, archived = ?7, language = ?8 WHERE id = ?1",
-            params![id, repo.name_with_owner, repo.url, repo.description, repo.pushed_at, repo.is_private, repo.is_archived, repo.language],
+            "UPDATE projects SET github = ?2, url = ?3, description = ?4, pushed_at = ?5, private = ?6, archived = ?7, language = ?8,
+             github_id = COALESCE(?9, github_id) WHERE id = ?1",
+            params![id, repo.name_with_owner, repo.url, repo.description, repo.pushed_at, repo.is_private, repo.is_archived, repo.language, repo.id],
         )?;
     }
     for p in projects.iter().filter(|p| !p.archived) {
         if let Some(gh) = &p.github {
-            if !repos.iter().any(|r| &r.name_with_owner == gh) {
+            let here = repos.iter().any(|r| &r.name_with_owner == gh || (r.id.is_some() && r.id.as_deref() == id_of(p)));
+            if !here {
                 db.conn.execute("UPDATE projects SET archived = 1 WHERE id = ?1", [p.id])?;
                 report.archived += 1;
             }

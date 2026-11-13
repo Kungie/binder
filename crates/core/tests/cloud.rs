@@ -53,7 +53,7 @@ fn copy_reports_progress_and_finishes() {
     let data: Vec<u8> = (0..3 * 1024 * 1024 + 5).map(|i| (i % 251) as u8).collect();
     fs::write(src.path().join("big.bin"), &data).unwrap();
     let mut calls = vec![];
-    let out = copy_into(&src.path().join("big.bin"), d.path(), Conflict::KeepBoth, &AtomicBool::new(false), &mut |done, total| calls.push((done, total)))
+    let out = copy_into(&src.path().join("big.bin"), d.path(), Conflict::KeepBoth, None, &AtomicBool::new(false), &mut |done, total| calls.push((done, total)))
         .unwrap()
         .unwrap();
     assert!(calls.len() >= 3);
@@ -67,7 +67,7 @@ fn cancel_removes_partial_file() {
     let src = tempfile::tempdir().unwrap();
     fs::write(src.path().join("big.bin"), vec![7u8; 3 * 1024 * 1024]).unwrap();
     let cancel = AtomicBool::new(false);
-    let r = copy_into(&src.path().join("big.bin"), d.path(), Conflict::KeepBoth, &cancel, &mut |_, _| cancel.store(true, Ordering::SeqCst));
+    let r = copy_into(&src.path().join("big.bin"), d.path(), Conflict::KeepBoth, None, &cancel, &mut |_, _| cancel.store(true, Ordering::SeqCst));
     assert!(matches!(r, Err(Error::Invalid(m)) if m == "Cancelled."));
     let left: Vec<_> = fs::read_dir(d.path()).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).filter(|n| n.contains("big")).collect();
     assert!(left.is_empty(), "{left:?}");
@@ -81,12 +81,12 @@ fn conflicts_replace_keep_both_skip() {
     fs::create_dir(src.path().join("2026")).unwrap();
     let photos = d.path().join("Photos");
     let never = AtomicBool::new(false);
-    let kept = copy_into(&src.path().join("a.jpg"), &photos, Conflict::KeepBoth, &never, &mut |_, _| {}).unwrap().unwrap();
+    let kept = copy_into(&src.path().join("a.jpg"), &photos, Conflict::KeepBoth, None, &never, &mut |_, _| {}).unwrap().unwrap();
     assert_eq!(kept.file_name().unwrap(), "a 2.jpg");
-    assert_eq!(copy_into(&src.path().join("a.jpg"), &photos, Conflict::Skip, &never, &mut |_, _| {}).unwrap(), None);
-    copy_into(&src.path().join("a.jpg"), &photos, Conflict::Replace, &never, &mut |_, _| {}).unwrap();
+    assert_eq!(copy_into(&src.path().join("a.jpg"), &photos, Conflict::Skip, None, &never, &mut |_, _| {}).unwrap(), None);
+    copy_into(&src.path().join("a.jpg"), &photos, Conflict::Replace, Some(d.path()), &never, &mut |_, _| {}).unwrap();
     assert_eq!(fs::read_to_string(photos.join("a.jpg")).unwrap(), "new");
-    let folder = copy_into(&src.path().join("2026"), &photos, Conflict::KeepBoth, &never, &mut |_, _| {}).unwrap().unwrap();
+    let folder = copy_into(&src.path().join("2026"), &photos, Conflict::KeepBoth, None, &never, &mut |_, _| {}).unwrap().unwrap();
     assert_eq!(folder.file_name().unwrap(), "2026 2");
     assert_eq!(free_name(&photos, "a.jpg").file_name().unwrap(), "a 3.jpg");
     assert_eq!(free_name(&photos, "README").file_name().unwrap(), "README");
@@ -100,7 +100,7 @@ fn copy_folder_recursively() {
     fs::write(src.path().join("trip/day1/x.jpg"), "x").unwrap();
     fs::write(src.path().join("trip/y.jpg"), "yy").unwrap();
     let mut last = (0, 0);
-    copy_into(&src.path().join("trip"), d.path(), Conflict::KeepBoth, &AtomicBool::new(false), &mut |a, b| last = (a, b)).unwrap();
+    copy_into(&src.path().join("trip"), d.path(), Conflict::KeepBoth, None, &AtomicBool::new(false), &mut |a, b| last = (a, b)).unwrap();
     assert_eq!(fs::read_to_string(d.path().join("trip/day1/x.jpg")).unwrap(), "x");
     assert_eq!(last, (3, 3));
 }
@@ -164,4 +164,48 @@ fn space_reports_nonzero_total() {
     let d = root();
     let s = space(d.path()).unwrap();
     assert!(s.total > 0 && s.free <= s.total);
+}
+
+#[test]
+fn replace_moves_the_old_item_to_trash() {
+    let d = root();
+    let src = tempfile::tempdir().unwrap();
+    fs::write(src.path().join("a.jpg"), "new").unwrap();
+    let never = AtomicBool::new(false);
+    copy_into(&src.path().join("a.jpg"), &d.path().join("Photos"), Conflict::Replace, Some(d.path()), &never, &mut |_, _| {}).unwrap();
+    assert_eq!(fs::read_to_string(d.path().join("Photos/a.jpg")).unwrap(), "new");
+    let items = list_trash(d.path()).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].origin, "Photos/a.jpg");
+    restore(d.path(), &items[0].id).unwrap();
+    assert_eq!(fs::read_to_string(d.path().join("Photos/a 2.jpg")).unwrap(), "jpg", "the old one comes back beside the new one");
+}
+
+#[test]
+fn replace_outside_cloud_is_refused() {
+    let d = root();
+    let src = tempfile::tempdir().unwrap();
+    fs::write(src.path().join("notes.txt"), "new").unwrap();
+    let r = copy_into(&src.path().join("notes.txt"), d.path(), Conflict::Replace, None, &AtomicBool::new(false), &mut |_, _| {});
+    assert!(matches!(r, Err(Error::Invalid(_))));
+    assert_eq!(fs::read_to_string(d.path().join("notes.txt")).unwrap(), "hi");
+}
+
+#[test]
+fn a_name_taken_during_the_copy_is_kept_both() {
+    let d = root();
+    let src = tempfile::tempdir().unwrap();
+    fs::write(src.path().join("clip.mov"), vec![1u8; 3 * 1024 * 1024]).unwrap();
+    let target = d.path().join("clip.mov");
+    // Another copy, or the phone, writes the same name while this one runs.
+    let landed = copy_into(&src.path().join("clip.mov"), d.path(), Conflict::KeepBoth, None, &AtomicBool::new(false), &mut |_, _| {
+        if !target.exists() {
+            fs::write(&target, "other").unwrap();
+        }
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(landed.file_name().unwrap(), "clip 2.mov");
+    assert_eq!(fs::read_to_string(&target).unwrap(), "other");
+    assert_eq!(fs::metadata(&landed).unwrap().len(), 3 * 1024 * 1024);
 }
