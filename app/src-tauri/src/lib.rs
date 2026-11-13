@@ -36,6 +36,9 @@ pub fn run() {
             std::thread::spawn(move || {
                 let (Ok(config), Ok(mut db)) = (Config::load(&data.join("config.toml")), Db::open(&data.join("binder.db"))) else { return };
                 let _ = binder_core::session::flush_pending(&mut db, &config.vault);
+                if config.claude_hooks {
+                    commands::repair_hooks();
+                }
             });
             // Repos come in from GitHub at start; the interface reloads projects when this lands.
             let handle = app.handle().clone();

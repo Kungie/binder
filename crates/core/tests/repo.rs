@@ -1,5 +1,5 @@
 use binder_core::Error;
-use binder_core::repo::repo_status;
+use binder_core::repo::{origin, parse_remote, repo_status};
 use std::path::Path;
 use std::process::Command;
 
@@ -56,4 +56,25 @@ fn counts_ahead_of_upstream() {
 fn not_a_repo_is_invalid() {
     let d = tempfile::tempdir().unwrap();
     assert!(matches!(repo_status(d.path()), Err(Error::Invalid(m)) if m == "Not a git repository"));
+}
+
+#[test]
+fn parse_remote_reads_github_urls() {
+    for url in ["https://github.com/Kungie/binder.git", "https://github.com/Kungie/binder", "git@github.com:Kungie/binder.git", "ssh://git@github.com/Kungie/binder", "https://github.com/Kungie/binder/\n"] {
+        assert_eq!(parse_remote(url).as_deref(), Some("Kungie/binder"), "{url}");
+    }
+    assert_eq!(parse_remote("https://gitlab.com/a/b"), None);
+    assert_eq!(parse_remote("https://github.com/only-owner"), None);
+}
+
+#[test]
+fn origin_gives_root_and_remote() {
+    let d = repo();
+    std::fs::create_dir_all(d.path().join("src/deep")).unwrap();
+    let root = d.path().canonicalize().unwrap();
+    assert_eq!(origin(&d.path().join("src/deep")), Some((root.clone(), None)));
+    git(d.path(), &["remote", "add", "origin", "git@github.com:demo-dev/tool.git"]);
+    assert_eq!(origin(&d.path().join("src")), Some((root, Some("demo-dev/tool".into()))));
+    let plain = tempfile::tempdir().unwrap();
+    assert_eq!(origin(plain.path()), None);
 }

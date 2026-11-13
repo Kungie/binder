@@ -304,6 +304,16 @@ pub async fn claude_hooks() -> Res<bool> {
     Ok(hooks::installed(&claude_settings()?))
 }
 
+/// Points the hooks at this app's binder-cli when they run another one (an old build, a moved app). Only the app
+/// in /Applications does this, so a dev build never takes the hooks over.
+pub fn repair_hooks() {
+    let (Ok(settings), Ok(exe)) = (claude_settings(), std::env::current_exe()) else { return };
+    let cli = exe.with_file_name("binder-cli");
+    if hooks::should_repair(&exe) && cli.is_file() && hooks::hook_cli(&settings).as_deref() != Some(cli.as_path()) {
+        let _ = hooks::install(&settings, &cli);
+    }
+}
+
 /// binder-cli sits beside the app's own executable, in the bundle and in a dev build alike.
 #[tauri::command]
 pub async fn set_claude_hooks(state: State<'_, AppState>, on: bool) -> Res<bool> {

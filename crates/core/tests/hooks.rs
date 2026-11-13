@@ -77,3 +77,34 @@ fn missing_settings_file_is_created() {
     uninstall(&path).unwrap();
     assert!(!installed(&path));
 }
+
+#[test]
+fn hook_cli_reads_our_entry() {
+    let (_d, path) = fixture();
+    assert_eq!(hook_cli(&path), None);
+    install(&path, Path::new(CLI)).unwrap();
+    assert_eq!(hook_cli(&path), Some(PathBuf::from(CLI)));
+    install(&path, Path::new("/Apps/My Tools/binder-cli")).unwrap();
+    assert_eq!(hook_cli(&path), Some(PathBuf::from("/Apps/My Tools/binder-cli")));
+    assert_eq!(hook_cli(&path.with_file_name("missing.json")), None);
+}
+
+#[test]
+fn repair_rewrites_only_ours() {
+    let (_d, path) = fixture();
+    install(&path, Path::new("/Users/demo-dev/Library/Caches/Binder/target/debug/binder-cli")).unwrap();
+    let dawn_before = read(&path)["hooks"]["Stop"][0].clone();
+    install(&path, Path::new(CLI)).unwrap();
+    let v = read(&path);
+    assert_eq!(v["hooks"]["Stop"][0], dawn_before, "the other Stop entry is untouched");
+    assert_eq!(commands(&v, "Stop"), ["say done".to_string(), format!("{CLI} hook stop")]);
+    assert_eq!(hook_cli(&path), Some(PathBuf::from(CLI)));
+}
+
+#[test]
+fn should_repair_only_from_applications() {
+    assert!(should_repair(Path::new("/Applications/Binder.app/Contents/MacOS/binder-app")));
+    assert!(!should_repair(Path::new("/Users/demo-dev/Library/Caches/Binder/target/release/bundle/macos/Binder.app/Contents/MacOS/binder-app")));
+    assert!(!should_repair(Path::new("target/debug/binder-app")));
+    assert!(!should_repair(Path::new("/ApplicationsOld/Binder.app/Contents/MacOS/binder-app")));
+}

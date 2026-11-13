@@ -192,7 +192,7 @@ fn cwd_outside_projects_does_nothing() {
     let sibling = w.dir.path().join("code/orbit-old").to_string_lossy().into_owned();
     let input = HookInput { cwd: sibling, ..input };
     assert_eq!(on_hook(&mut w.db, &input, 1).unwrap(), HookAction::Nothing);
-    assert!(project_for(&w.db, &w.dir.path().join("code/orbit/src").to_string_lossy()).is_some());
+    assert!(project_for(&mut w.db, &w.dir.path().join("code/orbit/src").to_string_lossy()).is_some());
 }
 
 #[test]
@@ -343,4 +343,96 @@ fn stored_loose_note_moves_into_its_folder() {
     assert!(!vault.join("Projects/orbit").exists(), "no second note");
     assert!(!loose.exists());
     assert_eq!(notes::read_history(&path).unwrap()[0].text, "old");
+}
+
+struct OneRepo(String);
+
+impl binder_core::github::GitHub for OneRepo {
+    fn login(&self) -> Result<String> {
+        Ok("demo-dev".into())
+    }
+    fn repos(&self, _: &str) -> Result<Vec<binder_core::github::Repo>> {
+        let name = self.0.split('/').nth(1).unwrap().to_string();
+        Ok(vec![binder_core::github::Repo {
+            id: Some(format!("R_{name}")),
+            name,
+            name_with_owner: self.0.clone(),
+            description: None,
+            url: format!("https://github.com/{}", self.0),
+            is_private: false,
+            is_archived: false,
+            pushed_at: "2026-11-01T00:00:00Z".into(),
+            language: None,
+        }])
+    }
+}
+
+/// A project brought in from GitHub, as sync makes it.
+fn gh_project(db: &mut Db, name_with_owner: &str) -> Project {
+    binder_core::github::sync(db, &OneRepo(name_with_owner.into()), 1_800_000_000).unwrap();
+    db.list_projects().unwrap().into_iter().find(|p| p.github.as_deref() == Some(name_with_owner)).expect("sync made it")
+}
+
+fn git_repo(dir: &Path, remote: Option<&str>) {
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let run = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().status.success());
+    run(&["init", "-q"]);
+    if let Some(r) = remote {
+        run(&["remote", "add", "origin", r]);
+    }
+}
+
+fn canon(p: &Path) -> String {
+    p.canonicalize().unwrap().to_string_lossy().into_owned()
+}
+
+#[test]
+fn session_matches_by_remote() {
+    let mut w = World::new();
+    let clone = w.dir.path().join("elsewhere/tool-clone");
+    git_repo(&clone, Some("https://github.com/Demo-Dev/Tool.git"));
+    let p = gh_project(&mut w.db, "demo-dev/tool");
+    assert_eq!(p.repo, None);
+    let found = project_for(&mut w.db, &clone.join("src").to_string_lossy()).expect("found by remote");
+    assert_eq!(found.id, p.id);
+    assert_eq!(w.db.get_project(p.id).unwrap().repo, Some(canon(&clone)), "the clone becomes its local folder");
+}
+
+#[test]
+fn session_matches_by_folder_name() {
+    let mut w = World::new();
+    let dir = w.dir.path().join("elsewhere/tool");
+    git_repo(&dir, None);
+    let p = w.db.create_project(NewProject { name: "Tool".into(), ..Default::default() }, 1).unwrap();
+    let found = project_for(&mut w.db, &dir.join("src").to_string_lossy()).expect("found by folder name");
+    assert_eq!(found.id, p.id);
+    assert_eq!(w.db.get_project(p.id).unwrap().repo, Some(canon(&dir)));
+    // Not a git repo: the folder name alone doesn't count.
+    let loose = w.dir.path().join("loose/tool");
+    std::fs::create_dir_all(&loose).unwrap();
+    let other = w.db.create_project(NewProject { name: "Tool2".into(), ..Default::default() }, 1).unwrap();
+    assert!(project_for(&mut w.db, &w.dir.path().join("loose/tool2").to_string_lossy()).is_none());
+    assert_eq!(w.db.get_project(other.id).unwrap().repo, None);
+}
+
+#[test]
+fn local_folder_never_overwritten() {
+    let mut w = World::new();
+    let clone = w.dir.path().join("elsewhere/tool");
+    git_repo(&clone, Some("git@github.com:demo-dev/tool.git"));
+    let p = gh_project(&mut w.db, "demo-dev/tool");
+    w.db.update_project(p.id, ProjectPatch { repo: Some("/src/tool".into()), ..Default::default() }).unwrap();
+    assert_eq!(project_for(&mut w.db, &clone.to_string_lossy()).map(|f| f.id), Some(p.id));
+    assert_eq!(w.db.get_project(p.id).unwrap().repo.as_deref(), Some("/src/tool"));
+}
+
+#[test]
+fn local_folder_still_wins() {
+    // orbit's local folder holds the cwd; another project claims the same remote.
+    let mut w = World::new();
+    let orbit = w.dir.path().join("code/orbit");
+    git_repo(&orbit, Some("https://github.com/demo-dev/tool"));
+    let other = gh_project(&mut w.db, "demo-dev/tool");
+    assert_eq!(project_for(&mut w.db, &orbit.join("src").to_string_lossy()).map(|f| f.id), Some(w.project.id));
+    assert_eq!(w.db.get_project(other.id).unwrap().repo, None);
 }

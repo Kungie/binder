@@ -41,18 +41,31 @@ fn expand_home(path: &str) -> PathBuf {
     }
 }
 
-/// The project whose repo folder holds `cwd`; the deepest one when repos nest.
-pub fn project_for(db: &Db, cwd: &str) -> Option<Project> {
-    let cwd = Path::new(cwd);
-    db.list_projects()
-        .ok()?
-        .into_iter()
+/// The project a session in `cwd` belongs to. First the project whose local folder holds `cwd` (the deepest one
+/// when they nest); then, inside a git repo, the project whose GitHub repo is its `origin`, then the one named
+/// like the repo's folder. A project found the second or third way without a local folder gets the repo's root.
+pub fn project_for(db: &mut Db, cwd: &str) -> Option<Project> {
+    let projects = db.list_projects().ok()?;
+    let dir = Path::new(cwd);
+    let local = projects
+        .iter()
         .filter_map(|p| {
             let repo = expand_home(p.repo.as_deref()?);
-            cwd.starts_with(&repo).then(|| (repo.components().count(), p))
+            dir.starts_with(&repo).then(|| (repo.components().count(), p))
         })
         .max_by_key(|(depth, _)| *depth)
-        .map(|(_, p)| p)
+        .map(|(_, p)| p.clone());
+    if local.is_some() {
+        return local;
+    }
+    let (root, remote) = crate::repo::origin(dir)?;
+    let by_remote = remote.and_then(|r| projects.iter().find(|p| p.github.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(&r))));
+    let folder = root.file_name()?.to_string_lossy().into_owned();
+    let found = by_remote.or_else(|| projects.iter().find(|p| p.name.eq_ignore_ascii_case(&folder)))?;
+    db.conn
+        .execute("UPDATE projects SET repo = ?2 WHERE id = ?1 AND repo IS NULL", params![found.id, root.to_string_lossy()])
+        .ok()?;
+    db.get_project(found.id).ok()
 }
 
 fn text_of(content: &serde_json::Value) -> Vec<String> {

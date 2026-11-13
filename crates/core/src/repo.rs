@@ -2,7 +2,7 @@
 
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,4 +47,23 @@ pub fn repo_status(path: &Path) -> Result<RepoStatus> {
         }
     }
     Ok(s)
+}
+
+/// `owner/name` from a GitHub remote URL (https, ssh or scp form), without `.git`. None for other hosts.
+pub fn parse_remote(url: &str) -> Option<String> {
+    let url = url.trim();
+    let rest = ["https://github.com/", "http://github.com/", "ssh://git@github.com/", "git://github.com/", "git@github.com:"]
+        .iter()
+        .find_map(|prefix| url.strip_prefix(prefix))?;
+    let rest = rest.trim_end_matches('/');
+    let rest = rest.strip_suffix(".git").unwrap_or(rest);
+    let (owner, name) = rest.split_once('/')?;
+    (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then(|| format!("{owner}/{name}"))
+}
+
+/// The root of the git repo holding `dir`, and its `origin` on GitHub when it has one. None outside a repo.
+pub fn origin(dir: &Path) -> Option<(PathBuf, Option<String>)> {
+    let root = PathBuf::from(git(dir, &["rev-parse", "--show-toplevel"]).ok()??.trim());
+    let remote = git(&root, &["remote", "get-url", "origin"]).ok().flatten().and_then(|u| parse_remote(&u));
+    Some((root, remote))
 }

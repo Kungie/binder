@@ -4,7 +4,7 @@
 use crate::Result;
 use crate::remote::quote;
 use serde_json::{Map, Value, json};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Claude Code's hook event, and the argument `binder-cli hook` takes for it.
 pub const EVENTS: [(&str, &str); 3] = [("Stop", "stop"), ("PreCompact", "precompact"), ("SessionEnd", "session-end")];
@@ -106,4 +106,23 @@ pub fn installed(settings_path: &Path) -> bool {
                 })
             })
     })
+}
+
+/// The program Binder's `Stop` hook runs, as written in the settings file.
+pub fn hook_cli(settings_path: &Path) -> Option<PathBuf> {
+    let settings = read(settings_path).ok()?;
+    let command = settings.get("hooks")?.get("Stop")?.as_array()?.iter().find_map(|g| {
+        g.get("hooks")?.as_array()?.iter().find_map(|h| h.get("command").and_then(Value::as_str).filter(|c| ours(c)).map(String::from))
+    })?;
+    let program = command.strip_suffix(" hook stop")?;
+    let program = match program.strip_prefix('\'').and_then(|p| p.strip_suffix('\'')) {
+        Some(quoted) => quoted.replace("'\\''", "'"),
+        None => program.to_string(),
+    };
+    Some(PathBuf::from(program))
+}
+
+/// Hooks point at the app's own binder-cli, so only an installed app repairs them; a dev build never rewrites them.
+pub fn should_repair(exe: &Path) -> bool {
+    exe.starts_with("/Applications")
 }
