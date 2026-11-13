@@ -12,6 +12,6 @@ fn config_defaults_to_volumes_vault() {
 fn config_round_trips() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("deep/config.toml");
-    Config { vault: "/tmp/v".into() }.save(&path).unwrap();
+    Config { vault: "/tmp/v".into(), ..Config::default() }.save(&path).unwrap();
     assert_eq!(Config::load(&path).unwrap().vault, Path::new("/tmp/v"));
 }

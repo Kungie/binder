@@ -185,3 +185,63 @@ pub struct ProjectPatch {
     pub clear_repo: bool,
     pub state: Option<ProjectState>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceKind {
+    Mac,
+    Server,
+    Printer,
+    #[default]
+    Other,
+}
+
+impl DeviceKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeviceKind::Mac => "mac",
+            DeviceKind::Server => "server",
+            DeviceKind::Printer => "printer",
+            DeviceKind::Other => "other",
+        }
+    }
+
+    pub fn parse(s: &str) -> DeviceKind {
+        match s {
+            "mac" => DeviceKind::Mac,
+            "server" => DeviceKind::Server,
+            "printer" => DeviceKind::Printer,
+            _ => DeviceKind::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Device {
+    pub id: i64,
+    pub name: String,
+    pub kind: DeviceKind,
+    pub address: String,
+    pub port: u16,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NewDevice {
+    pub name: String,
+    pub kind: DeviceKind,
+    pub address: String,
+    pub port: Option<u16>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DevicePatch {
+    pub name: Option<String>,
+    pub kind: Option<DeviceKind>,
+    pub address: Option<String>,
+    pub port: Option<u16>,
+    pub note: Option<String>,
+}

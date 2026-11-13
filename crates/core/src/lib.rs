@@ -19,13 +19,17 @@ pub enum Error {
     Invalid(String),
     #[error("Vault not connected: {}", .0.display())]
     VaultMissing(PathBuf),
+    #[error("{0}")]
+    Remote(String),
 }
 
 pub mod config;
 pub mod db;
+pub mod devices;
 pub mod model;
 pub mod notes;
 pub mod projects;
+pub mod remote;
 pub mod tasks;
 
 pub use db::Db;

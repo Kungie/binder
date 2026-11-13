@@ -34,6 +34,41 @@ const MIGRATIONS: &[&str] = &[
         updated INTEGER NOT NULL
     );
     CREATE TABLE counters (name TEXT PRIMARY KEY, next INTEGER NOT NULL);",
+    // v2: devices, agent runs, session cursors and done lines waiting for the vault
+    "CREATE TABLE devices (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        address TEXT NOT NULL,
+        port INTEGER NOT NULL DEFAULT 22,
+        note TEXT NOT NULL DEFAULT '',
+        created INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE agent_runs (
+        id INTEGER PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        run TEXT NOT NULL UNIQUE,
+        dir TEXT NOT NULL,
+        access TEXT NOT NULL,
+        started INTEGER NOT NULL,
+        ended INTEGER,
+        exit_code INTEGER,
+        tail TEXT NOT NULL DEFAULT ''
+    );
+    ALTER TABLE projects ADD COLUMN agent_dir TEXT;
+    CREATE TABLE sessions (
+        session_id TEXT PRIMARY KEY,
+        project_id INTEGER,
+        offset INTEGER NOT NULL DEFAULT 0,
+        pending_chars INTEGER NOT NULL DEFAULT 0,
+        transcript TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE pending_done (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        text TEXT NOT NULL
+    );",
 ];
 
 impl Db {

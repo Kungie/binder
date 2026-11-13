@@ -9,11 +9,26 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     /// Where the Obsidian vault is mounted.
     pub vault: PathBuf,
+    /// The home server's SSH target: an alias from `~/.ssh/config` or `user@host`.
+    pub server: Option<String>,
+    pub printers: Vec<PrinterConfig>,
+    /// Whether Binder's Claude Code hooks are installed.
+    pub claude_hooks: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct PrinterConfig {
+    pub name: String,
+    pub address: String,
+    pub serial: String,
+    /// SHA-256 of the printer's certificate, pinned on first connect.
+    pub cert_sha256: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault") }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false }
     }
 }
 
