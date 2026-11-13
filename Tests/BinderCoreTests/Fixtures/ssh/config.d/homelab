@@ -1,4 +1,0 @@
-host proxmox
-  hostname 10.0.7.20
-  user root
-  identityfile ~/.ssh/id_ed25519_homelab

@@ -1,205 +1,44 @@
-# Binder
+# Binder 2
 
-Binder is a macOS app and CLI that gives AI coding agents a lasting memory of you: who you are, your machines, your hosting, your SSH keys and your projects. It also hands a long session over to a fresh one without losing the thread. The marketing line is **AG~~I~~M: Artificial General ~~Intelligence~~ Memory**.
+A personal desktop dashboard for one developer: a task table for the owner and for a Claude Code agent on the home server, projects with Obsidian notes, devices, the home server and a Bambu 3D printer. The spec is `docs/specs/2026-11-13-binder-2-design.md` and wins over this file. Plans live in `docs/plans/`.
 
-**Status:** the v1 spec is written and waiting for the user's review: `docs/specs/2026-10-26-binder-v1-design.md`. The screens are in `design/flow/`. Next comes the implementation plan. There is no code yet, and nothing gets built before the spec is approved. Where the spec and this file disagree, the spec wins.
+## Working with the owner
 
-**Purpose, in the user's words:** a virtual memory for individual developers and hobbyists. It covers how each project is going, personal preferences, preferred apps and tools, hosting and machine details, and where to find the keys for access. Every project and session can reach it, and it fills itself as automatically as possible. Everything the user has described is in v1.
+- Talk to the owner in **Turkish**. Everything in the repo is **English**: code, comments, UI copy and docs.
+- Workflow: spec, then plan, then code. The owner approves each step. When something is unclear, ask a short multiple-choice question.
+- Never push without asking. No attribution lines in commits.
+- The repo is public: never commit personal addresses, host names, serials or keys. Demo data uses a made-up developer and `10.0.7.x`.
 
-## Working with the user
-
-- Talk to the user in **Turkish**. Everything in the repo is **English**: file names, code, comments, UI copy, CLI, docs and the future site.
-- When something is unclear, ask a short multiple-choice question rather than guessing.
-- Workflow: brainstorm, then a written spec, then a plan, then code. The user approves each step.
-- Don't mention the company or studio behind Binder anywhere in this repo.
-
-## The problem
-
-AI sessions get worse the longer they run, because old context crowds out the task. A fresh session doesn't know the topic, so the agent asks again: "where are we hosting this?", "should I create an SSH key?". Binder removes that trade-off. A new session starts out knowing your setup and where the work stands.
-
-## Audience
-
-Individual developers and hobbyists first, on macOS.
-
-## What Binder knows
-
-1. **You**: identity and role, working style (when to ask and when not to, tone, language, commit and PR habits), technical taste, and current projects and goals. Personal details are typed in by the user at onboarding. Technical taste is partly detected from repos and then corrected by the user.
-2. **Machines**: this Mac, servers and the homelab.
-3. **Hosting and app preferences**: which hosting, domains, services and tools the user uses.
-4. **SSH**: which key opens which host, which keys exist, and which key opens nothing. **Never the private key material.**
-5. **Projects**: repo, deploy method, domains, and decisions made along the way.
-
-## How it learns
-
-- **Observation** is the differentiator. Binder reads what is already on the machine:
-  - `~/.ssh/config` and the list of keys
-  - `gh auth status` and the git identity
-  - CLIs the user is signed in to (Vercel, Netlify, Fly, Cloudflare `wrangler`, Hetzner `hcloud`, Supabase and similar)
-  - deploy files in projects (`fly.toml`, `vercel.json`, `wrangler.toml`, `.github/workflows`, `Dockerfile`)
-  - DNS records for the domains it finds
-- **Conversation** is captured in two layers:
-  1. Commands the agent actually ran in a session (`ssh-keygen`, `wrangler deploy`, `fly launch`). These are parsed deterministically from the transcript, with no model call.
-  2. Decisions that were only said. These get summarised with the user's own `claude -p` on their own plan, with no API key, and **only after the user agrees** (asked in Connect, changeable in Settings).
-- Anything captured from a conversation lands in a **proposal inbox**. Nothing from a conversation enters memory until the user approves it.
-
-## How agents get it
-
-- **Claude Code only in v1**, through global, user-level hooks that `binder install` adds and can remove. It never touches the user's other hooks. Codex is deferred to a later version.
-- **Session start:** a short **context card** for the current folder. It tells the agent: this is verified, use it without asking; if something is missing, ask and propose.
-- **Session end:** capture, which produces proposals in the inbox.
-- MCP is a later, extra channel.
-
-## Handoff
-
-- Binder notices when a session is getting long, using the share of context used from the transcript, and offers "Hand off now".
-- The user can also hand off at any time from the menu bar or the CLI.
-- A handoff card holds what's done, what's left, what not to touch and the next action.
-- The card waits in Binder. The next session opened in that folder picks it up automatically, and so does `/clear` in Claude Code, which fires SessionStart again. There is also an "Open a new session" button that starts `claude` or `codex` in the same folder in the user's terminal (Terminal, iTerm or Ghostty).
-
-## Surfaces
-
-- **Menu bar:** its main job is approving the potential context captured in the current session (Keep, Edit, Drop, Keep all). It also shows the handoff warning.
-- **Main window:** onboarding, detailed settings, and browsing and editing memory. This is where everyday use beyond approvals happens.
-- **CLI `binder`:** `card` (session start), `capture` (session end, and `--now` from the PreCompact hook), `observe` (run the observers without the app), `install` and `uninstall` (hooks), `handoff`, `tidy`, `search`, `import` (CLAUDE.md and AGENTS.md as catches) and `index` (a repo's architecture as catches).
-
-## First launch
-
-Binder looks around first and fills in everything it can detect: this Mac, SSH, GitHub, hosting, projects and the homelab ("something answers SSH on 10.0.7.20, yours?"). It only asks for what it can't guess: identity and role, working style, technical taste, and projects and goals.
-
-## Architecture (agreed: approach A)
-
-One Swift package with three targets:
-- **BinderCore**: vault read and write, observers, the card builder, and transcript parsers for Claude Code (`~/.claude/projects/*.jsonl`) and Codex (`~/.codex/sessions`).
-- **Binder.app**: the SwiftUI menu bar app with a main window. It schedules the observers, using FSEvents on watched files plus a periodic run.
-- **binder**: the CLI that the hooks call.
-
-The author's Dawn app (github.com/Kungie/dawn) is a Swift menu bar app that already uses Claude Code hooks. Its patterns are a useful reference. Binder is a separate repo and release.
-
-## Storage
-
-A plain Markdown folder. The default is `~/Binder`, and first launch also offers "put it inside my Obsidian vault". Binder never needs Obsidian, but its notes are written to feel native there: Properties in the frontmatter, and `[[wikilinks]]` between notes so the graph shows how they connect (project → server → SSH key). An Obsidian plugin can come later as an extra surface.
+## Layout
 
 ```
-~/Binder/
-  me.md
-  machines/this-mac.md
-  access/ssh.md
-  access/accounts.md
-  servers/<host>.md
-  hosting/<provider>.md
-  projects/<name>.md
-  projects/<name>/<topic>.md
-  files/<project or me>/<yyyy-mm-dd>-<caption>.<ext>
-  handoffs/<project>/<yyyy-mm-dd-hhmm>.md
-  .binder/            # inbox (and inbox/files), cached cards, usage counts, transcript cursors, state, log (managed)
+crates/core/      Rust library: SQLite, tasks, projects, config, Obsidian notes (no Tauri)
+app/src-tauri/    Tauri app: thin commands over the core
+app/src/          React + TypeScript + Tailwind interface
 ```
 
-Each note has frontmatter (`verified`, `source`) and two kinds of content:
-- An **observed block** between `<!-- binder:observed start -->` and `<!-- binder:observed end -->`. The observers rewrite it from scratch every time, so it always shows the real state of the machine.
-- **`## Decisions`** and everything else. Only approved proposals and the user's own edits go here. A decision's detail is an indented line under it (`  - …`) and moves with it.
-
-Topic notes (`projects/<name>/<topic>.md`) are linked from the overview as `[[<name>/<topic>]]`. A fact about a server or a hosting provider is also written to that note, ending `· for [[<project>]]`. Kept images and PDFs are embedded as `![[files/…]]`, which is not a note link.
+The interface talks to an `Api` interface: Tauri `invoke` in the app, an in-memory fake (`app/src/lib/memory.ts`) in tests and in the browser preview.
 
 ## Build and test
 
-- This Mac has **only the Command Line Tools, not Xcode**. **Use `make build` and `make test`** (`make test FILTER=NoteTests` runs one suite).
-- `make test` passes `-load-plugin-library` for Swift Testing's macros. With only the Command Line Tools, the plugin server fails to load them and `swift test` alone breaks.
-- `~/Desktop` syncs with iCloud, which stamps Finder attributes on build output and breaks codesign. So `.build` is a symlink to `~/Library/Caches/Binder/build`, which `make` creates.
-- Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`). XCTest isn't available without Xcode.
-- **Never write `@State` in SwiftUI views.** With only the Command Line Tools, the macOS 27 SDK resolves it to a macro whose plugin isn't installed, and the build fails. Use `@StateObject private var x = Local(value)` (`Local` is in `Components.swift`).
-- There are no third-party dependencies, the same as Dawn. The CLI parses its own arguments.
-- The app's executable target is `BinderApp`, renamed to `Binder` inside `Binder.app`. The CLI product is `binder`. The two names would collide on the case-insensitive file system if both were `binder`.
-- Implementation plans live in `docs/plans/`.
+- `make test`, `make dev`, `make build`, `make preview`. Always build through `make`.
+- `~/Desktop` syncs with iCloud, which breaks codesign on build output, so the Makefile sets `CARGO_TARGET_DIR` to `~/Library/Caches/Binder/target`.
+- Data lives in `~/Library/Application Support/io.github.kungie.binder/` (`binder.db`, `config.toml`).
+- The Obsidian vault lives on the Raspberry Pi and is mounted on the Mac at `/Volumes/vault` over SMB. Binder only appends under `## Done` in a project note and writes nothing when the vault isn't mounted.
 
-## Performance
+## Look
 
-- A SwiftUI `TimelineView(.animation)` never stops by itself: it keeps drawing in a closed, minimized or background window, at full display rate. Anything long-lived must pause through `ScreenProbe`, set a `minimumInterval`, and keep what doesn't change by itself in a separate view that redraws only when its data does. `GraphView` is the model: the scene redraws on change, the pulse layer runs at 20 fps while the window is in front.
-- `Local.value` resolves a generic key path on every read. Read it once per frame, never per node.
-- The main window is released when it closes, so a closed window holds no views or graphics memory. `LibraryModel` stays, and keeps the selection.
+Dark only, no colour, minimal. Panels like panelui.dev, chrome like Orca and Linear.
 
-## Releasing and updates
+| Token | Hex |
+|---|---|
+| bg | `#000000` |
+| panel | `#0A0A0A` |
+| raised | `#141414` |
+| line | `#1C1C1C` |
+| line-strong | `#2A2A2A` |
+| text | `#EDEDED` |
+| text-2 | `#A1A1A1` |
+| text-3 | `#6B6B6B` |
 
-- Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, `Binder.version` in `BinderCore.swift` and the DMG background's version text in `Icon.swift`.
-- `make release` builds `build/Binder.dmg`, `build/Binder.zip` and signs the zip into `build/Binder.zip.sig` (Ed25519, private key in the login Keychain under `io.github.kungie.binder.update-signing`, made once by `swift scripts/update-key.swift`). **Never print, copy or commit the private key.**
-- Upload all three: `gh release create vX.Y.Z build/Binder.dmg build/Binder.zip build/Binder.zip.sig`. The in-app updater (`Update.swift`, `UpdateInstaller.swift`, `Updater.swift`) ignores a release without `Binder.zip.sig`, and installs only a zip whose signature matches the public key in `Update.publicKey`, whose bundle id is `io.github.kungie.binder` and whose version matches the tag.
-- An update replaces `Binder.app` only. The vault, `.binder/state.json`, the pointer in Application Support and the Claude Code hooks stay. New settings must decode with `decodeIfPresent` and a default, so older state files keep what they have.
-
-## How the summarizer runs (cost and freshness)
-
-- `claude -p` runs bare: `ClaudeCLISummarizer.arguments` gives it a short `--system-prompt`, `--tools ""`, `--strict-mcp-config`, `--setting-sources ""`, `--disable-slash-commands`, `--no-session-persistence`, from an empty scratch folder (`ClaudeCLISummarizer.runner()`). That's about 1k tokens of overhead per call instead of ~85k with Claude Code's full context. `--bare` is not usable: it needs an API key, and users sign in with their plan.
-- Batched: the Stop hook claims talk through `SummarizeQueue` only once 4,000 characters are waiting or 20 minutes passed; the app's `MemoryKeeper` sweeps sessions quiet for 10 minutes. Each byte is summarized once, in windows of 12,000 characters (the latest 3 per run).
-- Each call sees the newest 40 decisions of the project and of me.md and returns `{"new": [...], "outdated": ["P2", "M1"]}`. "me" is only for what's true of the person across projects. Outdated lines move to `## Superseded` (never deleted, restorable in the library, never on the card).
-- `Tidy` (every 6 hours in the app, or `binder tidy [--all]`) moves exact repeats always, and with consent lines newer ones made untrue, for notes changed since their last tidy.
-- The card budget is 3,600 characters, about 1k tokens.
-
-## Privacy rules
-
-- Local only. No telemetry, no account, no cloud. The one network call of its own is the daily update check to GitHub's releases API (on by default, off in Settings › Updates), and it sends nothing but the request itself.
-- Never store secrets (private keys, tokens, passwords). Store pointers instead, for example "the token is in 1Password, item Hetzner API".
-- Personal details only ever come from the user.
-- `.binder/usage.json` holds counts and pins only: lines are keyed by a hash, never their text. `.binder/expiry.json` (temporary facts' last day) and `.binder/imported.json` (each imported file's hash) hold no text either.
-- Fading: a decision older than 90 days that no agent used leaves the card (never me.md or access notes). Wrong supersedes a line with `· wrong <day>` and records it as dropped.
-- Import and Summarize code run the model only with consent. Code summaries never open `.env`, key or credential files, or anything the secret filter flags.
-- Images and PDFs wait in `.binder/inbox/files` and reach the binder only on Keep. Drop deletes the waiting copy.
-- Everything Binder writes is English, whatever language a session is in.
-
-## Mascot and voice
-
-- **Binder is both the name and the mascot:** a small ring binder with a glass dome on its head that shows its brain, and its face in the binder's label window.
-- **Tone:** lightly humorous and dry. For example: "I know where your SSH keys live. Not what's in them. I'm nosy, not reckless."
-- **Copy rules:** short sentences, plain English, no exclamation marks, no marketing filler ("seamless", "supercharge", "unlock"), no em dashes. Be honest about what Binder can and can't do.
-
-## Design (chosen: direction C, Phosphor)
-
-The source is in `design/`, and the canvas is at https://claude.ai/artifact/TA4eWJEfD6Fi6EJ4oeaxjW. The look is a retro broadcast ident on a CRT: dark only, brutalist and warm, flat, with a corner radius of 0–2 pt (except the app icon), scanlines and a faint glow on "screen" panels.
-
-| Token | Hex | Use |
-|---|---|---|
-| black | `#050303` | background |
-| black-2 | `#0E0908` | raised surfaces |
-| line | `#2A1B19` | hairlines, borders |
-| cream | `#F3E9D6` | primary text |
-| cream-2 | `#E6D9BE` | secondary text |
-| sand | `#D2C09B` | mascot spine, legs |
-| dim | `#A09189` | labels, captions |
-| amber | `#F2A60C` | accent, brain, meters, primary buttons |
-| amber-deep | `#8F5A00` | button shadow, meter stripes |
-| gyri | `#5A3A00` | lines on the brain |
-| ink | `#160D0B` | text on amber and cream |
-
-- **Type:**
-  - Archivo at 125 % width, weight 800–900, for the wordmark, titles and buttons. The wordmark has stacked offset shadows alternating black and amber.
-  - VT323 for anything "on a screen": percentages, statuses, counts.
-  - Space Grotesk for body text.
-  - Space Mono Bold, uppercase, for small labels.
-- **Primary buttons:** amber fill, ink text and a hard amber-deep offset shadow. Body text must meet WCAG AA, with a minimum text size of 10.5 pt.
-
-## Competitors (to stay honest about)
-
-- **claude-mem** (very large, session continuity across agents): the strongest on handoff. Ours must be clearly better or work alongside it.
-- **Supermemory**, **Mem0 / OpenMemory**: memory layers aimed at conversations and apps.
-- **Basic Memory**: Markdown and Obsidian plus MCP, the closest to our storage idea.
-- **hippo-memory**: a memory CLI and MCP.
-- **avenoxbeyin**: an Obsidian second brain driven by hooks.
-- **Mori**: a general macOS memory app in the menu bar.
-- The agents' own `CLAUDE.md`, `AGENTS.md` and built-in memory.
-- Handoff skills.
-
-**Our angle:** Binder observes the machine instead of only remembering what was said, it's a native Mac app with an approval inbox, and it builds the handoff in.
-
-## Decided (26 Oct 2026)
-
-- **License:** AGPL-3.0, the same as Dawn.
-- **Price:** free and open source.
-- **Vault:** `~/Binder` by default, with an option to put it inside an Obsidian vault.
-- **Handoff:** the card waits and is picked up automatically, plus an "Open a new session" button.
-- **Design:** direction C, Phosphor.
-- **Distribution:** downloaded from GitHub Releases as a DMG, never the App Store. Ad-hoc signed and not notarized, with no Apple Developer account. First launch needs Privacy & Security › Open Anyway, as with Dawn.
-- **Codex:** deferred. v1 is Claude Code only.
-- **Session summarizer:** asks for permission before it reads any session.
-- **Repo:** public.
-
-## Open questions
-
-- A brand check for the name "Binder" (mybinder.org and Android's Binder IPC also exist).
-- Which observers ship in v1, and how often they run.
+Inter 13 px (12 px in tables), weights 400 and 500 only; Geist Mono for numbers, ids and paths. Radius 6 px on controls, 8 px on panels. State shows through shape, never colour. Copy: plain English, no exclamation marks, no em dashes, no filler.
