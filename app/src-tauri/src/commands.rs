@@ -12,7 +12,10 @@ use binder_core::remote::SshRemote;
 use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
 use binder_core::agent::{self, Access, AgentRun};
+use binder_core::cloud::{self, Conflict, Space};
+use binder_core::github::{self, GhCli, SyncReport};
 use binder_core::{Db, Error, devices, hooks, repo, server};
+use tauri::Emitter;
 use std::path::Path;
 use tauri::State;
 use tauri_plugin_opener::OpenerExt;
@@ -304,4 +307,143 @@ pub async fn set_claude_hooks(state: State<'_, AppState>, on: bool) -> Res<bool>
     c.claude_hooks = on;
     c.save(&state.config_path).map_err(text)?;
     Ok(hooks::installed(&settings))
+}
+
+/// Brings GitHub repos in on its own database connection, so the app's lock isn't held while `gh` runs.
+pub fn sync_github(data_dir: &Path) -> Result<SyncReport, Error> {
+    let gh = GhCli::find().ok_or_else(|| Error::Invalid("Install gh and sign in with gh auth login to bring in your GitHub repos.".into()))?;
+    let mut db = Db::open(&data_dir.join("binder.db"))?;
+    github::sync(&mut db, &gh, now())
+}
+
+#[tauri::command]
+pub async fn github_sync(app: tauri::AppHandle, state: State<'_, AppState>) -> Res<SyncReport> {
+    let dir = state.config_path.parent().expect("config sits in the data folder").to_path_buf();
+    let report = sync_github(&dir).map_err(text)?;
+    let _ = app.emit("projects://changed", ());
+    Ok(report)
+}
+
+#[derive(serde::Serialize)]
+pub struct CloudStatus {
+    pub mounted: bool,
+    pub path: String,
+    pub space: Option<Space>,
+}
+
+/// A share is mounted when its folder sits on another device than its parent. An empty `/Volumes/cloud` left on the
+/// Mac's own disk is not Cloud, and nothing gets written into it.
+fn mounted(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let (Ok(me), Some(Ok(up))) = (std::fs::metadata(path), path.parent().map(std::fs::metadata)) else { return false };
+    me.is_dir() && me.dev() != up.dev()
+}
+
+fn cloud_root(state: &State<AppState>) -> Res<std::path::PathBuf> {
+    let root = state.config.lock().unwrap().cloud.clone();
+    if mounted(&root) { Ok(root) } else { Err("Cloud not connected.".into()) }
+}
+
+#[tauri::command]
+pub async fn cloud_status(state: State<'_, AppState>) -> Res<CloudStatus> {
+    let root = state.config.lock().unwrap().cloud.clone();
+    let on = mounted(&root);
+    Ok(CloudStatus { mounted: on, path: root.to_string_lossy().into_owned(), space: if on { cloud::space(&root).ok() } else { None } })
+}
+
+#[tauri::command]
+pub async fn cloud_list(state: State<'_, AppState>, rel: String, show_hidden: bool) -> Res<Vec<cloud::Entry>> {
+    cloud::list(&cloud_root(&state)?, &rel, show_hidden).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_mkdir(state: State<'_, AppState>, rel_dir: String, name: String) -> Res<()> {
+    cloud::mkdir(&cloud_root(&state)?, &rel_dir, &name).map(|_| ()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_rename(state: State<'_, AppState>, rel: String, new_name: String) -> Res<()> {
+    cloud::rename(&cloud_root(&state)?, &rel, &new_name).map(|_| ()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_move(state: State<'_, AppState>, rel: String, dest_dir_rel: String) -> Res<()> {
+    cloud::move_to(&cloud_root(&state)?, &rel, &dest_dir_rel).map(|_| ()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_trash(state: State<'_, AppState>, rel: String) -> Res<()> {
+    cloud::trash(&cloud_root(&state)?, &rel).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_trash_list(state: State<'_, AppState>) -> Res<Vec<cloud::TrashEntry>> {
+    cloud::list_trash(&cloud_root(&state)?).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_restore(state: State<'_, AppState>, id: String) -> Res<()> {
+    cloud::restore(&cloud_root(&state)?, &id).map(|_| ()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_empty_trash(state: State<'_, AppState>) -> Res<()> {
+    cloud::empty_trash(&cloud_root(&state)?).map_err(text)
+}
+
+#[tauri::command]
+pub async fn cloud_open(app: tauri::AppHandle, state: State<'_, AppState>, rel: String) -> Res<()> {
+    let path = cloud::resolve(&cloud_root(&state)?, &rel).map_err(text)?;
+    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn cloud_connect(app: tauri::AppHandle, state: State<'_, AppState>) -> Res<()> {
+    let share = state.config.lock().unwrap().cloud_share.clone().filter(|s| !s.trim().is_empty());
+    let share = share.ok_or_else(|| "Set the share address in Settings.".to_string())?;
+    if !share.starts_with("smb://") {
+        return Err("The share address starts with smb://.".into());
+    }
+    app.opener().open_url(share, None::<&str>).map_err(|e| e.to_string())
+}
+
+fn copies(app: &tauri::AppHandle, state: &State<AppState>, jobs: Vec<(std::path::PathBuf, std::path::PathBuf)>, conflict: Conflict) -> Vec<u64> {
+    jobs.into_iter()
+        .map(|(src, dst_dir)| {
+            let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let app = app.clone();
+            state.transfers.spawn(name, move |e| { let _ = app.emit("cloud://transfer", e); }, move |cancel, progress| {
+                cloud::copy_into(&src, &dst_dir, conflict, cancel, progress).map(|_| ())
+            })
+        })
+        .collect()
+}
+
+/// Copies files or folders from the Mac into a Cloud folder. Returns the transfer ids.
+#[tauri::command]
+pub async fn cloud_upload(app: tauri::AppHandle, state: State<'_, AppState>, paths: Vec<String>, dest_rel: String, conflict: Conflict) -> Res<Vec<u64>> {
+    let dest = cloud::resolve(&cloud_root(&state)?, &dest_rel).map_err(text)?;
+    if !dest.is_dir() {
+        return Err("Upload into a folder.".into());
+    }
+    let jobs = paths.into_iter().map(|p| (std::path::PathBuf::from(p), dest.clone())).collect();
+    Ok(copies(&app, &state, jobs, conflict))
+}
+
+/// Copies Cloud items into a folder on the Mac. Returns the transfer ids.
+#[tauri::command]
+pub async fn cloud_download(app: tauri::AppHandle, state: State<'_, AppState>, rels: Vec<String>, dest_dir: String, conflict: Conflict) -> Res<Vec<u64>> {
+    let root = cloud_root(&state)?;
+    let dest = std::path::PathBuf::from(dest_dir);
+    if !dest.is_dir() {
+        return Err("Save into a folder.".into());
+    }
+    let jobs = rels.iter().map(|r| cloud::resolve(&root, r).map(|src| (src, dest.clone()))).collect::<Result<Vec<_>, _>>().map_err(text)?;
+    Ok(copies(&app, &state, jobs, conflict))
+}
+
+#[tauri::command]
+pub async fn cloud_cancel(state: State<'_, AppState>, id: u64) -> Res<()> {
+    state.transfers.cancel(id);
+    Ok(())
 }

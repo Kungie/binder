@@ -1,16 +1,18 @@
 mod commands;
 mod printer;
+mod transfers;
 
 use binder_core::{Db, config::Config};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub struct AppState {
     pub db: Mutex<Db>,
     pub config: Mutex<Config>,
     pub config_path: PathBuf,
     pub printers: printer::Printers,
+    pub transfers: std::sync::Arc<transfers::Transfers>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,7 +27,7 @@ pub fn run() {
             let config = Config::load(&config_path)?;
             let db = Db::open(&dir.join("binder.db"))?;
             let printers = config.printers.clone();
-            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default() });
+            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default(), transfers: Default::default() });
             for p in printers {
                 printer::start(app.handle(), p);
             }
@@ -35,7 +37,21 @@ pub fn run() {
                 let (Ok(config), Ok(mut db)) = (Config::load(&data.join("config.toml")), Db::open(&data.join("binder.db"))) else { return };
                 let _ = binder_core::session::flush_pending(&mut db, &config.vault);
             });
+            // Repos come in from GitHub at start; the interface reloads projects when this lands.
+            let handle = app.handle().clone();
+            let data = dir.clone();
+            std::thread::spawn(move || {
+                if commands::sync_github(&data).is_ok() {
+                    let _ = handle.emit("projects://changed", ());
+                }
+            });
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Files dropped from Finder go to the interface, which decides whether Cloud takes them.
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let _ = window.emit("cloud://drop", paths);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::list_tasks,
@@ -71,6 +87,21 @@ pub fn run() {
             commands::printer_command,
             commands::claude_hooks,
             commands::set_claude_hooks,
+            commands::github_sync,
+            commands::cloud_status,
+            commands::cloud_list,
+            commands::cloud_mkdir,
+            commands::cloud_rename,
+            commands::cloud_move,
+            commands::cloud_trash,
+            commands::cloud_trash_list,
+            commands::cloud_restore,
+            commands::cloud_empty_trash,
+            commands::cloud_open,
+            commands::cloud_connect,
+            commands::cloud_upload,
+            commands::cloud_download,
+            commands::cloud_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("Binder could not start");

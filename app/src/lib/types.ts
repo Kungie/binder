@@ -236,3 +236,70 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
 };
 
 export const isClosed = (s: Status) => s === "done" || s === "canceled";
+
+// GitHub, mirrors crates/core/src/github.rs.
+
+export interface Repo {
+  name: string;
+  name_with_owner: string;
+  description: string | null;
+  url: string;
+  is_private: boolean;
+  is_archived: boolean;
+  /** RFC 3339 */
+  pushed_at: string;
+  language: string | null;
+}
+
+export interface SyncReport {
+  added: number;
+  linked: number;
+  updated: number;
+  archived: number;
+}
+
+// Cloud, mirrors crates/core/src/cloud.rs and app/src-tauri/src/transfers.rs.
+
+export type EntryKind = "file" | "dir" | "link";
+export type Conflict = "replace" | "keep_both" | "skip";
+
+export interface CloudEntry {
+  name: string;
+  /** Relative to Cloud's root, `/`-separated. */
+  rel: string;
+  kind: EntryKind;
+  size: number;
+  /** Unix seconds */
+  modified: number;
+}
+
+export interface TrashEntry {
+  id: string;
+  /** Where it was, relative to the root. */
+  origin: string;
+  /** Unix seconds */
+  deleted: number;
+  entry: CloudEntry;
+}
+
+export interface Space {
+  total: number;
+  free: number;
+}
+
+export interface CloudStatus {
+  mounted: boolean;
+  path: string;
+  space: Space | null;
+}
+
+export type TransferState = "running" | "done" | "cancelled" | "failed";
+
+export interface Transfer {
+  id: number;
+  name: string;
+  done: number;
+  total: number;
+  state: TransferState;
+  error: string | null;
+}

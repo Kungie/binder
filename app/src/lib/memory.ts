@@ -1,5 +1,6 @@
 import type { Api } from "./api";
-import type { AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, RepoStatus, ServerStatus, Task } from "./types";
+import type { AgentRun, PrinterCommand, PrinterView, Config, Device, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
 
@@ -11,9 +12,14 @@ export interface Seed {
   server?: ServerStatus;
   repos?: Record<number, RepoStatus>;
   printers?: PrinterView[];
+  /** What the fake gh returns; null means it isn't signed in. */
+  github?: Repo[] | null;
+  cloud?: CloudSeed;
 }
 
 export interface MemoryOptions {
+  /** Whether the Cloud share is mounted. Defaults to true. */
+  cloudMounted?: boolean;
   vaultConnected?: boolean;
   /** The SSH target in the config. Defaults to "lab"; null means none is set. */
   server?: string | null;
@@ -40,7 +46,14 @@ export function derivePrefix(name: string, taken: string[]): string {
 export function memoryApi(
   seed: Seed,
   options: MemoryOptions = {},
-): Api & { done: Record<number, DoneLine[]>; setServerReachable(v: boolean): void; printerCommands: [string, PrinterCommand][] } {
+): Api & {
+  done: Record<number, DoneLine[]>;
+  setServerReachable(v: boolean): void;
+  printerCommands: [string, PrinterCommand][];
+  cloudOpened: string[];
+  readonly cloudConnects: number;
+  dropFiles(paths: string[]): void;
+} {
   const tasks = seed.tasks.map((t) => ({ ...t }));
   const projects = seed.projects.map((p) => ({ ...p }));
   const done: Record<number, DoneLine[]> = Object.fromEntries(Object.entries(seed.done).map(([k, v]) => [k, [...v]]));
@@ -97,7 +110,46 @@ export function memoryApi(
     return p;
   };
 
+  const cloud = memoryCloud(seed.cloud, { mounted: () => options.cloudMounted ?? true, share: () => config.cloud_share });
+
+  /** The core's sync rules: link by name, add new as active or paused, update facts only, archive what's gone. */
+  const githubSync = async (): Promise<SyncReport> => {
+    const repos = seed.github === undefined ? [] : seed.github;
+    if (repos === null) throw new Error("Sign in with gh auth login to bring in your GitHub repos.");
+    const report: SyncReport = { added: 0, linked: 0, updated: 0, archived: 0 };
+    for (const r of repos) {
+      let p = projects.find((x) => x.github === r.name_with_owner);
+      if (p) {
+        const same = p.url === r.url && p.description === r.description && p.pushed_at === r.pushed_at && p.private === r.is_private && p.archived === r.is_archived && p.language === r.language;
+        if (!same) {
+          if (r.is_archived && !p.archived) report.archived++;
+          else report.updated++;
+        }
+      } else if ((p = projects.find((x) => !x.github && x.name.toLowerCase() === r.name.toLowerCase()))) {
+        report.linked++;
+      } else {
+        const fresh = Date.now() - Date.parse(r.pushed_at) <= 60 * 86400000;
+        p = { ...hand(r.name), id: nextId++, prefix: derivePrefix(r.name, projects.map((x) => x.prefix)), created: now(), state: fresh ? "active" : "paused" };
+        projects.push(p);
+        report.added++;
+      }
+      Object.assign(p, { github: r.name_with_owner, url: r.url, description: r.description, pushed_at: r.pushed_at, private: r.is_private, archived: r.is_archived, language: r.language });
+    }
+    for (const p of projects) {
+      if (p.github && !p.archived && !repos.some((r) => r.name_with_owner === p.github)) {
+        p.archived = true;
+        report.archived++;
+      }
+    }
+    return report;
+  };
+
   return {
+    ...cloud,
+    githubSync,
+    onProjectsChanged() {
+      return () => {};
+    },
     done,
     printerCommands,
     setServerReachable(v) {
@@ -373,6 +425,43 @@ function gh(name: string, description: string, language: string, days: number): 
   };
 }
 
+/** A repo on the made-up developer's GitHub, pushed `days` ago. */
+function repo(name: string, description: string, language: string, days: number): Repo {
+  return {
+    name,
+    name_with_owner: `demo-dev/${name}`,
+    description,
+    url: `https://github.com/demo-dev/${name}`,
+    is_private: false,
+    is_archived: false,
+    pushed_at: new Date(Date.now() - days * 86400000).toISOString(),
+    language,
+  };
+}
+
+function demoCloud(t: number): CloudSeed {
+  const MB = 1024 ** 2;
+  const dir = (rel: string, days: number) => ({ name: rel.split("/").pop()!, rel, kind: "dir" as const, size: 0, modified: t - days * 86400 });
+  const file = (rel: string, size: number, days: number) => ({ ...dir(rel, days), kind: "file" as const, size });
+  return {
+    entries: [
+      dir("Photos", 2),
+      dir("Photos/2026", 2),
+      file("Photos/2026/lake.jpg", 6 * MB, 2),
+      file("Photos/2026/workshop.heic", 3 * MB, 9),
+      dir("Documents", 5),
+      file("Documents/lease.pdf", 2 * MB, 40),
+      file("Documents/taxes-2025.xlsx", 0.4 * MB, 60),
+      dir("Videos", 1),
+      file("Videos/print-timelapse.mp4", 2300 * MB, 1),
+      dir("Backups", 7),
+      file("Backups/home-assistant.tar", 840 * MB, 7),
+      file("README.md", 0.002 * MB, 30),
+      file(".DS_Store", 0.006 * MB, 1),
+    ],
+  };
+}
+
 export function demoSeed(): Seed {
   const t = Math.floor(Date.now() / 1000);
   const day = localDay();
@@ -476,6 +565,13 @@ export function demoSeed(): Seed {
         error: null,
       },
     ],
+    github: [
+      { ...repo("orbit", "A sync engine for local-first notes", "TypeScript", 1), pushed_at: projects[0].pushed_at! },
+      repo("dotfiles", "Shell, editor and terminal setup", "Shell", 12),
+      repo("homelab", "Compose files for the home server", "Dockerfile", 3),
+      repo("pixel-clock", "A tiny e-ink clock", "C++", 140),
+    ],
+    cloud: demoCloud(t),
     repos: { 1: { branch: "main", changed: 3, ahead: 1, behind: 0, last_subject: "Fix the toolbar spacing", last_date: day } },
   };
 }

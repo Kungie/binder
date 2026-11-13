@@ -6,7 +6,10 @@ import type {
   PrinterCommand,
   PrinterView,
   AgentRun,
+  CloudEntry,
+  CloudStatus,
   Config,
+  Conflict,
   Device,
   DevicePatch,
   DoneLine,
@@ -17,9 +20,12 @@ import type {
   ProjectPatch,
   RepoStatus,
   ServerStatus,
+  SyncReport,
   Task,
   TaskPatch,
   TaskView,
+  Transfer,
+  TrashEntry,
 } from "./types";
 import { demoSeed, memoryApi } from "./memory";
 
@@ -64,6 +70,35 @@ export interface Api {
   /** Whether Binder's hooks are in ~/.claude/settings.json. */
   claudeHooks(): Promise<boolean>;
   setClaudeHooks(on: boolean): Promise<boolean>;
+  /** Brings the owner's GitHub repos in as projects, through gh's own login. */
+  githubSync(): Promise<SyncReport>;
+  /** Calls back when projects changed outside the interface (the sync at start). Returns the unsubscribe. */
+  onProjectsChanged(cb: () => void): () => void;
+  cloudStatus(): Promise<CloudStatus>;
+  cloudList(rel: string, showHidden: boolean): Promise<CloudEntry[]>;
+  cloudMkdir(relDir: string, name: string): Promise<void>;
+  cloudRename(rel: string, newName: string): Promise<void>;
+  cloudMove(rel: string, destDirRel: string): Promise<void>;
+  /** Moves to `.trash`; nothing in Cloud is deleted outright except by emptying the trash. */
+  cloudTrash(rel: string): Promise<void>;
+  cloudTrashList(): Promise<TrashEntry[]>;
+  cloudRestore(id: string): Promise<void>;
+  cloudEmptyTrash(): Promise<void>;
+  cloudOpen(rel: string): Promise<void>;
+  /** Opens the share address so Finder mounts it. */
+  cloudConnect(): Promise<void>;
+  /** Returns the transfer ids; progress comes through `onTransfer`. */
+  cloudUpload(paths: string[], destRel: string, conflict: Conflict): Promise<number[]>;
+  cloudDownload(rels: string[], destDir: string, conflict: Conflict): Promise<number[]>;
+  cloudCancel(id: number): Promise<void>;
+  onTransfer(cb: (t: Transfer) => void): () => void;
+  /** Files dropped on the window from Finder. */
+  onDrop(cb: (paths: string[]) => void): () => void;
+}
+
+function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
+  const off = listen<T>(event, (e) => cb(e.payload));
+  return () => void off.then((f) => f());
 }
 
 /** Tauri sends a command's error as a string; make it an Error so callers handle one shape. */
@@ -109,10 +144,25 @@ export const tauriApi: Api = {
   printerCommand: (serial, kind) => call("printer_command", { serial, kind }),
   claudeHooks: () => call("claude_hooks"),
   setClaudeHooks: (on) => call("set_claude_hooks", { on }),
-  onPrinter(cb) {
-    const off = listen<PrinterView>("printer://state", (e) => cb(e.payload));
-    return () => void off.then((f) => f());
-  },
+  onPrinter: (cb) => subscribe<PrinterView>("printer://state", cb),
+  githubSync: () => call("github_sync"),
+  onProjectsChanged: (cb) => subscribe<null>("projects://changed", () => cb()),
+  cloudStatus: () => call("cloud_status"),
+  cloudList: (rel, showHidden) => call("cloud_list", { rel, showHidden }),
+  cloudMkdir: (relDir, name) => call("cloud_mkdir", { relDir, name }),
+  cloudRename: (rel, newName) => call("cloud_rename", { rel, newName }),
+  cloudMove: (rel, destDirRel) => call("cloud_move", { rel, destDirRel }),
+  cloudTrash: (rel) => call("cloud_trash", { rel }),
+  cloudTrashList: () => call("cloud_trash_list"),
+  cloudRestore: (id) => call("cloud_restore", { id }),
+  cloudEmptyTrash: () => call("cloud_empty_trash"),
+  cloudOpen: (rel) => call("cloud_open", { rel }),
+  cloudConnect: () => call("cloud_connect"),
+  cloudUpload: (paths, destRel, conflict) => call("cloud_upload", { paths, destRel, conflict }),
+  cloudDownload: (rels, destDir, conflict) => call("cloud_download", { rels, destDir, conflict }),
+  cloudCancel: (id) => call("cloud_cancel", { id }),
+  onTransfer: (cb) => subscribe<Transfer>("cloud://transfer", cb),
+  onDrop: (cb) => subscribe<string[]>("cloud://drop", cb),
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
