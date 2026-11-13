@@ -18,6 +18,37 @@
   --radius-control: 6px;
   --radius-panel: 8px;
   --shadow-menu: 0 12px 32px rgb(0 0 0 / 0.6), 0 0 0 1px var(--color-line-strong);
+
+  /* The shadcn roles PanelUI's components read, mapped onto Binder's black and white. */
+  --color-foreground: #ededed;
+  --color-card: #0a0a0a;
+  --color-card-foreground: #ededed;
+  --color-muted: #141414;
+  --color-muted-foreground: #6b6b6b;
+  --color-secondary: #141414;
+  --color-border: #1c1c1c;
+  --color-destructive: #ededed;
+  --color-primary: #ededed;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 8px;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 500;
+  --shadow-xs: none;
+}
+
+:root {
+  --success: #ededed;
+  --warning: #ededed;
+  --info: #ededed;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
 }
 
 html,

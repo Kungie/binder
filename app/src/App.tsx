@@ -6,16 +6,14 @@ import { Tasks } from "./screens/Tasks";
 import { Projects } from "./screens/Projects";
 import { Settings } from "./screens/Settings";
 import { NewProject } from "./components/NewProject";
-
-function Placeholder({ title }: { title: string }) {
-  return <div className="p-6 text-text-2">{title}</div>;
-}
+import { CommandPalette } from "./components/CommandPalette";
+import { Overview } from "./screens/Overview";
 
 function Screens() {
   const { screen } = useStore();
   switch (screen) {
     case "overview":
-      return <Placeholder title="Overview" />;
+      return <Overview />;
     case "tasks":
       return <Tasks />;
     case "projects":
@@ -36,6 +34,7 @@ export function Shell() {
       </main>
       {creatingTask && <NewTask />}
       {creatingProject && <NewProject />}
+      <CommandPalette />
     </div>
   );
 }
