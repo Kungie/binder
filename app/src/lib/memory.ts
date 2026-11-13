@@ -56,6 +56,8 @@ export function memoryApi(
   setServerReachable(v: boolean): void;
   printerCommands: [string, PrinterCommand][];
   cloudOpened: string[];
+  /** Items Quick Look was asked to show. */
+  quickLooked: string[];
   /** URLs opened in the browser. */
   opened: string[];
   readonly cloudConnects: number;
@@ -81,7 +83,7 @@ export function memoryApi(
   };
   const offline = options.offline ?? ["10.0.7.30"];
   let reachable = true;
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud" };
   let lastDone: number | null = seed.lastDone ?? null;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
   const device = (id: number) => {
@@ -499,9 +501,11 @@ function demoCloud(t: number): CloudSeed {
       file("Videos/print-timelapse.mp4", 2300 * MB, 1),
       dir("Backups", 7),
       file("Backups/home-assistant.tar", 840 * MB, 7),
+      file("Backups/old-site.zip", 12 * MB, 90),
       file("README.md", 0.002 * MB, 30),
       file(".DS_Store", 0.006 * MB, 1),
     ],
+    zips: { "Backups/old-site.zip": [file("index.html", 0.01 * MB, 90)] },
   };
 }
 

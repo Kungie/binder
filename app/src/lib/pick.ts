@@ -15,3 +15,11 @@ export async function pickFiles(): Promise<string[]> {
   const chosen = await open({ multiple: true, directory: false });
   return Array.isArray(chosen) ? chosen : typeof chosen === "string" ? [chosen] : [];
 }
+
+/** An app chosen in the system dialog, starting in /Applications, or null. */
+export async function pickApp(): Promise<string | null> {
+  if (!inTauri) return null;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const chosen = await open({ multiple: false, directory: false, defaultPath: "/Applications", filters: [{ name: "Apps", extensions: ["app"] }] });
+  return typeof chosen === "string" ? chosen : null;
+}

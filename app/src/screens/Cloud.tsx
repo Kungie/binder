@@ -1,12 +1,16 @@
-import { type DragEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ContextMenu, type MenuEntry } from "../components/ContextMenu";
+import { FileInfo } from "../components/FileInfo";
 import { FileRow, KindIcon, NameInput } from "../components/FileRow";
+import { FolderPicker } from "../components/FolderPicker";
 import { Progress } from "../components/Progress";
 import { Button, Notice } from "../components/ui";
 import { bytes } from "../lib/format";
-import { pickFiles, pickFolder } from "../lib/pick";
+import { pickApp, pickFiles, pickFolder } from "../lib/pick";
+import { type Selection, all, click, empty, move as moveSel } from "../lib/selection";
 import { useStore } from "../lib/store";
 import { ago } from "../lib/time";
-import type { CloudEntry, CloudStatus, Conflict, TrashEntry } from "../lib/types";
+import type { AppChoice, CloudEntry, CloudStatus, Conflict, Space, TrashEntry } from "../lib/types";
 
 type SortKey = "name" | "size" | "modified";
 const UNDO_MS = 6000;
@@ -44,9 +48,10 @@ function NotConnected({ status }: { status: CloudStatus | null }) {
   );
 }
 
-function SpaceBar({ status }: { status: CloudStatus }) {
-  if (!status.space) return null;
-  const { total, free } = status.space;
+/** Space on the disk of the folder on screen: the SD card inside Cloud is a disk of its own. */
+function SpaceBar({ space }: { space: Space | null }) {
+  if (!space) return null;
+  const { total, free } = space;
   const used = total ? ((total - free) / total) * 100 : 0;
   return (
     <div className="flex w-48 flex-col gap-1">
@@ -111,15 +116,17 @@ function Trash({ onChange }: { onChange(): void }) {
                   <td className="px-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <KindIcon entry={t.entry} />
-                      <span className="truncate">{t.entry.name}</span>
+                      <span className={`truncate ${t.unfinished ? "text-text-3" : ""}`}>{t.unfinished ? `Unfinished upload: ${t.entry.name}` : t.entry.name}</span>
                     </div>
                   </td>
                   <td className="truncate px-3 font-mono text-[11px] text-text-3">{parentOf(t.origin) || "Cloud"}</td>
                   <td className="px-3 text-text-3">{t.deleted ? ago(t.deleted) : ""}</td>
                   <td className="px-3 text-right">
-                    <Button variant="ghost" aria-label={`Restore ${t.entry.name}`} onClick={() => void act(() => api.cloudRestore(t.id))}>
-                      Restore
-                    </Button>
+                    {!t.unfinished && (
+                      <Button variant="ghost" aria-label={`Restore ${t.entry.name}`} onClick={() => void act(() => api.cloudRestore(t.id))}>
+                        Restore
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -133,22 +140,28 @@ function Trash({ onChange }: { onChange(): void }) {
 
 /** A small file manager over the Cloud share on the home server. */
 export function Cloud() {
-  const { api } = useStore();
+  const { api, cloudClipboard: clipboard, setCloudClipboard } = useStore();
   const [status, setStatus] = useState<CloudStatus | null>(null);
+  const [space, setSpace] = useState<Space | null>(null);
   const [rel, setRel] = useState("");
   const [entries, setEntries] = useState<CloudEntry[]>([]);
   const [mode, setMode] = useState<"files" | "trash">("files");
   const [showHidden, setShowHidden] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
-  const [selected, setSelected] = useState<string | null>(null);
+  const [sel, setSel] = useState<Selection>(empty);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [undo, setUndo] = useState<{ name: string; id: string } | null>(null);
-  const [clash, setClash] = useState<{ paths: string[]; count: number } | null>(null);
+  const [undo, setUndo] = useState<string[] | null>(null);
+  const [clash, setClash] = useState<{ count: number; run(choice: Conflict): void } | null>(null);
   const [dropOn, setDropOn] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; on: "items" | "folder" } | null>(null);
+  const [apps, setApps] = useState<AppChoice[]>([]);
+  const [info, setInfo] = useState<string | null>(null);
+  const [picking, setPicking] = useState<string[] | null>(null);
   const dragging = useRef<string | null>(null);
+  const table = useRef<HTMLTableElement>(null);
   const mounted = status?.mounted ?? false;
 
   const refreshStatus = useCallback(() => api.cloudStatus().then(setStatus, () => setStatus(null)), [api]);
@@ -161,6 +174,11 @@ export function Cloud() {
     const timer = window.setInterval(() => void refreshStatus(), 3000);
     return () => clearInterval(timer);
   }, [mounted, refreshStatus]);
+
+  const refreshSpace = useCallback(() => {
+    if (mounted) void api.cloudSpace(rel).then(setSpace, () => setSpace(status?.space ?? null));
+  }, [api, rel, mounted, status?.space]);
+  useEffect(() => refreshSpace(), [refreshSpace]);
 
   const load = useCallback(async () => {
     if (!mounted) return;
@@ -175,7 +193,7 @@ export function Cloud() {
     void load();
   }, [load]);
 
-  useEffect(() => api.onTransfer((t) => t.state === "done" && void load().then(refreshStatus)), [api, load, refreshStatus]);
+  useEffect(() => api.onTransfer((t) => t.state === "done" && void load().then(refreshSpace)), [api, load, refreshSpace]);
 
   useEffect(() => {
     if (!undo) return;
@@ -192,15 +210,21 @@ export function Cloud() {
     }
     await load();
   };
+  const fail = (e: unknown) => setError(message(e));
+
+  /** Runs `start` with the clash choice, asking first when some names are already taken. */
+  const askOnClash = (count: number, start: (choice: Conflict) => void) => {
+    if (!count) return start("keep_both");
+    setClash({ count, run: (choice) => (setClash(null), start(choice)) });
+  };
 
   const upload = useCallback(
-    (paths: string[], choice?: Conflict) => {
+    (paths: string[]) => {
       if (!paths.length) return;
       const count = paths.filter((p) => entries.some((e) => e.name === baseOf(p))).length;
-      if (count && !choice) return setClash({ paths, count });
-      setClash(null);
-      void api.cloudUpload(paths, rel, choice ?? "keep_both").catch((e) => setError(message(e)));
+      askOnClash(count, (choice) => void api.cloudUpload(paths, rel, choice).catch(fail));
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [api, entries, rel],
   );
   const latestUpload = useRef(upload);
@@ -216,42 +240,132 @@ export function Cloud() {
       sort.dir,
     );
   }, [entries, query, sort]);
+  const order = shown.map((e) => e.rel);
+  const picked = shown.filter((e) => sel.items.includes(e.rel));
+  const one = picked.length === 1 ? picked[0] : null;
 
   const go = (to: string) => {
     setRel(to);
-    setSelected(null);
+    setSel(empty);
     setRenaming(null);
     setQuery("");
   };
-  const open = (e: CloudEntry) => (e.kind === "dir" ? go(e.rel) : void act(() => api.cloudOpen(e.rel)));
-  const trash = (target: string) =>
+  const open = (list: CloudEntry[]) => {
+    if (list.length === 1 && list[0].kind === "dir") return go(list[0].rel);
+    void act(async () => {
+      for (const e of list) if (e.kind !== "dir") await api.cloudOpen(e.rel);
+    });
+  };
+  const trash = (targets: string[]) =>
     act(async () => {
-      await api.cloudTrash(target);
-      const item = (await api.cloudTrashList()).find((t) => t.origin === target);
-      setSelected(null);
-      if (item) setUndo({ name: item.entry.name, id: item.id });
+      for (const t of targets) await api.cloudTrash(t);
+      const list = await api.cloudTrashList();
+      const ids = targets.map((t) => list.find((x) => x.origin === t)?.id).filter((id): id is string => !!id);
+      setSel(empty);
+      if (ids.length) setUndo(ids);
     });
   const move = (src: string, destDir: string) => {
-    if (src === destDir || parentOf(src) === destDir) return;
-    void act(() => api.cloudMove(src, destDir));
+    if (src === destDir || parentOf(src) === destDir) return Promise.resolve();
+    return api.cloudMove(src, destDir);
+  };
+  const paste = async (dest: string) => {
+    if (!clipboard) return;
+    const { mode: how, rels } = clipboard;
+    if (how === "cut") {
+      setCloudClipboard(null);
+      return act(async () => {
+        for (const r of rels) await move(r, dest);
+      });
+    }
+    const there = dest === rel ? entries : await api.cloudList(dest, true).catch(() => []);
+    const count = rels.filter((r) => there.some((e) => e.name === baseOf(r))).length;
+    askOnClash(count, (choice) => void api.cloudCopy(rels, dest, choice).catch(fail));
+  };
+  const copyPath = (list: CloudEntry[]) => void navigator.clipboard?.writeText(list.map((e) => `${status?.path ?? "/Volumes/cloud"}/${e.rel}`).join("\n")).catch(fail);
+  const saveTo = (list: CloudEntry[]) =>
+    void pickFolder().then((dir) => {
+      if (dir) api.cloudDownload(list.map((e) => e.rel), dir, "keep_both").catch(fail);
+    });
+  const newFolder = () => (setCreating(true), setSel(empty));
+
+  const itemMenu = (): MenuEntry[] => {
+    const list = picked;
+    const zip = one && one.kind === "file" && one.name.toLowerCase().endsWith(".zip");
+    const rels = list.map((e) => e.rel);
+    const out: (MenuEntry | false | null)[] = [
+      { label: "Open", shortcut: "⌘↓", onPick: () => open(list) },
+      one?.kind === "file" && {
+        label: "Open with",
+        submenu: [
+          ...apps.map((a) => ({ label: a.default ? `${a.name} (default)` : a.name, onPick: () => void api.cloudOpenWith(one.rel, a.path).catch(fail) })),
+          { label: "Other…", onPick: () => void pickApp().then((app) => void (app && api.cloudOpenWith(one.rel, app).catch(fail))) },
+        ],
+      },
+      one && { label: "Quick Look", shortcut: "Space", onPick: () => void api.cloudQuickLook(one.rel).catch(fail) },
+      "separator",
+      one && { label: "Rename", shortcut: "↩", onPick: () => setRenaming(one.rel) },
+      { label: "Duplicate", shortcut: "⌘D", onPick: () => void api.cloudDuplicate(rels).catch(fail) },
+      { label: "Copy", shortcut: "⌘C", onPick: () => setCloudClipboard({ mode: "copy", rels }) },
+      { label: "Cut", shortcut: "⌘X", onPick: () => setCloudClipboard({ mode: "cut", rels }) },
+      { label: "Move to…", onPick: () => setPicking(rels) },
+      { label: "Save to…", onPick: () => saveTo(list) },
+      "separator",
+      { label: one ? `Compress "${one.name}"` : `Compress ${list.length} items`, onPick: () => void api.cloudCompress(rels).catch(fail) },
+      zip && { label: "Extract here", onPick: () => void api.cloudExtract(one.rel).catch(fail) },
+      "separator",
+      { label: "Copy path", onPick: () => copyPath(list) },
+      one && { label: "Get info", shortcut: "⌘I", onPick: () => setInfo(one.rel) },
+      "separator",
+      { label: "Move to trash", shortcut: "⌘⌫", onPick: () => void trash(rels) },
+    ];
+    return out.filter((x): x is MenuEntry => !!x);
+  };
+  const folderMenu = (): MenuEntry[] =>
+    [
+      { label: "New folder", shortcut: "⇧⌘N", onPick: newFolder },
+      clipboard && { label: "Paste", shortcut: "⌘V", onPick: () => void paste(rel) },
+      { label: "Upload…", onPick: () => void pickFiles().then((p) => upload(p)) },
+      { label: showHidden ? "Hide hidden" : "Show hidden", onPick: () => setShowHidden(!showHidden) },
+    ].filter((x): x is Exclude<typeof x, null> => !!x);
+
+  const openMenu = (e: MouseEvent, on: "items" | "folder") => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, on });
+  };
+  const onRowMenu = (e: MouseEvent, entry: CloudEntry) => {
+    e.stopPropagation();
+    const list = sel.items.includes(entry.rel) ? shown.filter((x) => sel.items.includes(x.rel)) : [entry];
+    if (!sel.items.includes(entry.rel)) setSel({ items: [entry.rel], anchor: entry.rel });
+    setApps([]);
+    if (list.length === 1 && list[0].kind === "file") void api.cloudAppsFor(entry.rel).then(setApps, () => {});
+    openMenu(e, "items");
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (renaming || creating) return;
-    const index = shown.findIndex((x) => x.rel === selected);
-    const current = shown[index];
-    const pick = (i: number) => shown[i] && setSelected(shown[i].rel);
+    if (renaming || creating || menu || info || picking) return;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     const handled = () => {
       e.preventDefault();
       e.stopPropagation();
     };
-    if (e.key === "ArrowDown" && !e.metaKey) return handled(), pick(Math.min(shown.length - 1, index + 1));
-    if (e.key === "ArrowUp" && !e.metaKey) return handled(), pick(Math.max(0, index - 1));
-    if (e.key === "ArrowUp" && e.metaKey && rel) return handled(), go(parentOf(rel));
-    if (!current) return;
-    if (e.key === "Enter" || e.key === "F2") return handled(), setRenaming(current.rel);
-    if ((e.key === "ArrowDown" && e.metaKey) || (e.key === "o" && e.metaKey)) return handled(), open(current);
-    if (e.key === "Backspace" && e.metaKey) return handled(), void trash(current.rel);
+    const rels = picked.map((x) => x.rel);
+    if (key === "ArrowDown" && !e.metaKey) return handled(), setSel(moveSel(sel, order, 1, e.shiftKey));
+    if (key === "ArrowUp" && !e.metaKey) return handled(), setSel(moveSel(sel, order, -1, e.shiftKey));
+    if (key === "ArrowUp" && e.metaKey && rel) return handled(), go(parentOf(rel));
+    if (key === "Escape") return handled(), setSel(empty);
+    if (e.metaKey && key === "a") return handled(), setSel(all(order));
+    if (e.metaKey && e.shiftKey && key === "n") return handled(), newFolder();
+    if (e.metaKey && key === "v") return handled(), void paste(rel);
+    if (!picked.length) return;
+    if (e.metaKey && key === "c") return handled(), setCloudClipboard({ mode: "copy", rels });
+    if (e.metaKey && key === "x") return handled(), setCloudClipboard({ mode: "cut", rels });
+    if (e.metaKey && key === "d") return handled(), void api.cloudDuplicate(rels).catch(fail);
+    if (e.metaKey && key === "Backspace") return handled(), void trash(rels);
+    if ((key === "ArrowDown" && e.metaKey) || (e.metaKey && key === "o")) return handled(), open(picked);
+    if (!one) return;
+    if (e.metaKey && key === "i") return handled(), setInfo(one.rel);
+    if (key === " ") return handled(), void api.cloudQuickLook(one.rel).catch(fail);
+    if (key === "Enter" || key === "F2") return handled(), setRenaming(one.rel);
   };
 
   const dropZone = (target: string) => ({
@@ -266,7 +380,12 @@ export function Cloud() {
       const src = dragging.current ?? e.dataTransfer.getData("text/plain");
       dragging.current = null;
       setDropOn(null);
-      if (src) move(src, target);
+      if (!src) return;
+      // Dragging one of several selected rows moves them all.
+      const srcs = sel.items.includes(src) ? sel.items : [src];
+      void act(async () => {
+        for (const s of srcs) if (s !== target) await move(s, target);
+      });
     },
   });
 
@@ -284,9 +403,13 @@ export function Cloud() {
       </button>
     </th>
   );
+  const closeMenu = () => {
+    setMenu(null);
+    table.current?.focus();
+  };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
         <nav aria-label="Path" className="flex min-w-0 items-center gap-1 text-[13px]">
           {["", ...crumbs.map((_, i) => crumbs.slice(0, i + 1).join("/"))].map((to, i) => (
@@ -305,7 +428,7 @@ export function Cloud() {
           ))}
         </nav>
         <div className="ml-auto">
-          <SpaceBar status={status!} />
+          <SpaceBar space={space ?? status?.space ?? null} />
         </div>
       </header>
       <div className="flex h-10 shrink-0 items-center gap-2 px-5">
@@ -327,17 +450,8 @@ export function Cloud() {
             <Button variant="primary" onClick={() => void pickFiles().then((p) => upload(p))}>
               Upload
             </Button>
-            <Button onClick={() => (setCreating(true), setSelected(null))}>New folder</Button>
-            <Button
-              variant="ghost"
-              disabled={!selected}
-              onClick={() => {
-                if (!selected) return;
-                void pickFolder().then((dir) => {
-                  if (dir) api.cloudDownload([selected], dir, "keep_both").catch((e) => setError(message(e)));
-                });
-              }}
-            >
+            <Button onClick={newFolder}>New folder</Button>
+            <Button variant="ghost" disabled={!picked.length} onClick={() => saveTo(picked)}>
               Save to…
             </Button>
             <input
@@ -361,22 +475,22 @@ export function Cloud() {
           <Button variant="ghost" className="ml-auto" onClick={() => setClash(null)}>
             Cancel
           </Button>
-          <Button variant="ghost" onClick={() => upload(clash.paths, "skip")}>
+          <Button variant="ghost" onClick={() => clash.run("skip")}>
             Skip
           </Button>
-          <Button onClick={() => upload(clash.paths, "replace")}>Replace</Button>
-          <Button variant="primary" onClick={() => upload(clash.paths, "keep_both")}>
+          <Button onClick={() => clash.run("replace")}>Replace</Button>
+          <Button variant="primary" onClick={() => clash.run("keep_both")}>
             Keep both
           </Button>
         </div>
       )}
       {error && <p className="px-5 pb-2 text-[12px] text-urgent">{error}</p>}
       {mode === "trash" ? (
-        <Trash onChange={() => void load().then(refreshStatus)} />
+        <Trash onChange={() => void load().then(refreshSpace)} />
       ) : (
-        <div className="min-h-0 flex-1 px-5 pb-5">
-          <div className="max-h-full overflow-y-auto rounded-panel border border-line bg-panel">
-            <table aria-label="Files" tabIndex={0} onKeyDown={onKeyDown} className="w-full table-fixed border-collapse focus:outline-none">
+        <div className="flex min-h-0 flex-1 flex-col px-5 pb-5">
+          <div className="flex max-h-full min-h-0 flex-1 flex-col overflow-y-auto rounded-panel border border-line bg-panel" onContextMenu={(e) => openMenu(e, "folder")}>
+            <table ref={table} aria-label="Files" tabIndex={0} onKeyDown={onKeyDown} className="w-full table-fixed border-collapse focus:outline-none">
               <thead>
                 <tr className="h-8 border-b border-line text-left">
                   {header("name", "Name")}
@@ -393,6 +507,7 @@ export function Cloud() {
                         initial=""
                         onDone={(name) => {
                           setCreating(false);
+                          table.current?.focus();
                           if (name) void act(() => api.cloudMkdir(rel, name));
                         }}
                       />
@@ -403,13 +518,15 @@ export function Cloud() {
                   <FileRow
                     key={entry.rel}
                     entry={entry}
-                    selected={selected === entry.rel}
+                    selected={sel.items.includes(entry.rel)}
                     renaming={renaming === entry.rel}
                     dropTarget={dropOn === entry.rel}
-                    onSelect={() => setSelected(entry.rel)}
-                    onOpen={() => open(entry)}
+                    onSelect={(mods) => setSel(click(sel, entry.rel, order, mods))}
+                    onOpen={() => open([entry])}
+                    onMenu={(e) => onRowMenu(e, entry)}
                     onRename={(name) => {
                       setRenaming(null);
+                      table.current?.focus();
                       if (name) void act(() => api.cloudRename(entry.rel, name));
                     }}
                     onDragStart={(e) => {
@@ -422,8 +539,23 @@ export function Cloud() {
               </tbody>
             </table>
             {shown.length === 0 && !creating && <p className="px-3 py-4 text-[12px] text-text-3">{query ? "No match in this folder." : "This folder is empty. Drop files here from Finder."}</p>}
+            <div data-testid="cloud-empty-space" className="min-h-16 flex-1" onClick={() => setSel(empty)} />
           </div>
         </div>
+      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.on === "items" ? itemMenu() : folderMenu()} onClose={closeMenu} />}
+      {info && <FileInfo rel={info} onClose={() => (setInfo(null), table.current?.focus())} />}
+      {picking && (
+        <FolderPicker
+          onClose={() => setPicking(null)}
+          onPick={(dest) => {
+            const srcs = picking;
+            setPicking(null);
+            void act(async () => {
+              for (const s of srcs) await move(s, dest);
+            });
+          }}
+        />
       )}
       {undo && (
         <div role="status" className="fade-in absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-panel border border-line-strong bg-panel px-3 py-2 text-[12px] shadow-menu">
@@ -431,9 +563,11 @@ export function Cloud() {
           <button
             type="button"
             onClick={() => {
-              const { id } = undo;
+              const ids = undo;
               setUndo(null);
-              void act(() => api.cloudRestore(id));
+              void act(async () => {
+                for (const id of ids) await api.cloudRestore(id);
+              });
             }}
             className="font-medium text-text hover:underline"
           >

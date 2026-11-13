@@ -11,6 +11,8 @@ interface Row {
 
 const FADE_MS = 4000;
 
+const files = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "file" : "files"}`;
+
 function eta(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
   if (seconds < 60) return `${Math.ceil(seconds)} s left`;
@@ -85,14 +87,20 @@ export function Transfers() {
               </div>
               <Progress value={pct} label={t.name} />
               <div className="flex gap-2 font-mono text-[11px] text-text-3">
-                {t.state === "running" && (
+                {t.state === "running" && t.unit === "items" && (
+                  <>
+                    <span>{`${t.done.toLocaleString("en-US")} of ${files(t.total)}`}</span>
+                    {speed > 0 && <span className="ml-auto">{eta((t.total - t.done) / speed)}</span>}
+                  </>
+                )}
+                {t.state === "running" && t.unit !== "items" && (
                   <>
                     <span>{`${bytes(t.done)} of ${bytes(t.total)}`}</span>
                     {speed > 0 && <span>{`${bytes(speed)}/s`}</span>}
                     {speed > 0 && <span className="ml-auto">{eta((t.total - t.done) / speed)}</span>}
                   </>
                 )}
-                {t.state === "done" && <span>Done</span>}
+                {t.state === "done" && <span>{t.unit === "items" ? `Done, ${files(t.total)}` : "Done"}</span>}
                 {t.state === "cancelled" && <span>Cancelled</span>}
                 {t.state === "failed" && <span className="font-sans text-bad">{t.error ?? "Failed."}</span>}
               </div>

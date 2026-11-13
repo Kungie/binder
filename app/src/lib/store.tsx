@@ -34,6 +34,14 @@ export interface Store {
   github: GithubSync | null;
   syncing: boolean;
   syncGithub(): Promise<void>;
+  /** Cloud items copied or cut, kept while the app runs. */
+  cloudClipboard: CloudClipboard | null;
+  setCloudClipboard(c: CloudClipboard | null): void;
+}
+
+export interface CloudClipboard {
+  mode: "copy" | "cut";
+  rels: string[];
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -52,6 +60,7 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
   }, []);
   const [creatingProject, setCreatingProject] = useState(false);
   const [doneVersion, setDoneVersion] = useState(0);
+  const [cloudClipboard, setCloudClipboard] = useState<CloudClipboard | null>(null);
   const [github, setGithub] = useState<GithubSync | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -129,11 +138,13 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
           return written;
         }),
       doneVersion,
+      cloudClipboard,
+      setCloudClipboard,
       github,
       syncing,
       syncGithub,
     }),
-    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, github, syncing, syncGithub],
+    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

@@ -1,10 +1,14 @@
-import type { CloudEntry, CloudStatus, Conflict, Transfer, TrashEntry } from "./types";
+import type { AppChoice, CloudEntry, CloudInfo, CloudStatus, Conflict, Space, Transfer, TrashEntry } from "./types";
 
 /** What the fake Cloud starts with: every entry by its path, folders included. */
 export interface CloudSeed {
   entries: CloudEntry[];
   trash?: TrashEntry[];
+  /** What each zip holds, paths relative to the zip's folder. */
+  zips?: Record<string, CloudEntry[]>;
 }
+
+const SD: Space = { total: 29e9, free: 21e9 };
 
 const parentOf = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
 const baseOf = (path: string) => path.split("/").filter(Boolean).pop() ?? path;
@@ -21,6 +25,8 @@ function checkedName(name: string): string {
 export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => boolean; share: () => string | null }) {
   let entries = (seed?.entries ?? []).map((e) => ({ ...e }));
   let trash: (TrashEntry & { children: CloudEntry[] })[] = (seed?.trash ?? []).map((t) => ({ ...t, children: [] }));
+  const zips: Record<string, CloudEntry[]> = Object.fromEntries(Object.entries(seed?.zips ?? {}).map(([k, v]) => [k, v.map((e) => ({ ...e }))]));
+  const quickLooked: string[] = [];
   const transferListeners = new Set<(t: Transfer) => void>();
   const dropListeners = new Set<(paths: string[]) => void>();
   const cancelled = new Set<number>();
@@ -41,11 +47,37 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
   const folder = (rel: string) => {
     if (rel && get(rel).kind !== "dir") throw new Error("That's not a folder.");
   };
+  /** As the core: a taken folder never splits at its dot. */
+  const split = (dir: string, name: string) => {
+    const dot = name.lastIndexOf(".");
+    return dot > 0 && find(join(dir, name))?.kind !== "dir" ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  };
   const freeName = (dir: string, name: string) => {
     if (!find(join(dir, name))) return name;
-    const dot = name.lastIndexOf(".");
-    const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+    const [stem, ext] = split(dir, name);
     for (let n = 2; ; n++) if (!find(join(dir, `${stem} ${n}${ext}`))) return `${stem} ${n}${ext}`;
+  };
+  const copyName = (dir: string, name: string) => {
+    const [stem, ext] = split(dir, name);
+    if (!find(join(dir, `${stem} copy${ext}`))) return `${stem} copy${ext}`;
+    for (let n = 2; ; n++) if (!find(join(dir, `${stem} copy ${n}${ext}`))) return `${stem} copy ${n}${ext}`;
+  };
+  /** A copy of an entry and everything under it at a new path. */
+  const clone = (from: string, to: string) => {
+    const copies = entries.filter((e) => under(e.rel, from)).map((e) => ({ ...e, rel: to + e.rel.slice(from.length), modified: now() }));
+    copies.forEach((e) => (e.name = baseOf(e.rel)));
+    entries.push(...copies);
+  };
+  const toTrash = (taken: CloudEntry) => {
+    const children = entries.filter((e) => e !== taken && under(e.rel, taken.rel));
+    entries = entries.filter((e) => !under(e.rel, taken.rel));
+    trash.unshift({ id: `${Date.now()}-${trash.length}`, origin: taken.rel, deleted: now(), unfinished: false, entry: { ...taken }, children });
+  };
+  const sizeOf = (rel: string): [number, number] => {
+    const e = get(rel);
+    if (e.kind !== "dir") return [e.size, 1];
+    const inside = entries.filter((x) => x !== e && under(x.rel, rel));
+    return [inside.reduce((s, x) => s + x.size, 0), inside.length];
   };
   /** Moves an entry and everything under it to a new path. */
   const relocate = (from: string, to: string) => {
@@ -57,9 +89,9 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
   };
   const emit = (t: Transfer) => transferListeners.forEach((cb) => cb({ ...t }));
   /** Two progress events, then the end, each a tick apart. `land` runs only when it finishes. */
-  const transfer = (name: string, total: number, land: () => void) => {
+  const transfer = (name: string, total: number, land: () => void, unit: Transfer["unit"] = "bytes") => {
     const id = nextTransfer++;
-    const t: Transfer = { id, name, done: 0, total, state: "running", error: null };
+    const t: Transfer = { id, name, unit, done: 0, total, state: "running", error: null };
     const steps = [total / 2, total];
     const step = (i: number) =>
       setTimeout(() => {
@@ -78,6 +110,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
 
   return {
     cloudOpened: opened,
+    quickLooked,
     get cloudConnects() {
       return connects;
     },
@@ -120,6 +153,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
       folder(destDirRel);
       if (under(destDirRel, rel)) throw new Error("A folder can't go inside itself.");
       relocate(rel, join(destDirRel, freeName(destDirRel, baseOf(rel))));
+      return [] as number[];
     },
     async cloudTrash(rel: string) {
       mounted();
@@ -127,7 +161,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
       const entry = get(rel);
       const children = entries.filter((e) => e !== entry && under(e.rel, rel));
       entries = entries.filter((e) => !under(e.rel, rel));
-      trash.unshift({ id: `${Date.now()}-${trash.length}`, origin: rel, deleted: now(), entry: { ...entry }, children });
+      trash.unshift({ id: `${Date.now()}-${trash.length}`, origin: rel, deleted: now(), unfinished: false, entry: { ...entry }, children });
     },
     async cloudTrashList(): Promise<TrashEntry[]> {
       mounted();
@@ -137,6 +171,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
       mounted();
       const item = trash.find((t) => t.id === id);
       if (!item) throw new Error("That's no longer in the trash.");
+      if (item.unfinished) throw new Error("An unfinished upload can't be restored.");
       const dir = parentOf(item.origin);
       // Folders that went missing come back as plain folders.
       dir.split("/").reduce((acc, part) => {
@@ -154,10 +189,112 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
       mounted();
       trash = [];
     },
-    async cloudOpen(rel: string) {
+    async cloudOpen(rel: string): Promise<number[]> {
+      mounted();
+      const e = get(rel);
+      if (e.kind === "file" && rel.toLowerCase().endsWith(".zip")) return this.cloudExtract(rel);
+      opened.push(rel);
+      return [];
+    },
+    async cloudCopy(rels: string[], destDirRel: string, conflict: Conflict): Promise<number[]> {
+      mounted();
+      folder(destDirRel);
+      return rels.map((rel) => {
+        const e = get(rel);
+        if (e.kind === "dir" && under(destDirRel, rel)) throw new Error("A folder can't go inside itself.");
+        return transfer(e.name, e.size || 1, () => {
+          const taken = find(join(destDirRel, e.name));
+          if (taken && conflict === "skip") return;
+          if (taken && conflict === "replace") toTrash(taken);
+          clone(rel, join(destDirRel, taken && conflict === "keep_both" ? freeName(destDirRel, e.name) : e.name));
+        });
+      });
+    },
+    async cloudDuplicate(rels: string[]): Promise<number[]> {
+      mounted();
+      return rels.map((rel) => {
+        const e = get(rel);
+        const dir = parentOf(rel);
+        const name = copyName(dir, e.name);
+        return transfer(name, e.size || 1, () => clone(rel, join(dir, freeName(dir, name))));
+      });
+    },
+    async cloudCompress(rels: string[]): Promise<number[]> {
+      mounted();
+      if (!rels.length) throw new Error("Nothing to compress.");
+      const dir = parentOf(rels[0]);
+      if (rels.some((r) => parentOf(r) !== dir)) throw new Error("Compress items from one folder.");
+      const items = rels.map(get);
+      const name = items.length === 1 ? `${items[0].name}.zip` : "Archive.zip";
+      const inside = entries.filter((e) => rels.some((r) => under(e.rel, r))).map((e) => ({ ...e, rel: dir ? e.rel.slice(dir.length + 1) : e.rel }));
+      return [
+        transfer(
+          name,
+          inside.length,
+          () => {
+            const final = join(dir, freeName(dir, name));
+            entries.push({ name: baseOf(final), rel: final, kind: "file", size: inside.reduce((s, e) => s + e.size, 0) * 0.6, modified: now() });
+            zips[final] = inside;
+          },
+          "items",
+        ),
+      ];
+    },
+    async cloudExtract(rel: string): Promise<number[]> {
+      mounted();
+      const zip = get(rel);
+      const dir = parentOf(rel);
+      const stem = zip.name.replace(/\.[^.]*$/, "");
+      const inside = zips[rel] ?? [];
+      return [
+        transfer(
+          zip.name,
+          inside.length || 1,
+          () => {
+            const to = join(dir, freeName(dir, stem));
+            entries.push({ name: baseOf(to), rel: to, kind: "dir", size: 0, modified: now() });
+            entries.push(...inside.map((e) => ({ ...e, rel: join(to, e.rel), modified: now() })));
+          },
+          "items",
+        ),
+      ];
+    },
+    async cloudInfo(rel: string): Promise<CloudInfo> {
+      mounted();
+      const entry = get(rel);
+      return { entry: { ...entry }, created: entry.modified, path: `/Volumes/cloud/${rel}` };
+    },
+    async cloudSize(rel: string): Promise<[number, number]> {
+      mounted();
+      return sizeOf(rel);
+    },
+    async cloudSpace(rel: string): Promise<Space> {
+      mounted();
+      if (under(rel, "SD")) return { ...SD };
+      const used = entries.reduce((s, e) => s + e.size, 0);
+      return { total: 2e12, free: 2e12 - used - 600e9 };
+    },
+    async cloudFastPath(): Promise<"ssh" | "smb"> {
+      mounted();
+      return "ssh";
+    },
+    async cloudQuickLook(rel: string) {
       mounted();
       get(rel);
-      opened.push(rel);
+      quickLooked.push(rel);
+    },
+    async cloudAppsFor(rel: string): Promise<AppChoice[]> {
+      mounted();
+      get(rel);
+      return [
+        { name: "Preview", path: "/System/Applications/Preview.app", default: true },
+        { name: "TextEdit", path: "/System/Applications/TextEdit.app", default: false },
+      ];
+    },
+    async cloudOpenWith(rel: string, app: string) {
+      mounted();
+      get(rel);
+      opened.push(`${rel} with ${app}`);
     },
     async cloudConnect() {
       if (!opts.share()) throw new Error("Set the share address in Settings.");
@@ -173,11 +310,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
           const taken = find(join(destRel, name));
           if (taken && conflict === "skip") return;
           // Like the core: the replaced item goes to the trash, never away outright.
-          if (taken && conflict === "replace") {
-            const children = entries.filter((e) => e !== taken && under(e.rel, taken.rel));
-            entries = entries.filter((e) => !under(e.rel, taken.rel));
-            trash.unshift({ id: `${Date.now()}-${trash.length}`, origin: taken.rel, deleted: now(), entry: { ...taken }, children });
-          }
+          if (taken && conflict === "replace") toTrash(taken);
           const final = taken && conflict === "keep_both" ? freeName(destRel, name) : name;
           entries.push({ name: final, rel: join(destRel, final), kind: "file", size, modified: now() });
         });

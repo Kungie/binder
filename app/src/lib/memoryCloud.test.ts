@@ -91,3 +91,59 @@ describe("memory Cloud replace", () => {
     expect((await api.cloudList("", false)).filter((e) => e.name === "README.md")).toHaveLength(1);
   });
 });
+
+describe("memory Cloud names agree with the core", () => {
+  const list = async (api: ReturnType<typeof memoryApi>, rel: string) => (await api.cloudList(rel, false)).map((e) => `${e.name}${e.kind === "dir" ? "/" : ""}`);
+
+  it("duplicate names like Finder", async () => {
+    const api = memoryApi(demoSeed());
+    await api.cloudDuplicate(["Documents/lease.pdf"]);
+    await settle();
+    await api.cloudDuplicate(["Documents/lease.pdf"]);
+    await api.cloudDuplicate(["Photos"]);
+    await settle();
+    expect(await list(api, "Documents")).toEqual(["lease copy 2.pdf", "lease copy.pdf", "lease.pdf", "taxes-2025.xlsx"]);
+    expect(await list(api, "Photos copy")).toEqual(["2026/"]);
+    expect(await list(api, "Photos copy/2026")).toEqual(["lake.jpg", "workshop.heic"]);
+  });
+
+  it("copy keeps both on a clash", async () => {
+    const api = memoryApi(demoSeed());
+    await api.cloudCopy(["README.md"], "Documents", "keep_both");
+    await api.cloudCopy(["README.md"], "", "keep_both");
+    await settle();
+    expect(await list(api, "Documents")).toContain("README.md");
+    expect(await list(api, "")).toContain("README 2.md");
+  });
+
+  it("compress and extract", async () => {
+    const api = memoryApi(demoSeed());
+    const seen: Transfer[] = [];
+    api.onTransfer((t) => seen.push(t));
+    await api.cloudCompress(["Documents/lease.pdf"]);
+    await api.cloudCompress(["Documents/lease.pdf", "Documents/taxes-2025.xlsx"]);
+    await api.cloudCompress(["Documents/lease.pdf", "Documents/taxes-2025.xlsx"]);
+    await settle();
+    expect(seen.every((t) => t.unit === "items")).toBe(true);
+    expect(await list(api, "Documents")).toEqual(["Archive 2.zip", "Archive.zip", "lease.pdf", "lease.pdf.zip", "taxes-2025.xlsx"]);
+    await api.cloudExtract("Documents/Archive.zip");
+    await settle();
+    expect(await list(api, "Documents/Archive")).toEqual(["lease.pdf", "taxes-2025.xlsx"]);
+    await api.cloudExtract("Documents/lease.pdf.zip");
+    await settle();
+    // The stem is taken by a file, so the core's free name splits at its dot.
+    expect(await list(api, "Documents/lease 2.pdf")).toEqual(["lease.pdf"]);
+  });
+
+  it("info, size and the open of a zip", async () => {
+    const api = memoryApi(demoSeed());
+    const info = await api.cloudInfo("Photos/2026/lake.jpg");
+    expect(info.path).toBe("/Volumes/cloud/Photos/2026/lake.jpg");
+    expect(info.entry.name).toBe("lake.jpg");
+    expect(await api.cloudSize("Photos")).toEqual([9 * 1024 ** 2, 3]);
+    const ids = await api.cloudOpen("Backups/old-site.zip");
+    expect(ids).toHaveLength(1);
+    await settle();
+    expect(await list(api, "Backups/old-site")).toEqual(["index.html"]);
+  });
+});

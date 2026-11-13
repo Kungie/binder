@@ -116,6 +116,8 @@ export interface Config {
   claude_hooks: boolean;
   cloud: string;
   cloud_share: string | null;
+  /** The shared folder's path on the server, for the SSH fast path. */
+  cloud_remote: string;
 }
 
 export type DeviceKind = "mac" | "server" | "printer" | "other";
@@ -304,7 +306,24 @@ export interface TrashEntry {
   origin: string;
   /** Unix seconds */
   deleted: number;
+  /** A copy that never finished; it can't be restored. */
+  unfinished: boolean;
   entry: CloudEntry;
+}
+
+/** What Get info shows. */
+export interface CloudInfo {
+  entry: CloudEntry;
+  /** Unix seconds; 0 when the share doesn't say. */
+  created: number;
+  /** The item's path on this Mac. */
+  path: string;
+}
+
+export interface AppChoice {
+  name: string;
+  path: string;
+  default: boolean;
 }
 
 export interface Space {
@@ -323,6 +342,8 @@ export type TransferState = "running" | "done" | "cancelled" | "failed";
 export interface Transfer {
   id: number;
   name: string;
+  /** What done and total count: bytes for copies, items for zips. */
+  unit: "bytes" | "items";
   done: number;
   total: number;
   state: TransferState;

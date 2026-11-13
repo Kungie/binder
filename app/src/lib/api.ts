@@ -6,7 +6,9 @@ import type {
   PrinterCommand,
   PrinterView,
   AgentRun,
+  AppChoice,
   CloudEntry,
+  CloudInfo,
   CloudStatus,
   Config,
   Conflict,
@@ -27,6 +29,7 @@ import type {
   Task,
   TaskPatch,
   TaskView,
+  Space,
   Transfer,
   TrashEntry,
 } from "./types";
@@ -91,13 +94,29 @@ export interface Api {
   cloudList(rel: string, showHidden: boolean): Promise<CloudEntry[]>;
   cloudMkdir(relDir: string, name: string): Promise<void>;
   cloudRename(rel: string, newName: string): Promise<void>;
-  cloudMove(rel: string, destDirRel: string): Promise<void>;
+  /** A move onto another disk runs as a transfer; its id comes back. */
+  cloudMove(rel: string, destDirRel: string): Promise<number[]>;
   /** Moves to `.trash`; nothing in Cloud is deleted outright except by emptying the trash. */
   cloudTrash(rel: string): Promise<void>;
   cloudTrashList(): Promise<TrashEntry[]>;
   cloudRestore(id: string): Promise<void>;
   cloudEmptyTrash(): Promise<void>;
-  cloudOpen(rel: string): Promise<void>;
+  /** A zip is extracted beside it instead, as a transfer. */
+  cloudOpen(rel: string): Promise<number[]>;
+  cloudCopy(rels: string[], destDirRel: string, conflict: Conflict): Promise<number[]>;
+  cloudDuplicate(rels: string[]): Promise<number[]>;
+  cloudCompress(rels: string[]): Promise<number[]>;
+  cloudExtract(rel: string): Promise<number[]>;
+  cloudInfo(rel: string): Promise<CloudInfo>;
+  /** Bytes and item count. */
+  cloudSize(rel: string): Promise<[number, number]>;
+  /** The disk holding that folder. */
+  cloudSpace(rel: string): Promise<Space>;
+  cloudFastPath(): Promise<"ssh" | "smb">;
+  /** Opens Quick Look, or closes it when open. */
+  cloudQuickLook(rel: string): Promise<void>;
+  cloudAppsFor(rel: string): Promise<AppChoice[]>;
+  cloudOpenWith(rel: string, app: string): Promise<void>;
   /** Opens the share address so Finder mounts it. */
   cloudConnect(): Promise<void>;
   /** Returns the transfer ids; progress comes through `onTransfer`. */
@@ -174,6 +193,17 @@ export const tauriApi: Api = {
   cloudRestore: (id) => call("cloud_restore", { id }),
   cloudEmptyTrash: () => call("cloud_empty_trash"),
   cloudOpen: (rel) => call("cloud_open", { rel }),
+  cloudCopy: (rels, destDirRel, conflict) => call("cloud_copy", { rels, destDirRel, conflict }),
+  cloudDuplicate: (rels) => call("cloud_duplicate", { rels }),
+  cloudCompress: (rels) => call("cloud_compress", { rels }),
+  cloudExtract: (rel) => call("cloud_extract", { rel }),
+  cloudInfo: (rel) => call("cloud_info", { rel }),
+  cloudSize: (rel) => call("cloud_size", { rel }),
+  cloudSpace: (rel) => call("cloud_space", { rel }),
+  cloudFastPath: () => call("cloud_fast_path"),
+  cloudQuickLook: (rel) => call("cloud_quicklook", { rel }),
+  cloudAppsFor: (rel) => call("cloud_apps_for", { rel }),
+  cloudOpenWith: (rel, app) => call("cloud_open_with", { rel, app }),
   cloudConnect: () => call("cloud_connect"),
   cloudUpload: (paths, destRel, conflict) => call("cloud_upload", { paths, destRel, conflict }),
   cloudDownload: (rels, destDir, conflict) => call("cloud_download", { rels, destDir, conflict }),

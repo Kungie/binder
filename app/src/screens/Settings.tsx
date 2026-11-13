@@ -51,17 +51,22 @@ function CloudSettings() {
   const { api } = useStore();
   const [path, setPath] = useState<string | null>(null);
   const [share, setShare] = useState("");
+  const [remote, setRemote] = useState("");
+  const [fast, setFast] = useState<"ssh" | "smb" | null>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
     void api.getConfig().then((c) => {
       setPath(c.cloud);
       setShare(c.cloud_share ?? "");
+      setRemote(c.cloud_remote);
     });
+    // Only known while the share is mounted.
+    void api.cloudFastPath().then(setFast, () => setFast(null));
   }, [api]);
   const save = async () => {
     const address = share.trim();
     if (address && !address.startsWith("smb://")) return setNote("The share address starts with smb://.");
-    await api.setConfig({ ...(await api.getConfig()), cloud: (path ?? "").trim() || "/Volumes/cloud", cloud_share: address || null });
+    await api.setConfig({ ...(await api.getConfig()), cloud: (path ?? "").trim() || "/Volumes/cloud", cloud_share: address || null, cloud_remote: remote.trim() || "/srv/cloud" });
     setNote("Saved");
   };
   if (path === null) return null;
@@ -70,6 +75,9 @@ function CloudSettings() {
       <div className="flex flex-col gap-3 border-t border-line p-3">
         <Field label="Mount folder">
           <input aria-label="Cloud mount folder" className={`${fieldClass} font-mono`} value={path} onChange={(e) => (setPath(e.target.value), setNote(null))} />
+        </Field>
+        <Field label="Folder on the server">
+          <input aria-label="Cloud folder on the server" className={`${fieldClass} font-mono`} value={remote} onChange={(e) => (setRemote(e.target.value), setNote(null))} />
         </Field>
         <Field label="Share address">
           <div className="flex gap-2">
@@ -84,6 +92,7 @@ function CloudSettings() {
           </div>
         </Field>
         {note && <span className="text-[12px] text-text-3">{note}</span>}
+        {fast && <span className="text-[12px] text-text-2">{fast === "ssh" ? "Fast path: SSH" : "Fast path: off, using SMB"}</span>}
         <Notice>Cloud is a folder on the home server, shared over SMB like the vault. Connect in Finder once, save the password in the Keychain and add the share to Login Items. Your phone reaches it from Files, Connect to Server, over Tailscale.</Notice>
       </div>
     </Panel>

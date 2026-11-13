@@ -1,4 +1,4 @@
-import { type DragEvent, useEffect, useRef, useState } from "react";
+import { type DragEvent, type MouseEvent, useEffect, useRef, useState } from "react";
 import { bytes } from "../lib/format";
 import { ago } from "../lib/time";
 import type { CloudEntry } from "../lib/types";
@@ -65,8 +65,10 @@ export interface FileRowProps {
   selected: boolean;
   renaming: boolean;
   dropTarget: boolean;
-  onSelect(): void;
+  onSelect(mods: { meta: boolean; shift: boolean }): void;
   onOpen(): void;
+  /** Right-click. */
+  onMenu(e: MouseEvent): void;
   onRename(name: string | null): void;
   onDragStart(e: DragEvent): void;
   onDragOver(e: DragEvent): void;
@@ -74,15 +76,16 @@ export interface FileRowProps {
   onDrop(e: DragEvent): void;
 }
 
-export function FileRow({ entry, selected, renaming, dropTarget, onSelect, onOpen, onRename, onDragStart, onDragOver, onDragLeave, onDrop }: FileRowProps) {
+export function FileRow({ entry, selected, renaming, dropTarget, onSelect, onOpen, onMenu, onRename, onDragStart, onDragOver, onDragLeave, onDrop }: FileRowProps) {
   const dir = entry.kind === "dir";
   return (
     <tr
       data-name={entry.name}
       aria-selected={selected}
       draggable={!renaming}
-      onClick={onSelect}
+      onClick={(e) => onSelect({ meta: e.metaKey, shift: e.shiftKey })}
       onDoubleClick={onOpen}
+      onContextMenu={onMenu}
       onDragStart={onDragStart}
       onDragOver={dir ? onDragOver : undefined}
       onDragLeave={dir ? onDragLeave : undefined}
