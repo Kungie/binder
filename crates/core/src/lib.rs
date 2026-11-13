@@ -24,6 +24,7 @@ pub enum Error {
 }
 
 pub mod agent;
+pub mod cloud;
 pub mod config;
 pub mod db;
 pub mod devices;
