@@ -57,6 +57,6 @@ fn missing_docker_is_empty_not_error() {
 
 #[test]
 fn unreachable_is_remote_error() {
-    let r = FakeRemote::new(vec![Err(Error::Remote("Can't reach citadel".into()))]);
+    let r = FakeRemote::new(vec![Err(Error::Remote("Can't reach lab".into()))]);
     assert!(matches!(fetch(&r, 0), Err(Error::Remote(_))));
 }
