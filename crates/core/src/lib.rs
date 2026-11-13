@@ -30,6 +30,7 @@ pub mod model;
 pub mod notes;
 pub mod projects;
 pub mod remote;
+pub mod repo;
 pub mod server;
 pub mod tasks;
 
