@@ -4,6 +4,7 @@ import { PriorityIcon } from "./PriorityIcon";
 import { StatusIcon } from "./StatusIcon";
 import { PriorityMenu } from "./PriorityMenu";
 import { StatusMenu } from "./StatusMenu";
+import { Empty } from "./Mascot";
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -146,7 +147,7 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
       }}
       className="relative outline-none focus-visible:outline-none"
     >
-      {tasks.length === 0 && <p className="px-3 py-6 text-[12px] text-text-3">{empty}</p>}
+      {tasks.length === 0 && <Empty>{empty}</Empty>}
       {tasks.map((t, i) => {
         const isFocused = i === index;
         const isSelected = shown.includes(t.id);

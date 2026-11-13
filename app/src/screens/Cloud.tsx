@@ -11,6 +11,7 @@ import { type Selection, all, click, empty, move as moveSel } from "../lib/selec
 import { useStore } from "../lib/store";
 import { ago } from "../lib/time";
 import type { AppChoice, CloudEntry, CloudStatus, Conflict, Space, TrashEntry } from "../lib/types";
+import { Empty, Mascot } from "../components/Mascot";
 
 type SortKey = "name" | "size" | "modified";
 const UNDO_MS = 6000;
@@ -29,7 +30,8 @@ function NotConnected({ status }: { status: CloudStatus | null }) {
   const { api, setScreen } = useStore();
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="flex max-w-[560px] flex-col items-start gap-3 p-8">
+    <div className="relative m-5 flex max-w-[640px] flex-col items-start gap-3 overflow-hidden rounded-panel border border-line bg-panel pb-6 pl-[152px] pr-6 pt-6">
+      <Mascot size={128} className="absolute bottom-0 left-0" />
       <h1 className="text-[15px] font-medium">Cloud not connected</h1>
       <Notice>
         Cloud is a folder on the home server, shared like the vault. Once the share is set up on the server, Connect opens it in Finder, which asks for the password the first time and mounts it at{" "}
@@ -98,7 +100,9 @@ function Trash({ onChange }: { onChange(): void }) {
       </div>
       {error && <p className="text-[12px] text-urgent">{error}</p>}
       {items?.length === 0 ? (
-        <Notice>The trash is empty.</Notice>
+        <div className="rounded-panel border border-line bg-panel">
+          <Empty>The trash is empty.</Empty>
+        </div>
       ) : (
         <div className="min-h-0 overflow-y-auto rounded-panel border border-line bg-panel">
           <table aria-label="Trash" className="w-full table-fixed border-collapse">
@@ -538,7 +542,7 @@ export function Cloud() {
                 ))}
               </tbody>
             </table>
-            {shown.length === 0 && !creating && <p className="px-3 py-4 text-[12px] text-text-3">{query ? "No match in this folder." : "This folder is empty. Drop files here from Finder."}</p>}
+            {shown.length === 0 && !creating && (query ? <p className="px-3 py-4 text-[12px] text-text-3">No match in this folder.</p> : <Empty>This folder is empty. Drop files here from Finder.</Empty>)}
             <div data-testid="cloud-empty-space" className="min-h-16 flex-1" onClick={() => setSel(empty)} />
           </div>
         </div>

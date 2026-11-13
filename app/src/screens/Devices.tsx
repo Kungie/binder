@@ -5,6 +5,7 @@ import { Button, Field, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
 import { DEVICE_KIND_LABEL, type Device, type DevicePatch } from "../lib/types";
 import { usePoll } from "../lib/usePoll";
+import { Empty } from "../components/Mascot";
 
 export function Devices() {
   const { api } = useStore();
@@ -70,7 +71,7 @@ export function Devices() {
               ))}
             </tbody>
           </table>
-          {devices.length === 0 && <p className="border-t border-line px-3 py-3 text-[12px] text-text-3">No devices yet. Add the Mac, the server and the printer.</p>}
+          {devices.length === 0 && <div className="border-t border-line"><Empty>No devices yet. Add the Mac, the server and the printer.</Empty></div>}
         </div>
       </div>
       {creating && <NewDevice onClose={() => setCreating(false)} onCreated={() => void load()} />}

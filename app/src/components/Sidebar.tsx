@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { type Screen, useStore } from "../lib/store";
 import { isClosed } from "../lib/types";
 import { ProjectDot } from "./ProjectDot";
+import { MascotMark } from "./Mascot";
 
 function Item({ active, onClick, icon, children, count, dot }: { active: boolean; onClick(): void; icon: ReactNode; children: ReactNode; count?: number; dot?: boolean }) {
   return (
@@ -44,7 +45,7 @@ export function Sidebar() {
   return (
     <nav aria-label="Main" className="flex h-full w-[208px] shrink-0 flex-col border-r border-line px-2 pb-3 pt-10" data-tauri-drag-region>
       <div className="mb-3 flex items-center gap-2 px-2" data-tauri-drag-region>
-        <span className="h-2.5 w-2.5 rounded-[3px] bg-text" aria-hidden="true" />
+        <MascotMark size={16} />
         <span className="font-medium">Binder</span>
         <kbd className="ml-auto rounded-[4px] border border-line px-1.5 font-mono text-[11px] text-text-3">⌘K</kbd>
       </div>

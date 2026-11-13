@@ -7,6 +7,7 @@ import { Button, Notice } from "../components/ui";
 import { useStore } from "../lib/store";
 import type { PrinterCommand, PrinterView } from "../lib/types";
 import { STATE_LABEL, minutes, temp, usePrinters } from "../lib/usePrinters";
+import { Empty } from "../components/Mascot";
 
 export function Printer() {
   const { printers, reload } = usePrinters();
@@ -24,7 +25,9 @@ export function Printer() {
           <PrinterPanel key={p.config.serial} view={p} onRemoved={() => void reload()} />
         ))}
         {printers.length === 0 && (
-          <Notice>No printer yet. Add a Bambu printer in LAN mode with its address, serial number and access code.</Notice>
+          <div className="rounded-panel border border-line bg-panel">
+            <Empty>No printer yet. Add a Bambu printer in LAN mode with its address, serial number and access code.</Empty>
+          </div>
         )}
       </div>
       {adding && <NewPrinter onClose={() => setAdding(false)} onAdded={() => void reload()} />}
