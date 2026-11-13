@@ -84,11 +84,25 @@ The sidebar holds Overview, Tasks, Projects, Devices, Server and Printer, then t
 
 - A project has a name, a short prefix, a local repo folder, its note path and a state (active, paused or done). Projects are added by hand, by picking a repo folder.
 - **Start project** creates `<vault>/Projects/<name>.md` if it doesn't exist and opens it in Obsidian with `obsidian://open?path=…`.
-  - The vault defaults to `~/Documents/Obsidian Vault`, changeable in Settings.
+  - The vault lives on the Raspberry Pi and reaches the Mac as an SMB share (section 5a). Its path defaults to `/Volumes/vault`, changeable in Settings.
+  - When the share isn't mounted, Binder shows "Vault not connected" and **Start project** waits. Nothing is ever written to a local copy.
   - The note starts with frontmatter (`project`, `repo`, `started`), a title and an empty `## Done` section.
 - **The done log** is the `## Done` section, one line per decision, newest last: `- 2026-11-13 · Chose Tauri over a pure Rust UI.`
   - Lines are short: one sentence, no detail, no code.
   - Binder only ever appends to `## Done`. Everything else in the note belongs to the owner.
+
+## 5a. The vault on the home server
+
+The owner's notes live on the Pi, not on the Mac.
+- **On the Pi:**
+  - The folder `/srv/vault` belongs to the owner's Pi user and is shared by Samba as `vault`.
+  - Only that user may connect. No guests, SMB3 only, on the home network's interface only.
+- **The Samba password** is set by the owner on the Pi (`sudo smbpasswd -a <user>`). Binder never sees it.
+- **On the Mac:**
+  - Finder connects to `smb://<pi>/vault` once and saves the password in the Keychain.
+  - The share goes into Login Items, so it mounts at every login.
+  - Obsidian opens `/Volumes/vault` as its vault, and Binder writes there.
+- Setting this up is a one-time step on the Pi, done with the owner present. Binder itself installs nothing there.
 
 ## 6. Done lines from Claude Code sessions
 
@@ -102,11 +116,11 @@ The sidebar holds Overview, Tasks, Projects, Devices, Server and Printer, then t
   - `claude -p --model haiku`, bare, on the owner's own plan, with tools, MCP, settings and slash commands off and no session saved. It runs from an empty scratch folder.
   - Its input is the new talk, with secrets redacted, and the last 20 lines of the project's done log.
   - It returns at most 3 new key decisions as JSON, or none. Lines that repeat the log are dropped.
-- New lines are written straight to the note, without approval. The app's Projects screen and Overview show them, and each can be deleted there.
+- New lines are written straight to the note, without approval. If the vault isn't mounted, a line waits in the database and is written the next time it is. The app's Projects screen and Overview show them, and each can be deleted there.
 
 ## 7. Home server
 
-- Binder reaches the Pi with the system's `ssh` using a host alias from `~/.ssh/config`, with `BatchMode=yes` and a 5 second connect timeout. It never reads or writes keys and installs nothing on the Pi.
+- Binder reaches the Pi with the system's `ssh`, using the host set in Settings (an alias from `~/.ssh/config` or `user@address`), with `BatchMode=yes` and a 5 second connect timeout. It never reads or writes keys and installs nothing on the Pi.
 - **What it runs, all read only:**
   - `docker ps -a --format '{{json .}}'`
   - `systemctl list-units --type=service --state=running --no-legend --plain`
