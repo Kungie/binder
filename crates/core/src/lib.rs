@@ -48,5 +48,6 @@ pub mod server;
 pub mod session;
 pub mod shell;
 pub mod tasks;
+pub mod watch;
 
 pub use db::Db;
