@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/overview.png" alt="Overview: today's done lines, open tasks, the server, Cloud and the printer">
+  <img src="docs/screenshots/overview1.png" alt="Overview: today's done lines, open tasks, the server, Cloud and the printer">
 </p>
 
 Binder is mostly black and white, with a few colours that each mean something, keyboard first, and built for one person. The core is Rust, the window is Tauri with a React interface, and the data stays on your own machines.
