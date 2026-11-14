@@ -24,10 +24,10 @@ async function setup(initialScreen: "tasks" | "overview" = "tasks") {
 }
 
 describe("Tasks header", () => {
-  it("header has All, Mine and Agent only", async () => {
+  it("header has All, Mine, Agent and Night only", async () => {
     await setup();
     const tabs = await screen.findByRole("group", { name: "Task views" });
-    expect(within(tabs).getAllByRole("button").map((b) => b.textContent)).toEqual(["All", "Mine", "Agent"]);
+    expect(within(tabs).getAllByRole("button").map((b) => b.textContent)).toEqual(["All", "Mine", "Agent", "Night"]);
     expect(within(tabs).queryByRole("button", { name: "orbit" })).toBeNull();
   });
 
