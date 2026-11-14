@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BinderPanel } from "../components/BinderPanel";
 import { Panel } from "../components/Panel";
 import { ServerTargetForm } from "../components/ServerTargetForm";
 import { Button, Field, Notice, fieldClass } from "../components/ui";
@@ -124,6 +125,7 @@ export function Settings() {
         <h1 className="text-[13px] font-medium">Settings</h1>
       </header>
       <div className="flex max-w-[960px] flex-col gap-4 px-5">
+        <BinderPanel />
         <Panel title="Obsidian vault">
           <div className="flex flex-col gap-3 border-t border-line p-3">
             <Field label="Vault folder">
