@@ -128,22 +128,25 @@ pub async fn log_done(state: State<'_, AppState>, project_id: i64, text: String)
     let note = p.note.expect("note_for sets the note");
     let at = chrono::Local::now();
     let (date, time) = (at.format("%Y-%m-%d").to_string(), at.format("%H:%M").to_string());
-    binder_core::session::write_line(&mut db, Path::new(&note), &p.name, &date, Some(&time), &text).map_err(self::text)
+    let wrote = binder_core::session::write_line(&mut db, Path::new(&note), &p.name, &date, Some(&time), &text).map_err(self::text)?;
+    if wrote {
+        binder_core::session::remember(&mut db, project_id, &date, Some(&time), &text).map_err(self::text)?;
+    }
+    Ok(wrote)
 }
 
 #[tauri::command]
 pub async fn read_done(state: State<'_, AppState>, project_id: i64) -> Res<Vec<DoneLine>> {
-    let p = state.db.lock().unwrap().get_project(project_id).map_err(text)?;
-    match p.note {
-        Some(note) => notes::read_history(Path::new(&note)).map_err(text),
-        None => Ok(vec![]),
-    }
+    let db = state.db.lock().unwrap();
+    let p = db.get_project(project_id).map_err(text)?;
+    binder_core::session::history(&db, &p).map_err(text)
 }
 
 #[tauri::command]
 pub async fn done_today(state: State<'_, AppState>) -> Res<Vec<DoneItem>> {
-    let projects = state.db.lock().unwrap().list_projects().map_err(text)?;
-    Ok(notes::done_on(&projects, &today()))
+    let db = state.db.lock().unwrap();
+    let projects = db.list_projects().map_err(text)?;
+    binder_core::session::done_today(&db, &projects, &today()).map_err(text)
 }
 
 /// When a done line was last written, in Unix seconds. The overview refreshes Done today when it changes.

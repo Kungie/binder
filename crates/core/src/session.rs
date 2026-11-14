@@ -2,7 +2,7 @@
 //! a small model picks out the key decisions and they're appended to the project's daily file in the vault.
 
 use crate::model::Project;
-use crate::notes::{self, one_line};
+use crate::notes::{self, DoneItem, DoneLine, one_line};
 use crate::redact::redact;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, params};
@@ -239,6 +239,61 @@ pub fn write_line(db: &mut Db, note: &Path, project_name: &str, date: &str, time
     Ok(wrote)
 }
 
+/// Keeps a done line in Binder's own log as well as the vault, and marks that one was written, so Done today
+/// shows it whether or not the vault is mounted.
+pub fn remember(db: &mut Db, project_id: i64, date: &str, time: Option<&str>, text: &str) -> Result<()> {
+    db.conn.execute("INSERT INTO done_log (project_id, date, time, text) VALUES (?1, ?2, ?3, ?4)", params![project_id, date, time, text])?;
+    db.set_meta("last_done", &chrono::Utc::now().timestamp().to_string())?;
+    Ok(())
+}
+
+/// One day's done lines: those in the vault, and those Binder logged that the vault doesn't show (it isn't
+/// mounted, or the line still waits to be written). Newest first, as `notes::done_on` sorts them.
+pub fn done_today(db: &Db, projects: &[Project], day: &str) -> Result<Vec<DoneItem>> {
+    let mut out = notes::done_on(projects, day);
+    let mut stmt = db.conn.prepare("SELECT project_id, time, text FROM done_log WHERE date = ?1 ORDER BY id")?;
+    let logged = stmt
+        .query_map([day], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, String>(2)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut extra = vec![];
+    for (project_id, time, text) in logged {
+        let Some(p) = projects.iter().find(|p| p.id == project_id) else { continue };
+        let known = |d: &DoneItem| d.project_id == project_id && d.line.text.trim() == text.trim();
+        if out.iter().any(known) || extra.iter().any(known) {
+            continue;
+        }
+        extra.push(DoneItem {
+            project_id,
+            project: p.name.clone(),
+            color: p.color.clone(),
+            line: notes::DoneLine { date: day.to_string(), time, text },
+        });
+    }
+    extra.reverse();
+    out.extend(extra);
+    out.sort_by(|a, b| b.line.time.cmp(&a.line.time));
+    Ok(out)
+}
+
+/// A project's done lines, newest first: the vault's, then those Binder logged that the vault doesn't show.
+pub fn history(db: &Db, project: &Project) -> Result<Vec<DoneLine>> {
+    let mut out = match project.note.as_deref() {
+        Some(note) => notes::read_history(Path::new(note)).unwrap_or_default(),
+        None => vec![],
+    };
+    let mut stmt = db.conn.prepare("SELECT date, time, text FROM done_log WHERE project_id = ?1 ORDER BY id")?;
+    let logged = stmt
+        .query_map([project.id], |r| Ok(DoneLine { date: r.get(0)?, time: r.get(1)?, text: r.get(2)? }))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for line in logged {
+        if !out.iter().any(|l| l.date == line.date && l.text.trim() == line.text.trim()) {
+            out.push(line);
+        }
+    }
+    out.sort_by(|a, b| (&b.date, &b.time).cmp(&(&a.date, &a.time)));
+    Ok(out)
+}
+
 fn pending_for(db: &Db, project_id: i64) -> Result<Vec<String>> {
     let mut stmt = db.conn.prepare("SELECT text FROM pending_done WHERE project_id = ?1 ORDER BY id")?;
     Ok(stmt.query_map([project_id], |r| r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?)
@@ -287,6 +342,9 @@ pub fn summarize(db: &mut Db, vault: &Path, summarizer: &dyn Summarizer, session
         }
     }
 
+    for line in &fresh {
+        remember(db, s.project_id, today, Some(time), line)?;
+    }
     if vault.is_dir() {
         // SQLite's write lock doubles as the lock on note writes, so two processes never edit a note at once.
         exclusive(db, |db| {

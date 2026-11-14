@@ -92,6 +92,10 @@ const MIGRATIONS: &[&str] = &[
     // v6: night tasks, and night runs waiting in the server's queue
     "ALTER TABLE tasks ADD COLUMN night INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE agent_runs ADD COLUMN queued INTEGER NOT NULL DEFAULT 0;",
+    // v7: Binder's own copy of each day's done lines, so Done today shows while the vault isn't mounted
+    "CREATE TABLE done_log (id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        date TEXT NOT NULL, time TEXT, text TEXT NOT NULL);
+    CREATE INDEX done_log_date ON done_log(date);",
 ];
 
 impl Db {

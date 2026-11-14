@@ -436,3 +436,71 @@ fn local_folder_still_wins() {
     assert_eq!(project_for(&mut w.db, &orbit.join("src").to_string_lossy()).map(|f| f.id), Some(w.project.id));
     assert_eq!(w.db.get_project(other.id).unwrap().repo, None);
 }
+
+fn projects(w: &World) -> Vec<Project> {
+    w.db.list_projects().unwrap()
+}
+
+#[test]
+fn done_today_shows_lines_while_the_vault_is_away() {
+    let mut w = World::new();
+    let vault = w.vault();
+    let p = w.transcript("a.jsonl", FIXTURE);
+    w.hook("s1", &p, "SessionEnd");
+    let s = Fake::new(vec![vec!["Sync runs in a worker."]]);
+    summarize(&mut w.db, &vault, &s, "s1", "2026-11-13", "14:32").unwrap();
+    // The Mac restarts and the vault isn't mounted yet.
+    std::fs::rename(&vault, w.dir.path().join("unmounted")).unwrap();
+    let items = done_today(&w.db, &projects(&w), "2026-11-13").unwrap();
+    assert_eq!(items.iter().map(|d| (d.project.as_str(), d.line.time.as_deref(), d.line.text.as_str())).collect::<Vec<_>>(), vec![("orbit", Some("14:32"), "Sync runs in a worker.")]);
+}
+
+#[test]
+fn done_today_lists_a_line_once_when_the_vault_has_it_too() {
+    let mut w = World::new();
+    let vault = w.vault();
+    let p = w.transcript("a.jsonl", FIXTURE);
+    w.hook("s1", &p, "SessionEnd");
+    let s = Fake::new(vec![vec!["Sync runs in a worker.", "Conflicts wait for the owner."]]);
+    summarize(&mut w.db, &vault, &s, "s1", "2026-11-13", "14:32").unwrap();
+    assert_eq!(done_today(&w.db, &projects(&w), "2026-11-13").unwrap().len(), 2);
+    assert!(done_today(&w.db, &projects(&w), "2026-11-14").unwrap().is_empty());
+}
+
+#[test]
+fn lines_waiting_for_the_vault_show_today_too() {
+    let mut w = World::new();
+    let missing = w.dir.path().join("not-mounted");
+    let p = w.transcript("a.jsonl", FIXTURE);
+    w.hook("s1", &p, "SessionEnd");
+    let s = Fake::new(vec![vec!["Sync runs in a worker."]]);
+    summarize(&mut w.db, &missing, &s, "s1", "2026-11-13", "14:32").unwrap();
+    assert_eq!(done_today(&w.db, &projects(&w), "2026-11-13").unwrap().len(), 1);
+    assert!(w.db.meta("last_done").unwrap().is_some(), "the overview refreshes");
+    std::fs::create_dir_all(&missing).unwrap();
+    flush_pending(&mut w.db, &missing).unwrap();
+    assert_eq!(done_today(&w.db, &projects(&w), "2026-11-13").unwrap().len(), 1, "flushed, still once");
+}
+
+#[test]
+fn a_line_logged_by_hand_is_remembered() {
+    let mut w = World::new();
+    remember(&mut w.db, w.project.id, "2026-11-13", Some("09:05"), "Moved the backups.").unwrap();
+    let items = done_today(&w.db, &projects(&w), "2026-11-13").unwrap();
+    assert_eq!(items[0].line.text, "Moved the backups.");
+}
+
+#[test]
+fn project_history_shows_logged_lines_while_the_vault_is_away() {
+    let mut w = World::new();
+    let vault = w.vault();
+    let p = w.transcript("a.jsonl", FIXTURE);
+    w.hook("s1", &p, "SessionEnd");
+    let s = Fake::new(vec![vec!["Sync runs in a worker."], vec!["Conflicts wait for the owner."]]);
+    summarize(&mut w.db, &vault, &s, "s1", "2026-11-12", "10:00").unwrap();
+    let project = w.db.get_project(w.project.id).unwrap();
+    assert_eq!(history(&w.db, &project).unwrap().len(), 1, "once, though in the vault and the log");
+    std::fs::rename(&vault, w.dir.path().join("unmounted")).unwrap();
+    let lines = history(&w.db, &project).unwrap();
+    assert_eq!(lines.iter().map(|l| (l.date.as_str(), l.text.as_str())).collect::<Vec<_>>(), vec![("2026-11-12", "Sync runs in a worker.")]);
+}
