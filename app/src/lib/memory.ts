@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { Agent, AppInfo, Transfer, UpdateInfo, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -81,6 +81,10 @@ export function memoryApi(
   emitTransfer(t: Transfer): void;
   /** Whether an update was installed. */
   readonly installed: boolean;
+  /** Acts as if the app read or started agent runs in the background. */
+  emitTasksChanged(): void;
+  /** Acts as if a container alert was sent. */
+  emitWatchAlert(title: string): void;
 } {
   const tasks = seed.tasks.map((t) => ({ ...t }));
   const projects = seed.projects.map((p) => ({ ...p }));
@@ -106,13 +110,26 @@ export function memoryApi(
   const encoder = new TextEncoder();
   const copied: string[] = [];
   let installed = false;
+  let night = false;
+  const tasksChanged = new Set<() => void>();
+  const alerts = new Set<(title: string) => void>();
+  const processes: TopProcess[] = [
+    { name: "ollama", cpu: 41.2, mem: 12.5, rss_mb: 1024 },
+    { name: "node", cpu: 2, mem: 3.3, rss_mb: 264 },
+    { name: "caddy", cpu: 0.4, mem: 0.9, rss_mb: 72 },
+  ];
+  const folders: TopFolder[] = [
+    { path: "/srv/cloud", bytes: 590_000_000_000 },
+    { path: "/home/demo-dev", bytes: 150_000_000_000 },
+    { path: "/srv/cloud/SD/photos", bytes: 70_000_000_000 },
+  ];
   async function openTerm(agent: Agent, onData: (bytes: Uint8Array) => void) {
     if (!config.server) throw new Error("No server set.");
     if (options.termFail) throw new Error(options.termFail);
     terms.set(agent, onData);
     onData(encoder.encode("Connected to demo-dev@10.0.7.2 (demo)\r\n"));
   }
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud" };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100 };
   let lastDone: number | null = seed.lastDone ?? null;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
   const device = (id: number) => {
@@ -241,6 +258,42 @@ export function memoryApi(
     },
     get installed() {
       return installed;
+    },
+    async nightState() {
+      if (!config.server) throw new Error("No server set.");
+      return night;
+    },
+    async nightSetup() {
+      night = true;
+      return night;
+    },
+    async nightRemove() {
+      night = false;
+      return night;
+    },
+    async serverProcesses(byMemory) {
+      return [...processes].sort((a, b) => (byMemory ? b.rss_mb - a.rss_mb : b.cpu - a.cpu));
+    },
+    async serverFolders() {
+      return folders.map((f) => ({ ...f }));
+    },
+    async setZoom(percent) {
+      if (![100, 110, 125, 150].includes(percent)) throw new Error("The interface size is 100, 110, 125 or 150%.");
+      config = { ...config, zoom: percent };
+    },
+    onTasksChanged(cb) {
+      tasksChanged.add(cb);
+      return () => void tasksChanged.delete(cb);
+    },
+    onWatchAlert(cb) {
+      alerts.add(cb);
+      return () => void alerts.delete(cb);
+    },
+    emitTasksChanged() {
+      tasksChanged.forEach((cb) => cb());
+    },
+    emitWatchAlert(title) {
+      alerts.forEach((cb) => cb(title));
     },
     done,
     printerCommands,

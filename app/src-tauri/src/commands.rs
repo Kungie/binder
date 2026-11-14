@@ -20,7 +20,7 @@ use crate::transfers::Unit;
 use std::sync::atomic::AtomicBool;
 use binder_core::github::{self, GhCli, HiddenRepo, SyncReport};
 use binder_core::{Db, Error, devices, hooks, repo, server};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use std::path::Path;
 use tauri::State;
 use tauri::ipc::{Channel, InvokeResponseBody};
@@ -178,7 +178,7 @@ fn server_target(state: &State<AppState>) -> Res<String> {
 #[tauri::command]
 pub async fn server_status(state: State<'_, AppState>) -> Res<ServerStatus> {
     let target = server_target(&state)?;
-    server::fetch(&SshRemote::new(target), now(), None).map_err(text)
+    server::fetch(&SshRemote::new(target), now(), Some(&sd_path(&state))).map_err(text)
 }
 
 #[tauri::command]
@@ -774,4 +774,68 @@ pub async fn term_resize(state: State<'_, AppState>, agent: Agent, cols: u16, ro
 pub async fn term_reconnect(app: tauri::AppHandle, state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
     state.terminals.close(agent);
     term_start(app, &state, agent, cols, rows, output)
+}
+
+/// The SD card's mount point inside Cloud on the server.
+fn sd_path(state: &State<AppState>) -> String {
+    format!("{}/SD", state.config.lock().unwrap().cloud_remote.trim_end_matches('/'))
+}
+
+/// Whether the crontab line for night tasks is on the server.
+#[tauri::command]
+pub async fn night_state(state: State<'_, AppState>) -> Res<bool> {
+    binder_core::night::cron_state(&remote(&state)?).map_err(text)
+}
+
+#[tauri::command]
+pub async fn night_setup(state: State<'_, AppState>) -> Res<bool> {
+    let r = remote(&state)?;
+    binder_core::night::cron_install(&r).map_err(text)?;
+    binder_core::night::cron_state(&r).map_err(text)
+}
+
+/// Empties the queue first, so nothing waits for a timer that is gone.
+#[tauri::command]
+pub async fn night_remove(state: State<'_, AppState>) -> Res<bool> {
+    let r = remote(&state)?;
+    binder_core::night::clear(&state.db, &r).map_err(text)?;
+    binder_core::night::cron_remove(&r).map_err(text)?;
+    binder_core::night::cron_state(&r).map_err(text)
+}
+
+#[tauri::command]
+pub async fn server_processes(state: State<'_, AppState>, by_memory: bool) -> Res<Vec<server::TopProcess>> {
+    server::processes(&remote(&state)?, by_memory).map_err(text)
+}
+
+#[tauri::command]
+pub async fn server_folders(state: State<'_, AppState>) -> Res<Vec<server::TopFolder>> {
+    let sd = sd_path(&state);
+    server::folders(&remote(&state)?, &["/", &sd]).map_err(text)
+}
+
+/// The interface sizes Settings offers, in percent.
+pub const ZOOMS: [u16; 4] = [100, 110, 125, 150];
+
+/// Scales the whole window to the saved interface size.
+pub fn apply_zoom(app: &tauri::AppHandle) {
+    let zoom = app.state::<AppState>().config.lock().unwrap().zoom;
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_zoom(f64::from(if ZOOMS.contains(&zoom) { zoom } else { 100 }) / 100.0);
+    }
+}
+
+#[tauri::command]
+pub async fn set_zoom(app: tauri::AppHandle, state: State<'_, AppState>, percent: u16) -> Res<()> {
+    if !ZOOMS.contains(&percent) {
+        return Err("The interface size is 100, 110, 125 or 150%.".into());
+    }
+    let config = {
+        let mut c = state.config.lock().unwrap();
+        c.zoom = percent;
+        c.clone()
+    };
+    config.save(&state.config_path).map_err(text)?;
+    apply_zoom(&app);
+    Ok(())
 }

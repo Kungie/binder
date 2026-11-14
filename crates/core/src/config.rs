@@ -20,6 +20,12 @@ pub struct Config {
     pub cloud_share: Option<String>,
     /// The shared folder's path on the server, for the SSH fast path.
     pub cloud_remote: String,
+    /// Whether Binder starts the agent's tasks by itself.
+    pub pick_up: bool,
+    /// Whether Binder watches the server's containers and sends notifications.
+    pub watch: bool,
+    /// The interface size in percent: 100, 110, 125 or 150.
+    pub zoom: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -34,7 +40,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into() }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100 }
     }
 }
 

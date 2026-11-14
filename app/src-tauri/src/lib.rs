@@ -1,4 +1,5 @@
 mod apps;
+mod background;
 mod commands;
 mod printer;
 mod terminal;
@@ -44,6 +45,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -68,6 +70,8 @@ pub fn run() {
             let handle = app.handle().clone();
             let data = dir.clone();
             std::thread::spawn(move || commands::sync_and_tell(&handle, &data));
+            commands::apply_zoom(app.handle());
+            background::start(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -76,6 +80,11 @@ pub fn run() {
             let scale = window.scale_factor().unwrap_or(1.0);
             let at = |p: &tauri::PhysicalPosition<f64>| DropPoint { x: p.x / scale, y: p.y / scale };
             match event {
+                // Closing the window hides it: Binder keeps picking up tasks and watching the server. ⌘Q quits.
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
                 tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, position }) => {
                     let p = at(position);
                     let _ = window.emit("cloud://drop", Dropped { paths: paths.clone(), x: p.x, y: p.y });
@@ -161,15 +170,31 @@ pub fn run() {
             commands::term_resize,
             commands::term_reconnect,
             commands::copy_text,
+            commands::night_state,
+            commands::night_setup,
+            commands::night_remove,
+            commands::server_processes,
+            commands::server_folders,
+            commands::set_zoom,
         ])
         .build(tauri::generate_context!())
         .expect("Binder could not start")
         .run(|app, event| {
-            // Quitting ends the local ssh processes; the tmux sessions on the server stay.
-            if let tauri::RunEvent::Exit = event {
-                if let Some(state) = app.try_state::<AppState>() {
-                    state.terminals.close_all();
+            match event {
+                // Quitting ends the local ssh processes; the tmux sessions on the server stay.
+                tauri::RunEvent::Exit => {
+                    if let Some(state) = app.try_state::<AppState>() {
+                        state.terminals.close_all();
+                    }
                 }
+                // The Dock icon brings the hidden window back.
+                tauri::RunEvent::Reopen { .. } => {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                    }
+                }
+                _ => {}
             }
         });
 }

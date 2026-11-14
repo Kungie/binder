@@ -122,6 +122,12 @@ export interface Config {
   cloud_share: string | null;
   /** The shared folder's path on the server, for the SSH fast path. */
   cloud_remote: string;
+  /** Whether Binder starts the agent's tasks by itself. */
+  pick_up: boolean;
+  /** Whether Binder watches the server's containers and sends notifications. */
+  watch: boolean;
+  /** The interface size in percent: 100, 110, 125 or 150. */
+  zoom: number;
 }
 
 export type DeviceKind = "mac" | "server" | "printer" | "other";

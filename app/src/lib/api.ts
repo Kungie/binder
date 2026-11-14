@@ -36,6 +36,8 @@ import type {
   AppInfo,
   UpdateInfo,
   InstallProgress,
+  TopProcess,
+  TopFolder,
 } from "./types";
 import { demoSeed, memoryApi } from "./memory";
 
@@ -149,6 +151,19 @@ export interface Api {
   checkUpdate(): Promise<UpdateInfo | null>;
   /** Downloads, checks and installs the update, then the app restarts. */
   installUpdate(onProgress: (p: InstallProgress) => void): Promise<void>;
+  /** Whether the crontab line for night tasks is on the server. */
+  nightState(): Promise<boolean>;
+  nightSetup(): Promise<boolean>;
+  /** Empties the night queue, then takes the line out; returns the new state. */
+  nightRemove(): Promise<boolean>;
+  serverProcesses(byMemory: boolean): Promise<TopProcess[]>;
+  serverFolders(): Promise<TopFolder[]>;
+  /** Saves the interface size and scales the window to it. */
+  setZoom(percent: number): Promise<void>;
+  /** The app read or started agent runs in the background. */
+  onTasksChanged(cb: () => void): () => void;
+  /** A container alert was sent; the payload is its title. */
+  onWatchAlert(cb: (title: string) => void): () => void;
 }
 
 export interface Dropped {
@@ -283,6 +298,14 @@ export const tauriApi: Api = {
   termReconnect: (agent, cols, rows, onData) => call("term_reconnect", { agent, cols, rows, output: bytesChannel(onData) }),
   copyText: (text) => call("copy_text", { text }),
   appInfo: () => call("app_info"),
+  nightState: () => call("night_state"),
+  nightSetup: () => call("night_setup"),
+  nightRemove: () => call("night_remove"),
+  serverProcesses: (byMemory) => call("server_processes", { byMemory }),
+  serverFolders: () => call("server_folders"),
+  setZoom: (percent) => call("set_zoom", { percent }),
+  onTasksChanged: (cb) => subscribe<null>("tasks://changed", () => cb()),
+  onWatchAlert: (cb) => subscribe<string>("watch://alert", cb),
   checkUpdate: () => call("update_check"),
   installUpdate: (onProgress) => {
     const progress = new Channel<InstallProgress>();

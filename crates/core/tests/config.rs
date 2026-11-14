@@ -23,3 +23,11 @@ fn cloud_remote_defaults_to_srv_cloud() {
     std::fs::write(dir.path().join("old.toml"), "vault = \"/v\"\n").unwrap();
     assert_eq!(Config::load(&dir.path().join("old.toml")).unwrap().cloud_remote, "/srv/cloud", "a 2.1 file gets the default");
 }
+
+#[test]
+fn config_defaults_for_new_fields() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("old.toml"), "vault = \"/Volumes/vault\"\nclaude_hooks = true\n").unwrap();
+    let c = Config::load(&dir.path().join("old.toml")).unwrap();
+    assert_eq!((c.pick_up, c.watch, c.zoom), (true, true, 100));
+}
