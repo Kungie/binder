@@ -30,7 +30,8 @@ Binder is mostly black and white, with a few colours that each mean something, k
 - **Projects:** your GitHub repos come in on their own through the `gh` CLI and its login, at start and with **Sync**. Your own edits stay, and nothing is deleted: a repo that's archived or gone moves to Archived, and a project you delete stays gone until you bring it back. Projects that aren't on GitHub can be added by hand. A project can have a local folder (branch, changes, ahead and behind, last commit) and an Obsidian folder with its note and a daily file of decisions.
 - **Claude Code:** Settings › Claude Code adds three hooks. Sessions are matched to a project by folder or by the repo's GitHub remote. When a session has enough new talk, Haiku picks out up to three key decisions, after secrets are masked, and writes them to the project's daily file. Overview shows today's lines.
 - **Cloud:** a file manager over a folder on the home server, shared over SMB. Right-click menu, multi-select, Quick Look, Open with, zip and unzip on the server, and a transfer tray with progress. With SSH set up, folders move as one stream, so a `node_modules` takes seconds. More than one disk works, each with its own trash. Your phone reaches the same folder from the Files app.
-- **Server:** containers, running services, load, memory, disk and temperature, read over SSH every 30 seconds. Read only.
+- **Server:** containers, running services, load, memory, disk, temperature and the Pi board's power draw, read over SSH every 30 seconds. Read only.
+- **Agents:** two terminals side by side, Claude Code on the left and a small local model (Qwen3 4B in Ollama) on the right, each a tmux session on the home server reached with the system `ssh`. They stay connected while Binder runs, and the sessions keep going after it quits.
 - **Devices:** your machines and whether each one answers.
 - **Printer:** a Bambu Lab printer in LAN mode over MQTT: job, progress, temperatures, pause, resume and stop.
 
@@ -50,6 +51,7 @@ Download `Binder.dmg` from the [latest release](https://github.com/Kungie/binder
 ## Setup
 
 - **Server:** Settings › Home server takes an SSH target, `user@host` or a `Host` from `~/.ssh/config`. Binder uses your keys through the system `ssh` and never stores a password.
+- **Agents:** the server needs `tmux`, Claude Code signed in, and Ollama in a Docker container named `ollama` with `qwen3:4b` pulled.
 - **Vault:** the Obsidian vault can live anywhere that mounts as a folder, such as an SMB share. Each project gets a folder with its note and daily files. Binder writes only when the vault is mounted; done lines wait otherwise.
 - **GitHub:** install the GitHub CLI and run `gh auth login` once. Binder never reads or stores a token.
 - **Cloud:** on the server, run `sudo scripts/cloud-share.sh <user>` once. It creates `/srv/cloud` and shares it as `[cloud]`. On the Mac, connect to `smb://<server>/cloud` in Finder, save the password in the Keychain, add the share to Login Items and put the same address in Settings › Cloud. On a phone, use Files › Connect to Server with the server's Tailscale address.

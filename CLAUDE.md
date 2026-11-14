@@ -1,6 +1,6 @@
 # Binder 2
 
-A personal desktop dashboard for one developer: a task board for the owner and for a Claude Code agent on the home server, projects from GitHub with Obsidian notes, devices, the home server, Cloud (a file manager over an SMB share on the server) and a Bambu 3D printer. The specs are `docs/specs/2026-11-13-binder-2-design.md`, `docs/specs/2026-11-13-binder-2.1-design.md` and `docs/specs/2026-11-13-binder-2.2-design.md` (the later one wins where they differ), and they win over this file. Plans live in `docs/plans/`.
+A personal desktop dashboard for one developer: a task board for the owner and for a Claude Code agent on the home server, projects from GitHub with Obsidian notes, devices, the home server, two agent terminals on it (Agents), Cloud (a file manager over an SMB share on the server) and a Bambu 3D printer. The specs are `docs/specs/2026-11-13-binder-2-design.md`, `docs/specs/2026-11-13-binder-2.1-design.md` and `docs/specs/2026-11-13-binder-2.2-design.md` and `docs/specs/2026-11-14-binder-2.3-design.md` (the later one wins where they differ), and they win over this file. Plans live in `docs/plans/`.
 
 ## Working with the owner
 
@@ -15,10 +15,11 @@ A personal desktop dashboard for one developer: a task board for the owner and f
 crates/core/      Rust library, no Tauri: SQLite, tasks, projects, devices, notes, SSH runner (server status,
                   agent runs), git status, Bambu reports, Claude Code session summaries, hook install,
                   GitHub sync through `gh` (github.rs), Cloud file operations (cloud.rs), the Cloud fast path over
-                  SSH (cloud_fast.rs, on shell.rs)
+                  SSH (cloud_fast.rs, on shell.rs), the Agents' ssh and tmux command lines (agents.rs)
 crates/cli/       binder-cli: the Claude Code hook (`hook <event>`) and the detached `summarize <session>`
 app/src-tauri/    Tauri app: thin commands over the core, the printer MQTT workers (printer.rs), Cloud copies
-                  in flight (transfers.rs), "Open with" through Launch Services (apps.rs)
+                  in flight (transfers.rs), "Open with" through Launch Services (apps.rs), the Agents'
+                  pseudo-terminals (terminal.rs)
 app/src/          React + TypeScript + Tailwind interface
 site/             the website at binder.erenkahraman.dev: static HTML and assets, no build step
 ```
@@ -40,6 +41,7 @@ The interface talks to an `Api` interface: Tauri `invoke` in the app, an in-memo
 - **Fast path.** With a server set and a check passing (a token written over SMB and read back over SSH at `cloud_remote`, default `/srv/cloud`), folder uploads and downloads stream one tar, copies run `cp -a`, zips run `zip`/`unzip`, and sizes and free space are counted on the server. Every script is built with `remote::quote`. Without it everything runs over SMB (the `zip` crate for zips). Work writes to a `.binder-partial-<pid>-…` name and lands through the mount; partials of a dead process go to the trash as unfinished uploads.
 - **More than one disk.** The Pi's SD card is mounted inside Cloud at `SD/`. Through SMB the Mac sees one device for the whole share, so a disk shows only as EXDEV on a rename: an item goes to the `.trash` of its own disk (`SD/.trash`, listed in `.trash/.disks`), and a move across disks is a copy then a remove, in the transfer tray. `lost+found` is never listed.
 - GitHub sync runs `gh` with its own login on a second database connection, at start and on **Sync**. It only updates GitHub's facts on a project (URL, description, privacy, last push, language, archived), never the owner's edits, and never deletes. A GitHub project the owner deletes is remembered in `hidden_repos` and sync skips it until it's brought back.
+- **Agents.** Each terminal is a pseudo-terminal running the system `ssh -tt` into a fixed tmux session on the server, `binder-claude` (Claude Code) or `binder-qwen` (`docker exec -it ollama ollama run qwen3:4b`), with a login shell after the program so the session survives. Output bytes go to xterm.js untouched; `app/src/components/XtermView.tsx` is the only file that imports xterm. Quitting ends the local `ssh` only. On the server, Ollama runs from `~/apps/ollama`, and Claude Code's `~/.claude/settings.json` skips permission prompts behind a deny list; change that list only with the owner.
 - The website in `site/` runs on the home server in `~/sites/binder-site` (Caddy plus its own Cloudflare Tunnel, like the other sites there). To publish a change, `rsync -a --delete site/ <server>:sites/binder-site/public/`; Caddy serves it at once.
 
 ## Look
