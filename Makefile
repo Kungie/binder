@@ -10,6 +10,11 @@ SIDECAR := app/src-tauri/binaries/binder-cli-$(TRIPLE)
 
 # The private key that signs updates lives only in the Keychain; the app holds the public key.
 UPDATER_KEY := -s io.github.kungie.binder.updater -a release
+# The app is signed with this self-signed identity from the login Keychain, so its code identity stays the same
+# from one build to the next and macOS keeps its permissions (Local Network, Finder control) across updates.
+# Without it a build is signed ad hoc, and macOS sees every update as a new app.
+SIGN_ID := Binder Self-Signed
+SIGN = $(shell security find-certificate -c "$(SIGN_ID)" >/dev/null 2>&1 && echo "$(SIGN_ID)" || echo -)
 VERSION = $(shell node -p "require('./app/package.json').version")
 
 sidecar:
@@ -33,6 +38,7 @@ build: sidecar-release
 	npm --prefix app run tauri build -- --bundles app
 
 install: build
+	codesign --force --deep --sign "$(SIGN)" $(CARGO_TARGET_DIR)/release/bundle/macos/Binder.app
 	rm -rf /Applications/Binder.app
 	cp -R $(CARGO_TARGET_DIR)/release/bundle/macos/Binder.app /Applications/
 
@@ -40,8 +46,9 @@ install: build
 release-check:
 	@test -f build/notes.md || { echo "Write build/notes.md first."; exit 1; }
 	@security find-generic-password $(UPDATER_KEY) >/dev/null 2>&1 || { echo "No update signing key in the Keychain."; exit 1; }
+	@security find-certificate -c "$(SIGN_ID)" >/dev/null 2>&1 || { echo "No $(SIGN_ID) identity in the Keychain."; exit 1; }
 
-# Binder.dmg for a GitHub release: the app signed ad hoc as a whole (not notarized, so the first
+# Binder.dmg for a GitHub release: the app signed with $(SIGN_ID) as a whole (not notarized, so the first
 # launch needs Privacy & Security > Open Anyway) beside a link to /Applications, in a window laid out
 # by scripts/dmg.sh over app/dmg/background.tiff (drawn from background.svg by scripts/dmg-background.swift).
 # Next to it, the update Binder installs from Settings: the same app as a signed tarball, and latest.json.
@@ -49,7 +56,7 @@ release: release-check build
 	rm -rf $(CARGO_TARGET_DIR)/dmg build/Binder.dmg build/Binder.app.tar.gz build/Binder.app.tar.gz.sig build/latest.json
 	mkdir -p $(CARGO_TARGET_DIR)/dmg build
 	cp -R $(CARGO_TARGET_DIR)/release/bundle/macos/Binder.app $(CARGO_TARGET_DIR)/dmg/
-	codesign --force --deep --sign - $(CARGO_TARGET_DIR)/dmg/Binder.app
+	codesign --force --deep --sign "$(SIGN_ID)" $(CARGO_TARGET_DIR)/dmg/Binder.app
 	codesign --verify --deep --strict $(CARGO_TARGET_DIR)/dmg/Binder.app
 	ln -s /Applications $(CARGO_TARGET_DIR)/dmg/Applications
 	scripts/dmg.sh $(CARGO_TARGET_DIR)/dmg app/dmg/background.tiff build/Binder.dmg
