@@ -35,6 +35,13 @@ describe("Motion", () => {
     expect(next).toHaveClass("screen-in");
   });
 
+  it("a_screen_coming_in_never_scrolls_the_window", async () => {
+    setup();
+    await screen.findByTestId("screen");
+    // The screen rises from 6 px down: its frame clips that, so the window gets no scrollbar meanwhile.
+    expect(screen.getByRole("main")).toHaveClass("overflow-hidden");
+  });
+
   it("the_task_sheet_slides_in_and_out", async () => {
     motion(true);
     const { user } = setup("tasks");

@@ -66,7 +66,8 @@ export function Shell() {
   return (
     <div className="flex h-full">
       <Sidebar />
-      <main className="relative flex min-w-0 flex-1 flex-col">
+      {/* overflow-hidden: a screen rising in from a few pixels down must not give the window a scrollbar. */}
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="h-3 shrink-0" data-tauri-drag-region />
         {/* Keyed by screen, so each one arrives with its own animation. */}
         {screen !== "agents" && (
