@@ -5,3 +5,4 @@ app/dist/
 .superpowers/
 app/src-tauri/gen/
 app/src-tauri/binaries/
+build/

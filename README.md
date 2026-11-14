@@ -8,13 +8,12 @@
 
 <p align="center">
   <a href="https://github.com/Kungie/binder/releases/latest"><img src="https://img.shields.io/github/v/release/Kungie/binder?label=release&color=1c1c1f&labelColor=0b0b0c" alt="Latest release"></a>
-  <a href="https://github.com/Kungie/binder/releases"><img src="https://img.shields.io/github/downloads/Kungie/binder/total?label=downloads&color=1c1c1f&labelColor=0b0b0c" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20silicon-1c1c1f?labelColor=0b0b0c" alt="macOS on Apple silicon">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Kungie/binder?color=1c1c1f&labelColor=0b0b0c" alt="License"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Kungie/binder/releases/latest"><img src="https://img.shields.io/badge/Download%20for%20macOS-EDEDED?style=for-the-badge&logo=apple&logoColor=0b0b0c" alt="Download for macOS"></a>
+  <a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKungie%2Fbinder%2Fbadges%2Fdownloads.json" alt="Download for Mac (total downloads)"></a>
 </p>
 
 <p align="center">
@@ -41,6 +40,10 @@ Binder is mostly black and white, with a few colours that each mean something, k
   <img src="docs/screenshots/cloud.png" width="49%" alt="Cloud, a file manager over the home server">
   <img src="docs/screenshots/server.png" width="49%" alt="The home server: load, memory, disk, containers and services">
 </p>
+
+## Install
+
+Download `Binder.dmg` from the [latest release](https://github.com/Kungie/binder/releases/latest) and drag Binder into Applications. It runs on Apple silicon Macs. Binder isn't notarized, so the first launch needs System Settings › Privacy & Security › Open Anyway.
 
 ## Setup
 

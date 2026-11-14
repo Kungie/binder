@@ -242,7 +242,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "binder-app"
-version = "2.0.0"
+version = "2.2.0"
 dependencies = [
  "binder-core",
  "chrono",
@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "binder-cli"
-version = "2.0.0"
+version = "2.2.0"
 dependencies = [
  "binder-core",
  "chrono",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "binder-core"
-version = "2.0.0"
+version = "2.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
