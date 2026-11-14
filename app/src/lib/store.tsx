@@ -1,10 +1,13 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "./api";
-import type { AppInfo, GithubSync, NewProject, UpdateInfo, NewTask, Project, ProjectPatch, Status, Task, TaskPatch, TaskView } from "./types";
+import type { AppInfo, GithubSync, InstallProgress, NewProject, UpdateInfo, NewTask, Project, ProjectPatch, Status, Task, TaskPatch, TaskView } from "./types";
 
 export type Screen = "overview" | "tasks" | "projects" | "devices" | "server" | "agents" | "cloud" | "printer" | "settings";
 
 export type UpdateState = { kind: "idle" } | { kind: "checking" } | { kind: "current" } | { kind: "available"; info: UpdateInfo } | { kind: "failed" };
+
+/** An install kept here, not in the panel, so leaving Settings doesn't lose it. */
+export type InstallState = { kind: "idle" } | { kind: "working"; progress: InstallProgress | null } | { kind: "failed" };
 
 export interface Store {
   api: Api;
@@ -44,6 +47,9 @@ export interface Store {
   update: UpdateState;
   /** Asks GitHub for a newer release. Quiet: a failure goes back to idle and shows nothing. */
   checkUpdate(quiet: boolean): Promise<void>;
+  install: InstallState;
+  /** Downloads and installs the update; the app restarts when it lands. */
+  installUpdate(): Promise<void>;
   /** Whether a Cloud copy is in flight. */
   transferring: boolean;
 }
@@ -57,17 +63,21 @@ const Ctx = createContext<Store | null>(null);
 
 /** How long after the window opens Binder looks for an update. */
 const UPDATE_DELAY = 5000;
+/** A check that hasn't answered by then counts as failed. */
+const CHECK_TIMEOUT = 30_000;
 
 export function StoreProvider({
   api,
   children,
   initialScreen = "overview",
   updateDelay = UPDATE_DELAY,
+  checkTimeout = CHECK_TIMEOUT,
 }: {
   api: Api;
   children: ReactNode;
   initialScreen?: Screen;
   updateDelay?: number;
+  checkTimeout?: number;
 }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -87,6 +97,7 @@ export function StoreProvider({
   const [syncing, setSyncing] = useState(false);
   const [app, setApp] = useState<AppInfo | null>(null);
   const [update, setUpdate] = useState<UpdateState>({ kind: "idle" });
+  const [install, setInstall] = useState<InstallState>({ kind: "idle" });
   const [running, setRunning] = useState<ReadonlySet<number>>(new Set());
   const checked = useRef(false);
 
@@ -94,14 +105,24 @@ export function StoreProvider({
     async (quiet: boolean) => {
       setUpdate({ kind: "checking" });
       try {
-        const info = await api.checkUpdate();
+        const late = new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("No answer.")), checkTimeout));
+        const info = await Promise.race([api.checkUpdate(), late]);
         setUpdate(info ? { kind: "available", info } : { kind: "current" });
       } catch {
         setUpdate(quiet ? { kind: "idle" } : { kind: "failed" });
       }
     },
-    [api],
+    [api, checkTimeout],
   );
+
+  const installUpdate = useCallback(async () => {
+    setInstall({ kind: "working", progress: null });
+    try {
+      await api.installUpdate((progress) => setInstall({ kind: "working", progress }));
+    } catch {
+      setInstall({ kind: "failed" });
+    }
+  }, [api]);
 
   // Once, a few seconds after the window opens, and never in a development build.
   useEffect(() => {
@@ -211,9 +232,11 @@ export function StoreProvider({
       app,
       update,
       checkUpdate,
+      install,
+      installUpdate,
       transferring: running.size > 0,
     }),
-    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub, app, update, checkUpdate, running],
+    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub, app, update, checkUpdate, install, installUpdate, running],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

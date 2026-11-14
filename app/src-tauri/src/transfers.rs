@@ -82,6 +82,13 @@ impl Transfers {
         self.flags.lock().unwrap().len()
     }
 
+    /// Blocks until no copy is running, looking every `every`.
+    pub fn wait_idle(&self, every: Duration) {
+        while self.running() > 0 {
+            std::thread::sleep(every);
+        }
+    }
+
     /// Asks a transfer to stop. Unknown or finished ids are ignored.
     pub fn cancel(&self, id: u64) {
         if let Some(flag) = self.flags.lock().unwrap().get(&id) {
@@ -115,6 +122,26 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert_eq!(transfers.running(), 0);
+    }
+
+    #[test]
+    fn wait_idle_returns_once_copies_end() {
+        let transfers = Arc::new(Transfers::default());
+        let (go, wait) = mpsc::channel::<()>();
+        let wait = Mutex::new(wait);
+        transfers.spawn("a.bin".into(), Unit::Bytes, |_| {}, move |_, _| {
+            let _ = wait.lock().unwrap().recv();
+            Ok(())
+        });
+        let (done_tx, done_rx) = mpsc::channel();
+        let t = transfers.clone();
+        std::thread::spawn(move || {
+            t.wait_idle(Duration::from_millis(10));
+            done_tx.send(()).unwrap();
+        });
+        assert!(done_rx.recv_timeout(Duration::from_millis(200)).is_err(), "returned while a copy ran");
+        go.send(()).unwrap();
+        assert!(done_rx.recv_timeout(Duration::from_secs(2)).is_ok());
     }
 
     #[test]

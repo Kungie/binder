@@ -5,11 +5,11 @@ import { Shell } from "../App";
 import { type MemoryOptions, demoSeed, memoryApi } from "../lib/memory";
 import { StoreProvider } from "../lib/store";
 
-function setup(options: MemoryOptions = {}) {
+function setup(options: MemoryOptions = {}, checkTimeout?: number) {
   const api = memoryApi(demoSeed(), options);
   const user = userEvent.setup();
   render(
-    <StoreProvider api={api} initialScreen="settings" updateDelay={60_000}>
+    <StoreProvider api={api} initialScreen="settings" updateDelay={60_000} checkTimeout={checkTimeout}>
       <Shell />
     </StoreProvider>,
   );
@@ -80,6 +80,37 @@ describe("Settings › Binder", () => {
     expect(screen.getByText("Wait for the Cloud transfer to finish.")).toBeInTheDocument();
     act(() => api.emitTransfer({ id: 7, name: "big.mov", unit: "bytes", done: 10, total: 10, state: "done", error: null }));
     expect(screen.getByRole("button", { name: "Install and restart" })).toBeEnabled();
+  });
+
+  it("leaving Settings keeps the install going", async () => {
+    const installGate = () => new Promise<void>(() => {});
+    const { user } = setup({ update: { version: "2.5.0", notes: "" }, installGate });
+    await screen.findByText("Version 2.4.0");
+    await check(user);
+    await user.click(await screen.findByRole("button", { name: "Install and restart" }));
+    await screen.findByRole("button", { name: "Downloading 42%" });
+    await user.click(screen.getByRole("button", { name: "Overview" }));
+    await user.click(screen.getByRole("button", { name: /^Settings/ }));
+    expect(await screen.findByRole("button", { name: "Downloading 42%" })).toBeDisabled();
+  });
+
+  it("a copy started during the download shows the wait line", async () => {
+    const installGate = () => new Promise<void>(() => {});
+    const { api, user } = setup({ update: { version: "2.5.0", notes: "" }, installGate });
+    await screen.findByText("Version 2.4.0");
+    await check(user);
+    await user.click(await screen.findByRole("button", { name: "Install and restart" }));
+    await screen.findByRole("button", { name: "Downloading 42%" });
+    act(() => api.emitTransfer({ id: 8, name: "big.mov", unit: "bytes", done: 1, total: 10, state: "running", error: null }));
+    expect(screen.getByText("Wait for the Cloud transfer to finish.")).toBeInTheDocument();
+  });
+
+  it("a check that hangs gives up", async () => {
+    const { user } = setup({ updateHang: true }, 50);
+    await screen.findByText("Version 2.4.0");
+    await check(user);
+    expect(await screen.findByText("Couldn't check for updates.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check for updates" })).toBeEnabled();
   });
 
   it("development builds show no button", async () => {

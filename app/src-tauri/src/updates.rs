@@ -5,7 +5,26 @@ use crate::AppState;
 use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tauri_plugin_updater::UpdaterExt;
+
+static INSTALLING: AtomicBool = AtomicBool::new(false);
+
+/// Held while an update installs, so a second press can't start another.
+pub struct InstallGuard;
+
+impl InstallGuard {
+    pub fn take() -> Option<InstallGuard> {
+        INSTALLING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).ok().map(|_| InstallGuard)
+    }
+}
+
+impl Drop for InstallGuard {
+    fn drop(&mut self) {
+        INSTALLING.store(false, Ordering::SeqCst);
+    }
+}
 
 #[derive(Serialize)]
 pub struct AppInfo {
@@ -50,7 +69,8 @@ pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> 
 }
 
 /// Downloads the update, checks its signature against the key in `tauri.conf.json`, replaces the app and
-/// restarts into it. Refuses while a Cloud copy runs, so no copy ends halfway.
+/// restarts into it. Refuses while a Cloud copy runs, and waits for any copy started during the download,
+/// so no copy ends halfway. One install at a time.
 #[tauri::command]
 pub async fn update_install(app: AppHandle, state: State<'_, AppState>, progress: Channel<InstallProgress>) -> Result<(), String> {
     if cfg!(debug_assertions) {
@@ -59,13 +79,19 @@ pub async fn update_install(app: AppHandle, state: State<'_, AppState>, progress
     if state.transfers.running() > 0 {
         return Err("Wait for the Cloud transfer to finish.".into());
     }
+    let _guard = InstallGuard::take().ok_or("An update is already installing.")?;
     let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?.ok_or("No update.")?;
     let mut done = 0u64;
-    update
-        .download_and_install(
+    let mut last = None;
+    let bytes = update
+        .download(
             |chunk, total| {
                 done += chunk as u64;
-                let _ = progress.send(InstallProgress::Downloading { percent: percent(done, total) });
+                let p = percent(done, total);
+                if last != Some(p) {
+                    last = Some(p);
+                    let _ = progress.send(InstallProgress::Downloading { percent: p });
+                }
             },
             || {
                 let _ = progress.send(InstallProgress::Installing);
@@ -73,6 +99,10 @@ pub async fn update_install(app: AppHandle, state: State<'_, AppState>, progress
         )
         .await
         .map_err(|e| e.to_string())?;
+    // A copy started during the download finishes before the app is replaced and restarts.
+    let transfers = state.transfers.clone();
+    tauri::async_runtime::spawn_blocking(move || transfers.wait_idle(Duration::from_millis(500))).await.map_err(|e| e.to_string())?;
+    update.install(bytes).map_err(|e| e.to_string())?;
     // As quitting does: the local ssh processes end, the tmux sessions on the server stay.
     state.terminals.close_all();
     app.restart()
@@ -81,6 +111,14 @@ pub async fn update_install(app: AppHandle, state: State<'_, AppState>, progress
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_second_install_is_refused_until_the_first_ends() {
+        let first = InstallGuard::take().expect("first");
+        assert!(InstallGuard::take().is_none());
+        drop(first);
+        assert!(InstallGuard::take().is_some());
+    }
 
     #[test]
     fn percent_needs_a_total() {

@@ -38,6 +38,8 @@ export interface MemoryOptions {
   updateFail?: "check" | "install";
   /** A development build, which never updates. */
   dev?: boolean;
+  /** The update check never answers. */
+  updateHang?: boolean;
   /** Awaited after each install step, so a test can look in between. */
   installGate?: () => Promise<void>;
 }
@@ -224,6 +226,7 @@ export function memoryApi(
     },
     async checkUpdate() {
       if (options.updateFail === "check") throw new Error("Network is unreachable.");
+      if (options.updateHang) return new Promise<never>(() => {});
       return options.update ?? null;
     },
     async installUpdate(onProgress) {

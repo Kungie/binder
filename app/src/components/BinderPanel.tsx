@@ -1,13 +1,9 @@
-import { useState } from "react";
 import { plainText } from "../lib/plain";
-import { useStore } from "../lib/store";
-import type { InstallProgress } from "../lib/types";
+import { type InstallState, useStore } from "../lib/store";
 import { Panel } from "./Panel";
 import { Button } from "./ui";
 
-type Install = { kind: "idle" } | { kind: "working"; progress: InstallProgress | null } | { kind: "failed" };
-
-function installLabel(install: Install): string {
+function installLabel(install: InstallState): string {
   if (install.kind !== "working" || !install.progress) return install.kind === "working" ? "Downloading…" : "Install and restart";
   const p = install.progress;
   if (p.kind === "installing") return "Installing…";
@@ -16,18 +12,8 @@ function installLabel(install: Install): string {
 
 /** The running version and updates from GitHub releases. First in Settings. */
 export function BinderPanel() {
-  const { api, app, update, checkUpdate, transferring } = useStore();
-  const [install, setInstall] = useState<Install>({ kind: "idle" });
+  const { app, update, checkUpdate, install, installUpdate, transferring } = useStore();
   if (!app) return null;
-
-  const start = async () => {
-    setInstall({ kind: "working", progress: null });
-    try {
-      await api.installUpdate((progress) => setInstall({ kind: "working", progress }));
-    } catch {
-      setInstall({ kind: "failed" });
-    }
-  };
   const working = install.kind === "working";
 
   return (
@@ -49,10 +35,10 @@ export function BinderPanel() {
             <p>Binder {update.info.version} is available.</p>
             {update.info.notes.trim() && <p className="line-clamp-6 whitespace-pre-line text-text-2">{plainText(update.info.notes)}</p>}
             <div className="flex items-center gap-2">
-              <Button variant="primary" disabled={working || transferring} onClick={() => void start()}>
+              <Button variant="primary" disabled={working || transferring} onClick={() => void installUpdate()}>
                 {installLabel(install)}
               </Button>
-              {transferring && !working && <span className="text-text-2">Wait for the Cloud transfer to finish.</span>}
+              {transferring && <span className="text-text-2">Wait for the Cloud transfer to finish.</span>}
             </div>
             {install.kind === "failed" && <p className="text-bad">The update couldn't be installed.</p>}
           </div>
