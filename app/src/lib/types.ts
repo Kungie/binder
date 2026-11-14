@@ -176,6 +176,9 @@ export interface ServerStatus {
   temp_c: number | null;
   /** The Pi board's draw in watts, from its PMIC; null when it has none. */
   power_w: number | null;
+  /** The SD card inside Cloud, when it is a disk of its own. */
+  sd_size: number | null;
+  sd_used: number | null;
   /** From nproc; 0 when unknown. */
   cores: number;
   at: number;
@@ -378,3 +381,18 @@ export interface UpdateInfo {
 }
 
 export type InstallProgress = { kind: "downloading"; percent: number | null } | { kind: "installing" };
+
+/** One of the processes using the most CPU or memory on the server. */
+export interface TopProcess {
+  name: string;
+  cpu: number;
+  /** Share of memory, in percent. */
+  mem: number;
+  rss_mb: number;
+}
+
+/** One of the largest folders on the server's disks. */
+export interface TopFolder {
+  path: string;
+  bytes: number;
+}

@@ -1,7 +1,7 @@
 //! What runs on the home server: containers, services, load, memory, disk and temperature, read in one SSH call.
 
 use crate::Result;
-use crate::remote::Remote;
+use crate::remote::{Remote, quote};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,6 +32,9 @@ pub struct ServerStatus {
     pub cores: u32,
     /// The Pi 5's board draw in watts, from its PMIC; `None` on other servers.
     pub power_w: Option<f32>,
+    /// The SD card inside Cloud, when it is a disk of its own.
+    pub sd_size: Option<u64>,
+    pub sd_used: Option<u64>,
     pub at: i64,
 }
 
@@ -47,8 +50,13 @@ echo --binder:power--; vcgencmd pmic_read_adc 2>/dev/null
 exit 0
 "#;
 
-pub fn fetch(remote: &dyn Remote, now: i64) -> Result<ServerStatus> {
-    let out = remote.run(SCRIPT, None)?;
+/// One call for everything on the Server screen. `sd` is the SD card's mount point inside Cloud, if any.
+pub fn fetch(remote: &dyn Remote, now: i64, sd: Option<&str>) -> Result<ServerStatus> {
+    let script = match sd {
+        Some(sd) => SCRIPT.replace("exit 0\n", &format!("echo --binder:sd--; df -B1 --output=target,size,used {} 2>/dev/null\nexit 0\n", quote(sd))),
+        None => SCRIPT.to_string(),
+    };
+    let out = remote.run(&script, None)?;
     let part = |name: &str| section(&out, name);
     let (mem_total, mem_available) = parse_meminfo(part("mem"));
     let (disk_size, disk_used) = parse_df(part("disk"));
@@ -63,6 +71,8 @@ pub fn fetch(remote: &dyn Remote, now: i64) -> Result<ServerStatus> {
         temp_c: parse_temp(part("temp")),
         cores: parse_cores(part("cores")),
         power_w: parse_power(part("power")),
+        sd_size: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(s, _)| s),
+        sd_used: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(_, u)| u),
         at: now,
     })
 }
@@ -146,4 +156,89 @@ pub fn parse_power(s: &str) -> Option<f32> {
     }
     let pairs: Vec<f32> = rails.values().filter_map(|(a, v)| Some((*a)? * (*v)?)).collect();
     (!pairs.is_empty()).then(|| pairs.iter().sum())
+}
+
+/// (size, used) from `df --output=target,size,used`, only when the mount point is `path` itself: a folder
+/// that isn't a disk of its own would count the disk it sits on twice.
+pub fn parse_mount(s: &str, path: &str) -> Option<(u64, u64)> {
+    let line = s.lines().filter(|l| !l.trim().is_empty()).nth(1)?;
+    let w: Vec<&str> = line.split_whitespace().collect();
+    let [.., size, used] = w.as_slice() else { return None };
+    let (size, used) = (size.parse().ok()?, used.parse().ok()?);
+    let target = w[..w.len() - 2].join(" ");
+    (target == path.trim_end_matches('/')).then_some((size, used))
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TopProcess {
+    pub name: String,
+    pub cpu: f32,
+    /// Share of memory, in percent.
+    pub mem: f32,
+    pub rss_mb: u64,
+}
+
+/// The 10 processes using the most CPU, or the most memory.
+pub fn processes(remote: &dyn Remote, by_memory: bool) -> Result<Vec<TopProcess>> {
+    let sort = if by_memory { "-rss" } else { "-pcpu" };
+    let out = remote.run(&format!("echo --binder:ps--\nps -eo comm=,pcpu=,pmem=,rss= --sort={sort} 2>/dev/null | head -n 10\nexit 0\n"), None)?;
+    Ok(section(&out, "ps")
+        .lines()
+        .filter_map(|l| {
+            // The name may hold spaces; the last three words are the numbers.
+            let w: Vec<&str> = l.split_whitespace().collect();
+            let [.., cpu, mem, rss] = w.as_slice() else { return None };
+            let (cpu, mem, rss): (f32, f32, u64) = (cpu.parse().ok()?, mem.parse().ok()?, rss.parse().ok()?);
+            let name = w[..w.len() - 3].join(" ");
+            if name.is_empty() {
+                return None;
+            }
+            Some(TopProcess { name, cpu, mem, rss_mb: rss / 1024 })
+        })
+        .collect())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TopFolder {
+    pub path: String,
+    pub bytes: u64,
+}
+
+/// The 10 largest folders two levels down each root, each disk counted once (`du -x`).
+pub fn folders(remote: &dyn Remote, roots: &[&str]) -> Result<Vec<TopFolder>> {
+    let du: Vec<String> = roots.iter().map(|r| format!("timeout 60 du -x -B1 -d2 {} 2>/dev/null", quote(r))).collect();
+    let out = remote.run(&format!("echo --binder:du--\n{}\nexit 0\n", du.join("\n")), None)?;
+    Ok(parse_folders(section(&out, "du"), roots))
+}
+
+/// `du` lines as the largest folders: the roots themselves go, and so does a folder whose sub-folder on the
+/// same disk is also listed, so each one says where the space really is.
+pub fn parse_folders(out: &str, roots: &[&str]) -> Vec<TopFolder> {
+    let root_of = |p: &str| -> usize {
+        roots
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| **r == "/" || p == **r || p.starts_with(&format!("{r}/")))
+            .max_by_key(|(_, r)| r.len())
+            .map_or(usize::MAX, |(i, _)| i)
+    };
+    let all: Vec<TopFolder> = out
+        .lines()
+        .filter_map(|l| {
+            let (bytes, path) = l.split_once('\t')?;
+            Some(TopFolder { path: path.trim().to_string(), bytes: bytes.trim().parse().ok()? })
+        })
+        .filter(|f| !roots.contains(&f.path.as_str()))
+        .collect();
+    let mut keep: Vec<TopFolder> = all
+        .iter()
+        .filter(|f| {
+            let prefix = format!("{}/", f.path.trim_end_matches('/'));
+            !all.iter().any(|g| g.path.starts_with(&prefix) && root_of(&g.path) == root_of(&f.path))
+        })
+        .cloned()
+        .collect();
+    keep.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    keep.truncate(10);
+    keep
 }

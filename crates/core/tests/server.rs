@@ -39,7 +39,7 @@ fn parses_load_mem_disk_temp() {
 #[test]
 fn fetch_splits_sections_from_one_call() {
     let r = FakeRemote::new(vec![Ok(FULL.to_string())]);
-    let s = fetch(&r, 1_700_000_000).unwrap();
+    let s = fetch(&r, 1_700_000_000, None).unwrap();
     assert_eq!(r.seen.borrow().len(), 1);
     assert_eq!((s.containers.len(), s.services.len(), s.at), (2, 3, 1_700_000_000));
     assert_eq!(s.disk_used, 50840000000);
@@ -57,7 +57,7 @@ fn parses_cores() {
 #[test]
 fn missing_docker_is_empty_not_error() {
     let out = "--binder:docker--\n--binder:services--\n--binder:load--\n0.1 0.2 0.3 1/2 3\n--binder:mem--\n--binder:disk--\n--binder:temp--\n";
-    let s = fetch(&FakeRemote::new(vec![Ok(out.into())]), 0).unwrap();
+    let s = fetch(&FakeRemote::new(vec![Ok(out.into())]), 0, None).unwrap();
     assert!(s.containers.is_empty() && s.services.is_empty());
     assert_eq!((s.mem_total, s.disk_size, s.temp_c), (0, 0, None));
     assert_eq!(s.load, [0.1, 0.2, 0.3]);
@@ -66,7 +66,7 @@ fn missing_docker_is_empty_not_error() {
 #[test]
 fn unreachable_is_remote_error() {
     let r = FakeRemote::new(vec![Err(Error::Remote("Can't reach lab".into()))]);
-    assert!(matches!(fetch(&r, 0), Err(Error::Remote(_))));
+    assert!(matches!(fetch(&r, 0, None), Err(Error::Remote(_))));
 }
 
 const PMIC: &str = include_str!("fixtures/server/pmic.txt");
@@ -85,8 +85,73 @@ fn power_is_none_without_pairs() {
 
 #[test]
 fn status_reads_power_and_survives_without_it() {
-    let s = fetch(&FakeRemote::new(vec![Ok(FULL.into())]), 1).unwrap();
+    let s = fetch(&FakeRemote::new(vec![Ok(FULL.into())]), 1, None).unwrap();
     assert!((s.power_w.unwrap() - 4.50).abs() < 0.01);
     let without = FULL[..FULL.find("--binder:power--").unwrap()].to_string();
-    assert_eq!(fetch(&FakeRemote::new(vec![Ok(without)]), 1).unwrap().power_w, None);
+    assert_eq!(fetch(&FakeRemote::new(vec![Ok(without)]), 1, None).unwrap().power_w, None);
+}
+
+const SD: &str = "/srv/cloud/SD";
+
+fn with_sd(df: &str) -> String {
+    format!("{FULL}--binder:sd--\n{df}")
+}
+
+#[test]
+fn sd_is_read_when_it_is_its_own_mount() {
+    let r = FakeRemote::new(vec![Ok(with_sd("Mounted on       1B-blocks         Used\n/srv/cloud/SD 127000000000 31000000000\n"))]);
+    let s = fetch(&r, 1, Some(SD)).unwrap();
+    assert_eq!((s.sd_size, s.sd_used), (Some(127_000_000_000), Some(31_000_000_000)));
+    assert!(r.seen.borrow()[0].0.contains(&binder_core::remote::quote(SD)));
+}
+
+#[test]
+fn sd_not_a_mount_is_left_out() {
+    let r = FakeRemote::new(vec![Ok(with_sd("Mounted on 1B-blocks Used\n/ 1000000000000 400000000000\n"))]);
+    let s = fetch(&r, 1, Some(SD)).unwrap();
+    assert_eq!((s.sd_size, s.sd_used), (None, None));
+    let none = fetch(&FakeRemote::new(vec![Ok(FULL.into())]), 1, None).unwrap();
+    assert_eq!(none.sd_size, None);
+}
+
+#[test]
+fn processes_parse_names_with_spaces() {
+    let r = FakeRemote::new(vec![Ok(format!("--binder:ps--\n{}", include_str!("fixtures/server/ps-cpu.txt")))]);
+    let p = processes(&r, false).unwrap();
+    assert_eq!(p.len(), 3);
+    assert_eq!((p[0].name.as_str(), p[0].cpu, p[0].mem, p[0].rss_mb), ("ollama", 41.2, 12.5, 1024));
+    assert_eq!((p[1].name.as_str(), p[1].rss_mb), ("kworker/u8:2 something", 1));
+    assert!(r.seen.borrow()[0].0.contains("--sort=-pcpu"));
+}
+
+#[test]
+fn processes_ask_ps_by_memory() {
+    let r = FakeRemote::new(vec![Ok("--binder:ps--\n".into())]);
+    assert!(processes(&r, true).unwrap().is_empty());
+    assert!(r.seen.borrow()[0].0.contains("--sort=-rss"));
+}
+
+#[test]
+fn folders_keep_the_deepest_largest_first() {
+    let f = parse_folders(include_str!("fixtures/server/du.txt"), &["/", SD]);
+    let got: Vec<(&str, u64)> = f.iter().map(|f| (f.path.as_str(), f.bytes)).collect();
+    assert_eq!(
+        got,
+        vec![
+            ("/srv/cloud", 590_000_000_000),
+            ("/home/demo", 150_000_000_000),
+            ("/srv/cloud/SD/photos", 70_000_000_000),
+            ("/var/lib", 30_000_000_000),
+            ("/srv/cloud/SD/films", 20_000_000_000),
+            ("/var/empty", 5000),
+        ]
+    );
+}
+
+#[test]
+fn folders_quote_their_roots() {
+    let r = FakeRemote::new(vec![Ok("--binder:du--\n".into())]);
+    folders(&r, &["/", "/srv/my disk"]).unwrap();
+    let script = r.seen.borrow()[0].0.clone();
+    assert!(script.contains("'/srv/my disk'") && script.contains("du -x -B1 -d2"), "{script}");
 }

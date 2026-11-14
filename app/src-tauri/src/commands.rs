@@ -178,7 +178,7 @@ fn server_target(state: &State<AppState>) -> Res<String> {
 #[tauri::command]
 pub async fn server_status(state: State<'_, AppState>) -> Res<ServerStatus> {
     let target = server_target(&state)?;
-    server::fetch(&SshRemote::new(target), now()).map_err(text)
+    server::fetch(&SshRemote::new(target), now(), None).map_err(text)
 }
 
 #[tauri::command]
