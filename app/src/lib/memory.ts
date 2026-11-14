@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { Agent, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { Agent, AppInfo, Transfer, UpdateInfo, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -32,6 +32,14 @@ export interface MemoryOptions {
   offline?: string[];
   /** When set, the agents' terminals fail to connect with this line. */
   termFail?: string;
+  /** The newer release the update check finds. Defaults to none. */
+  update?: UpdateInfo | null;
+  /** Makes the update check or the install fail. */
+  updateFail?: "check" | "install";
+  /** A development build, which never updates. */
+  dev?: boolean;
+  /** Awaited after each install step, so a test can look in between. */
+  installGate?: () => Promise<void>;
 }
 
 const FOLD: Record<string, string> = { ş: "S", Ş: "S", ı: "I", İ: "I", ğ: "G", Ğ: "G", ü: "U", Ü: "U", ö: "O", Ö: "O", ç: "C", Ç: "C" };
@@ -67,6 +75,10 @@ export function memoryApi(
   dropFiles(paths: string[], x?: number, y?: number): void;
   /** Mac paths each native drag started with. */
   dragged: string[][];
+  /** Sends a Cloud transfer event. */
+  emitTransfer(t: Transfer): void;
+  /** Whether an update was installed. */
+  readonly installed: boolean;
 } {
   const tasks = seed.tasks.map((t) => ({ ...t }));
   const projects = seed.projects.map((p) => ({ ...p }));
@@ -91,6 +103,7 @@ export function memoryApi(
   const terms = new Map<Agent, (bytes: Uint8Array) => void>();
   const encoder = new TextEncoder();
   const copied: string[] = [];
+  let installed = false;
   async function openTerm(agent: Agent, onData: (bytes: Uint8Array) => void) {
     if (!config.server) throw new Error("No server set.");
     if (options.termFail) throw new Error(options.termFail);
@@ -205,6 +218,26 @@ export function memoryApi(
     },
     onTermExit() {
       return () => {};
+    },
+    async appInfo(): Promise<AppInfo> {
+      return { version: "2.4.0", updates: !options.dev };
+    },
+    async checkUpdate() {
+      if (options.updateFail === "check") throw new Error("Network is unreachable.");
+      return options.update ?? null;
+    },
+    async installUpdate(onProgress) {
+      const gate = options.installGate ?? (async () => {});
+      onProgress({ kind: "downloading", percent: 42 });
+      await gate();
+      if (options.updateFail === "install") throw new Error("The signature doesn't match.");
+      onProgress({ kind: "downloading", percent: 100 });
+      onProgress({ kind: "installing" });
+      await gate();
+      installed = true;
+    },
+    get installed() {
+      return installed;
     },
     done,
     printerCommands,

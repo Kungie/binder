@@ -356,3 +356,19 @@ export interface Transfer {
 
 /** The Agents screen's two chats, each a tmux session on the home server. */
 export type Agent = "claude" | "qwen";
+
+/** The running app, as the updater sees it. */
+export interface AppInfo {
+  version: string;
+  /** False in development builds, which never update. */
+  updates: boolean;
+}
+
+/** A newer release on GitHub. */
+export interface UpdateInfo {
+  version: string;
+  /** The release notes, as written (Markdown). */
+  notes: string;
+}
+
+export type InstallProgress = { kind: "downloading"; percent: number | null } | { kind: "installing" };

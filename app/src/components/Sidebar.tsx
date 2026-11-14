@@ -4,7 +4,25 @@ import { isClosed } from "../lib/types";
 import { ProjectDot } from "./ProjectDot";
 import { MascotMark } from "./Mascot";
 
-function Item({ active, onClick, icon, children, count, dot }: { active: boolean; onClick(): void; icon: ReactNode; children: ReactNode; count?: number; dot?: boolean }) {
+function Item({
+  active,
+  onClick,
+  icon,
+  children,
+  count,
+  dot,
+  dotLabel = "Needs attention",
+  dotTone = "urgent",
+}: {
+  active: boolean;
+  onClick(): void;
+  icon: ReactNode;
+  children: ReactNode;
+  count?: number;
+  dot?: boolean;
+  dotLabel?: string;
+  dotTone?: "urgent" | "online";
+}) {
   return (
     <button
       type="button"
@@ -16,7 +34,7 @@ function Item({ active, onClick, icon, children, count, dot }: { active: boolean
     >
       <span className="flex w-4 justify-center text-text-3">{icon}</span>
       <span className="truncate">{children}</span>
-      {dot && <span role="img" aria-label="Needs attention" className="ml-auto size-1.5 shrink-0 rounded-full bg-urgent" />}
+      {dot && <span role="img" aria-label={dotLabel} className={`ml-auto size-1.5 shrink-0 rounded-full ${dotTone === "online" ? "bg-ok" : "bg-urgent"}`} />}
       {count !== undefined && <span className={`${dot ? "" : "ml-auto "}font-mono text-[11px] text-text-3`}>{count}</span>}
     </button>
   );
@@ -40,7 +58,7 @@ const NAV: { screen: Screen; label: string; d: string }[] = [
 ];
 
 export function Sidebar() {
-  const { screen, setScreen, tasks, projects, openProject, selectedProject } = useStore();
+  const { screen, setScreen, tasks, projects, openProject, selectedProject, update } = useStore();
   const open = tasks.filter((t) => !isClosed(t.status)).length;
   const attention = tasks.some((t) => t.attention);
   return (
@@ -73,7 +91,13 @@ export function Sidebar() {
           ))}
       </div>
       <div className="mt-auto">
-        <Item active={screen === "settings"} onClick={() => setScreen("settings")} icon={<Glyph d="M5.74 2.89L6.01 1.39h1.98l.27 1.5A4.3 4.3 0 0 1 9.93 3.86l1.44-.52.99 1.71-1.17.98a4.3 4.3 0 0 1 0 1.94l1.17.98-.99 1.71-1.44-.52a4.3 4.3 0 0 1-1.67.97l-.27 1.5H6.01l-.27-1.5a4.3 4.3 0 0 1-1.67-.97l-1.44.52-.99-1.71 1.17-.98a4.3 4.3 0 0 1 0-1.94L1.64 5.05l.99-1.71 1.44.52a4.3 4.3 0 0 1 1.67-.97zM7 5.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6z" />}>
+        <Item
+          active={screen === "settings"}
+          onClick={() => setScreen("settings")}
+          dot={update.kind === "available"}
+          dotLabel="Update available"
+          dotTone="online"
+          icon={<Glyph d="M5.74 2.89L6.01 1.39h1.98l.27 1.5A4.3 4.3 0 0 1 9.93 3.86l1.44-.52.99 1.71-1.17.98a4.3 4.3 0 0 1 0 1.94l1.17.98-.99 1.71-1.44-.52a4.3 4.3 0 0 1-1.67.97l-.27 1.5H6.01l-.27-1.5a4.3 4.3 0 0 1-1.67-.97l-1.44.52-.99-1.71 1.17-.98a4.3 4.3 0 0 1 0-1.94L1.64 5.05l.99-1.71 1.44.52a4.3 4.3 0 0 1 1.67-.97zM7 5.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6z" />}>
           Settings
         </Item>
       </div>

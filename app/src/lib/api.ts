@@ -33,6 +33,9 @@ import type {
   Space,
   Transfer,
   TrashEntry,
+  AppInfo,
+  UpdateInfo,
+  InstallProgress,
 } from "./types";
 import { demoSeed, memoryApi } from "./memory";
 
@@ -141,6 +144,11 @@ export interface Api {
   copyText(text: string): Promise<void>;
   /** A terminal's ssh ended, with one line saying why. */
   onTermExit(cb: (agent: Agent, message: string) => void): () => void;
+  appInfo(): Promise<AppInfo>;
+  /** The newer release, or null when Binder is up to date. */
+  checkUpdate(): Promise<UpdateInfo | null>;
+  /** Downloads, checks and installs the update, then the app restarts. */
+  installUpdate(onProgress: (p: InstallProgress) => void): Promise<void>;
 }
 
 export interface Dropped {
@@ -274,6 +282,13 @@ export const tauriApi: Api = {
   termResize: (agent, cols, rows) => call("term_resize", { agent, cols, rows }),
   termReconnect: (agent, cols, rows, onData) => call("term_reconnect", { agent, cols, rows, output: bytesChannel(onData) }),
   copyText: (text) => call("copy_text", { text }),
+  appInfo: () => call("app_info"),
+  checkUpdate: () => call("update_check"),
+  installUpdate: (onProgress) => {
+    const progress = new Channel<InstallProgress>();
+    progress.onmessage = onProgress;
+    return call("update_install", { progress });
+  },
   onTermExit: (cb) => subscribe<{ agent: Agent; message: string }>("term-exit", (e) => cb(e.agent, e.message)),
 };
 

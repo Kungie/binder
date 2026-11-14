@@ -1,8 +1,10 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "./api";
-import type { GithubSync, NewProject, NewTask, Project, ProjectPatch, Status, Task, TaskPatch, TaskView } from "./types";
+import type { AppInfo, GithubSync, NewProject, UpdateInfo, NewTask, Project, ProjectPatch, Status, Task, TaskPatch, TaskView } from "./types";
 
 export type Screen = "overview" | "tasks" | "projects" | "devices" | "server" | "agents" | "cloud" | "printer" | "settings";
+
+export type UpdateState = { kind: "idle" } | { kind: "checking" } | { kind: "current" } | { kind: "available"; info: UpdateInfo } | { kind: "failed" };
 
 export interface Store {
   api: Api;
@@ -37,6 +39,13 @@ export interface Store {
   /** Cloud items copied or cut, kept while the app runs. */
   cloudClipboard: CloudClipboard | null;
   setCloudClipboard(c: CloudClipboard | null): void;
+  /** The running app; null until it answers. */
+  app: AppInfo | null;
+  update: UpdateState;
+  /** Asks GitHub for a newer release. Quiet: a failure goes back to idle and shows nothing. */
+  checkUpdate(quiet: boolean): Promise<void>;
+  /** Whether a Cloud copy is in flight. */
+  transferring: boolean;
 }
 
 export interface CloudClipboard {
@@ -46,7 +55,20 @@ export interface CloudClipboard {
 
 const Ctx = createContext<Store | null>(null);
 
-export function StoreProvider({ api, children, initialScreen = "overview" }: { api: Api; children: ReactNode; initialScreen?: Screen }) {
+/** How long after the window opens Binder looks for an update. */
+const UPDATE_DELAY = 5000;
+
+export function StoreProvider({
+  api,
+  children,
+  initialScreen = "overview",
+  updateDelay = UPDATE_DELAY,
+}: {
+  api: Api;
+  children: ReactNode;
+  initialScreen?: Screen;
+  updateDelay?: number;
+}) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [screen, setScreen] = useState<Screen>(initialScreen);
@@ -63,6 +85,49 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
   const [cloudClipboard, setCloudClipboard] = useState<CloudClipboard | null>(null);
   const [github, setGithub] = useState<GithubSync | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [app, setApp] = useState<AppInfo | null>(null);
+  const [update, setUpdate] = useState<UpdateState>({ kind: "idle" });
+  const [running, setRunning] = useState<ReadonlySet<number>>(new Set());
+  const checked = useRef(false);
+
+  const checkUpdate = useCallback(
+    async (quiet: boolean) => {
+      setUpdate({ kind: "checking" });
+      try {
+        const info = await api.checkUpdate();
+        setUpdate(info ? { kind: "available", info } : { kind: "current" });
+      } catch {
+        setUpdate(quiet ? { kind: "idle" } : { kind: "failed" });
+      }
+    },
+    [api],
+  );
+
+  // Once, a few seconds after the window opens, and never in a development build.
+  useEffect(() => {
+    let timer: number | undefined;
+    void api.appInfo().then((info) => {
+      setApp(info);
+      if (!info.updates || checked.current) return;
+      checked.current = true;
+      timer = window.setTimeout(() => void checkUpdate(true), updateDelay);
+    });
+    return () => window.clearTimeout(timer);
+  }, [api, checkUpdate, updateDelay]);
+
+  useEffect(
+    () =>
+      api.onTransfer((t) =>
+        setRunning((s) => {
+          if ((t.state === "running") === s.has(t.id)) return s;
+          const next = new Set(s);
+          if (t.state === "running") next.add(t.id);
+          else next.delete(t.id);
+          return next;
+        }),
+      ),
+    [api],
+  );
 
   const reload = useCallback(async () => {
     const [t, p] = await Promise.all([api.listTasks({ kind: "all" }, true), api.listProjects()]);
@@ -143,8 +208,12 @@ export function StoreProvider({ api, children, initialScreen = "overview" }: { a
       github,
       syncing,
       syncGithub,
+      app,
+      update,
+      checkUpdate,
+      transferring: running.size > 0,
     }),
-    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub],
+    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub, app, update, checkUpdate, running],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

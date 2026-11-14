@@ -335,6 +335,8 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
     async cloudCancel(id: number) {
       cancelled.add(id);
     },
+    /** Sends a transfer event, as a copy in flight would. */
+    emitTransfer: emit,
     onTransfer(cb: (t: Transfer) => void) {
       transferListeners.add(cb);
       return () => void transferListeners.delete(cb);
