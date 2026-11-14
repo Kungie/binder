@@ -12,6 +12,7 @@ import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
 import { minutes, STATE_LABEL, temp, usePrinters } from "../lib/usePrinters";
 import { ago } from "../lib/time";
+import { useVault } from "../lib/useVault";
 import { loadPercent } from "../lib/load";
 import type { CloudEntry, CloudStatus } from "../lib/types";
 import { Empty } from "../components/Mascot";
@@ -88,8 +89,12 @@ export function Overview() {
 
 /** Today's done lines across projects, newest first, scrolling inside the panel. */
 function DoneToday({ items }: { items: DoneItem[] }) {
+  const { connected } = useVault();
   return (
-    <Panel className="flex min-h-0 flex-col" title="Done today" action={<span className="font-mono text-[11px] text-text-3">{items.length}</span>}>
+    <Panel label="Done today" className="flex min-h-0 flex-col" title="Done today" action={<span className="font-mono text-[11px] text-text-3">{items.length}</span>}>
+      {connected === false && (
+        <p className="border-t border-line px-3 py-2 text-[12px] text-text-3">Vault not connected. Older lines come back when it is.</p>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ul aria-label="Done today" className="border-t border-line">
           {items.map((d, i) => (

@@ -7,9 +7,9 @@ import { demoSeed, memoryApi } from "../lib/memory";
 import { localDay } from "../lib/tasks";
 import type { DoneLine } from "../lib/types";
 
-function setup(done: Record<number, DoneLine[]>) {
+function setup(done: Record<number, DoneLine[]>, vaultConnected = true) {
   const seed = { ...demoSeed(), done };
-  const api = memoryApi(seed);
+  const api = memoryApi(seed, { vaultConnected });
   render(
     <StoreProvider api={api} initialScreen="overview">
       <Shell />
@@ -22,6 +22,19 @@ const day = localDay();
 const at = (time: string, text: string, date = day): DoneLine => ({ date, time, text });
 
 describe("Done today", () => {
+  it("says_when_the_vault_isnt_connected", async () => {
+    setup({}, false);
+    const panel = await screen.findByRole("region", { name: "Done today" });
+    expect(await within(panel).findByText("Vault not connected. Older lines come back when it is.")).toBeInTheDocument();
+  });
+
+  it("says_nothing_about_the_vault_when_it_is_there", async () => {
+    setup({});
+    const panel = await screen.findByRole("region", { name: "Done today" });
+    await within(panel).findByText("Nothing logged today.");
+    expect(within(panel).queryByText(/Vault not connected/)).toBeNull();
+  });
+
   it("done today shows time, project dot and text, newest first", async () => {
     const { seed } = setup({ 1: [at("09:10", "Early one."), at("08:00", "Yesterday.", "2000-01-01")], 2: [at("15:30", "Late one.")] });
     const list = await screen.findByRole("list", { name: "Done today" });
