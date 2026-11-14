@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Shell } from "../App";
@@ -125,6 +125,28 @@ describe("Cloud", () => {
     await user.type(input, "Receipts{Enter}");
     await waitFor(() => expect(names()).toContain("Receipts"));
     expect(names()).not.toContain("Taxes");
+  });
+
+  it("name_fields_keep_macos_text_suggestions_away", async () => {
+    const { user } = await setup();
+    await ready();
+    await user.click(row("README.md"));
+    await user.keyboard("{Enter}");
+    // WebKit's autocorrect bubble takes Enter and Escape, and rewrites the name; file names want none of it.
+    const input = screen.getByRole("textbox", { name: "Rename README.md" });
+    for (const [attr, value] of [["autocorrect", "off"], ["autocapitalize", "off"], ["autocomplete", "off"], ["spellcheck", "false"], ["writingsuggestions", "false"]]) {
+      expect(input).toHaveAttribute(attr, value);
+    }
+  });
+
+  it("a_composing_enter_doesnt_finish_the_rename", async () => {
+    const { user } = await setup();
+    await ready();
+    await user.click(row("README.md"));
+    await user.keyboard("{Enter}");
+    const input = screen.getByRole("textbox", { name: "Rename README.md" });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(screen.getByRole("textbox", { name: "Rename README.md" })).toBeInTheDocument();
   });
 
   it("a drop of cloud paths on a folder moves them", async () => {

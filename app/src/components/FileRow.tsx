@@ -49,8 +49,16 @@ export function NameInput({ label, initial, onDone }: { label: string; initial: 
       value={name}
       onChange={(e) => setName(e.target.value)}
       onClick={(e) => e.stopPropagation()}
+      // macOS text suggestions (autocorrect, inline predictions) take Enter and Escape in WebKit and rewrite the name.
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize="off"
+      spellCheck={false}
+      {...{ writingsuggestions: "false" }}
       onKeyDown={(e) => {
         e.stopPropagation();
+        // An Enter that ends a composition (an accent, a suggestion) belongs to the input method, not the rename.
+        if (e.nativeEvent.isComposing) return;
         if (e.key === "Enter") finish(name.trim() && name !== initial ? name : null);
         if (e.key === "Escape") finish(null);
       }}
