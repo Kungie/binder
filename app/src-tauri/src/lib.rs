@@ -3,6 +3,7 @@ mod commands;
 mod printer;
 mod terminal;
 mod transfers;
+mod updates;
 
 use binder_core::{Db, config::Config};
 use std::path::PathBuf;
@@ -89,6 +90,9 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            updates::app_info,
+            updates::update_check,
+            updates::update_install,
             commands::list_tasks,
             commands::create_task,
             commands::update_task,

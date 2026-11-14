@@ -77,6 +77,11 @@ impl Transfers {
         id
     }
 
+    /// How many copies are still running.
+    pub fn running(&self) -> usize {
+        self.flags.lock().unwrap().len()
+    }
+
     /// Asks a transfer to stop. Unknown or finished ids are ignored.
     pub fn cancel(&self, id: u64) {
         if let Some(flag) = self.flags.lock().unwrap().get(&id) {
@@ -93,6 +98,24 @@ fn text(e: Error) -> String {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    #[test]
+    fn running_counts_transfers_in_flight() {
+        let transfers = Arc::new(Transfers::default());
+        let (go, wait) = mpsc::channel::<()>();
+        let wait = Mutex::new(wait);
+        transfers.spawn("a.bin".into(), Unit::Bytes, |_| {}, move |_, _| {
+            let _ = wait.lock().unwrap().recv();
+            Ok(())
+        });
+        assert_eq!(transfers.running(), 1);
+        go.send(()).unwrap();
+        let end = std::time::Instant::now() + Duration::from_secs(2);
+        while transfers.running() > 0 && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(transfers.running(), 0);
+    }
 
     #[test]
     fn cancel_flag_stops_a_running_transfer() {
