@@ -112,3 +112,50 @@ describe("Server", () => {
     expect(await screen.findByText("load 37%")).toBeInTheDocument();
   });
 });
+
+describe("What uses the server", () => {
+  it("load_lists_processes_by_cpu", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Load" }));
+    const list = await screen.findByRole("region", { name: "Processes by CPU" });
+    expect(within(list).getAllByRole("row")[1]).toHaveTextContent("ollama");
+    expect(screen.getByRole("button", { name: "Load" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("memory_lists_processes_by_memory", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Memory" }));
+    const list = await screen.findByRole("region", { name: "Processes by memory" });
+    expect(within(list).getAllByRole("row")[1]).toHaveTextContent("1024");
+  });
+
+  it("pressing_again_closes", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Load" }));
+    await screen.findByRole("region", { name: "Processes by CPU" });
+    await user.click(screen.getByRole("button", { name: "Load" }));
+    expect(screen.queryByRole("region", { name: "Processes by CPU" })).toBeNull();
+  });
+
+  it("disk_lists_folders", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Disk" }));
+    const list = await screen.findByRole("region", { name: "Largest folders" });
+    expect(within(list).getAllByRole("row")[1]).toHaveTextContent("/srv/cloud");
+  });
+
+  it("disk_box_adds_the_sd_card", async () => {
+    const seed = demoSeed().server!;
+    const used = seed.disk_used + seed.sd_used!;
+    const total = seed.disk_size + seed.sd_size!;
+    setup();
+    const disk = await screen.findByRole("group", { name: `Disk: ${Math.round((used / total) * 100)}%` });
+    expect(disk).toHaveTextContent("SSD and SD card");
+  });
+
+  it("disk_box_without_sd_is_as_before", async () => {
+    setup({}, (s) => ((s.sd_size = null), (s.sd_used = null)));
+    const disk = await screen.findByRole("group", { name: /^Disk:/ });
+    expect(disk).not.toHaveTextContent("SD card");
+  });
+});

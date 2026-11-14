@@ -1,3 +1,4 @@
+import { DiskBars, useSdSpace } from "../components/DiskBars";
 import { useEffect, useState } from "react";
 import { Dot, Metric } from "../components/Metric";
 import { Panel } from "../components/Panel";
@@ -10,7 +11,6 @@ import { clock, useServer } from "../lib/useServer";
 import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
 import { minutes, usePrinters } from "../lib/usePrinters";
-import { bytes } from "../lib/format";
 import { ago } from "../lib/time";
 import { loadPercent } from "../lib/load";
 import type { CloudEntry, CloudStatus } from "../lib/types";
@@ -131,6 +131,7 @@ function CloudPanel() {
     };
   }, [api]);
   const space = status?.space;
+  const sd = useSdSpace(status?.mounted ?? false);
   return (
     <Panel
       title="Cloud"
@@ -145,12 +146,7 @@ function CloudPanel() {
         {!status?.mounted ? (
           <span className="text-text-3">Not connected</span>
         ) : (
-          space && (
-            <>
-              <span className="font-mono text-[11px] text-text-2">{`${bytes(space.free)} free of ${bytes(space.total)}`}</span>
-              <Progress value={space.total ? ((space.total - space.free) / space.total) * 100 : 0} label="Cloud space used" />
-            </>
-          )
+          <DiskBars ssd={space ?? null} sd={sd} />
         )}
       </div>
       {recent.length > 0 && (

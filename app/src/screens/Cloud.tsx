@@ -1,11 +1,10 @@
+import { DiskBars, useSdSpace } from "../components/DiskBars";
 import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { FileInfo } from "../components/FileInfo";
 import { FileRow, KindIcon, NameInput } from "../components/FileRow";
 import { FolderPicker } from "../components/FolderPicker";
-import { Progress } from "../components/Progress";
 import { Button, Notice } from "../components/ui";
-import { bytes } from "../lib/format";
 import { pickApp, pickFiles, pickFolder } from "../lib/pick";
 import { type Selection, all, click, empty, move as moveSel } from "../lib/selection";
 import { useStore } from "../lib/store";
@@ -46,19 +45,6 @@ function NotConnected({ status }: { status: CloudStatus | null }) {
         </Button>
       </div>
       {error && <p className="text-[12px] text-urgent">{error}</p>}
-    </div>
-  );
-}
-
-/** Space on the disk of the folder on screen: the SD card inside Cloud is a disk of its own. */
-function SpaceBar({ space }: { space: Space | null }) {
-  if (!space) return null;
-  const { total, free } = space;
-  const used = total ? ((total - free) / total) * 100 : 0;
-  return (
-    <div className="flex w-48 flex-col gap-1">
-      <span className="text-right font-mono text-[11px] text-text-3">{`${bytes(free)} free of ${bytes(total)}`}</span>
-      <Progress value={used} label="Space used" />
     </div>
   );
 }
@@ -166,6 +152,7 @@ export function Cloud() {
   const [picking, setPicking] = useState<string[] | null>(null);
   const table = useRef<HTMLTableElement>(null);
   const mounted = status?.mounted ?? false;
+  const sd = useSdSpace(mounted);
 
   const refreshStatus = useCallback(() => api.cloudStatus().then(setStatus, () => setStatus(null)), [api]);
   useEffect(() => {
@@ -431,7 +418,9 @@ export function Cloud() {
           ))}
         </nav>
         <div className="ml-auto">
-          <SpaceBar space={space ?? status?.space ?? null} />
+          <div className="w-56">
+            <DiskBars ssd={status?.space ?? space} sd={sd} />
+          </div>
         </div>
       </header>
       <div className="flex h-10 shrink-0 items-center gap-2 px-5">

@@ -378,7 +378,7 @@ describe("Cloud", () => {
     expect(within(trash).queryByRole("button", { name: /Restore/ })).toBeNull();
   });
 
-  it("the space bar shows the disk of the folder on screen", async () => {
+  it("bars_show_both_disks_in_any_folder", async () => {
     const seed = demoSeed();
     seed.cloud!.entries.push({ name: "SD", rel: "SD", kind: "dir", size: 0, modified: 1 });
     const api = memoryApi(seed);
@@ -390,8 +390,25 @@ describe("Cloud", () => {
     );
     await ready();
     expect(await screen.findByText(/free of 2 TB/)).toBeInTheDocument();
-    await enter(user, "SD");
     expect(await screen.findByText(/free of 29 GB/)).toBeInTheDocument();
+    await enter(user, "SD");
+    expect(screen.getByText(/free of 2 TB/)).toBeInTheDocument();
+    expect(screen.getByText("SSD")).toBeInTheDocument();
+    expect(screen.getByText("SD card")).toBeInTheDocument();
+  });
+
+  it("overview_shows_ssd_and_sd_bars", async () => {
+    const seed = demoSeed();
+    seed.cloud!.entries.push({ name: "SD", rel: "SD", kind: "dir", size: 0, modified: 1 });
+    render(
+      <StoreProvider api={memoryApi(seed)} initialScreen="overview">
+        <Shell />
+      </StoreProvider>,
+    );
+    const panel = await screen.findByRole("region", { name: "Cloud" });
+    expect(await within(panel).findByText(/free of 29 GB/)).toBeInTheDocument();
+    expect(within(panel).getByText("SSD")).toBeInTheDocument();
+    expect(within(panel).getByText("SD card")).toBeInTheDocument();
   });
 
   it("the tray counts files for a zip", async () => {

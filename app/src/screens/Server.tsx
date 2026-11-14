@@ -1,14 +1,17 @@
 import { Dot, Metric } from "../components/Metric";
+import { type TopKind, TopList } from "../components/TopList";
 import { Panel } from "../components/Panel";
 import { ServerTargetForm } from "../components/ServerTargetForm";
 import { Button, Notice } from "../components/ui";
 import { useState } from "react";
 import { loadPercent } from "../lib/load";
-import type { Service } from "../lib/types";
+import type { ServerStatus, Service } from "../lib/types";
 import { clock, gb, percent, useServer } from "../lib/useServer";
 
 export function Server() {
   const { target, status, error, refresh } = useServer(30_000);
+  const [open, setOpen] = useState<TopKind | null>(null);
+  const toggle = (k: TopKind) => setOpen((o) => (o === k ? null : k));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -45,16 +48,19 @@ export function Server() {
           {status && (
             <>
               <div className={`grid grid-cols-5 gap-3 ${error ? "opacity-60" : ""}`}>
-                <LoadMetric load={status.load} cores={status.cores} />
+                <LoadMetric load={status.load} cores={status.cores} onClick={() => toggle("cpu")} pressed={open === "cpu"} />
                 <Metric
                   title="Memory"
                   value={percent(status.mem_total - status.mem_available, status.mem_total)}
                   detail={`${gb(status.mem_total - status.mem_available)} of ${gb(status.mem_total)} GB`}
+                  onClick={() => toggle("memory")}
+                  pressed={open === "memory"}
                 />
-                <Metric title="Disk" value={percent(status.disk_used, status.disk_size)} detail={`${gb(status.disk_used)} of ${gb(status.disk_size)} GB`} />
+                <DiskMetric status={status} onClick={() => toggle("disk")} pressed={open === "disk"} />
                 <Metric title="Temperature" value={status.temp_c === null ? "None" : `${status.temp_c.toFixed(0)}°C`} />
                 <Metric title="Power" value={status.power_w === null ? "None" : `${status.power_w.toFixed(1)} W`} detail="Pi board" />
               </div>
+              {open && <TopList kind={open} />}
               <div className={`grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start gap-3 ${error ? "opacity-60" : ""}`}>
                 <Containers status={status} />
                 <Services services={status.services} />
@@ -102,10 +108,18 @@ function Containers({ status }: { status: NonNullable<ReturnType<typeof useServe
 export const SERVICES_SHOWN = 13;
 
 /** The 1-minute load over the cores, with 5 and 15 minutes under it; the raw numbers without a core count. */
-function LoadMetric({ load, cores }: { load: [number, number, number]; cores: number }) {
+/** The SSD and the SD card together, when the SD card is a disk of its own. */
+function DiskMetric({ status, onClick, pressed }: { status: ServerStatus; onClick(): void; pressed: boolean }) {
+  const sd = status.sd_size !== null && status.sd_used !== null;
+  const used = status.disk_used + (sd ? status.sd_used! : 0);
+  const total = status.disk_size + (sd ? status.sd_size! : 0);
+  return <Metric title="Disk" value={percent(used, total)} detail={`${gb(used)} of ${gb(total)} GB${sd ? ", SSD and SD card" : ""}`} onClick={onClick} pressed={pressed} />;
+}
+
+function LoadMetric({ load, cores, onClick, pressed }: { load: [number, number, number]; cores: number; onClick(): void; pressed: boolean }) {
   const pct = loadPercent(load[0], cores);
-  if (pct === null) return <Metric title="Load" value={load[0].toFixed(2)} detail={`${load[1].toFixed(2)}  ${load[2].toFixed(2)}`} />;
-  return <Metric title="Load" value={pct} detail={`5 min ${loadPercent(load[1], cores)}  15 min ${loadPercent(load[2], cores)}`} />;
+  if (pct === null) return <Metric title="Load" value={load[0].toFixed(2)} detail={`${load[1].toFixed(2)}  ${load[2].toFixed(2)}`} onClick={onClick} pressed={pressed} />;
+  return <Metric title="Load" value={pct} detail={`5 min ${loadPercent(load[1], cores)}  15 min ${loadPercent(load[2], cores)}`} onClick={onClick} pressed={pressed} />;
 }
 
 /** Running services: the first 13, then all of them on request. The count stays the total. */
