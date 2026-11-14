@@ -26,6 +26,7 @@ pub enum Error {
     CrossDisk,
 }
 
+pub mod agents;
 pub mod agent;
 pub mod cloud;
 pub mod cloud_fast;
