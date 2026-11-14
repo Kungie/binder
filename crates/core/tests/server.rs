@@ -155,3 +155,19 @@ fn folders_quote_their_roots() {
     let script = r.seen.borrow()[0].0.clone();
     assert!(script.contains("'/srv/my disk'") && script.contains("du -x -B1 -d2"), "{script}");
 }
+
+#[test]
+fn a_failed_docker_read_is_marked() {
+    let s = fetch(&FakeRemote::new(vec![Ok("--binder:docker--\n--binder:docker-failed--\n--binder:load--\n0.1 0.2 0.3 1/2 3\n".into())]), 0, None).unwrap();
+    assert!(s.docker_failed);
+    assert!(s.containers.is_empty());
+    let ok = fetch(&FakeRemote::new(vec![Ok("--binder:docker--\n--binder:load--\n0.1 0.2 0.3 1/2 3\n".into())]), 0, None).unwrap();
+    assert!(!ok.docker_failed, "no containers at all is not a failure");
+}
+
+#[test]
+fn the_docker_read_says_when_it_fails() {
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    fetch(&r, 0, None).unwrap();
+    assert!(r.seen.borrow()[0].0.contains("|| echo --binder:docker-failed--"));
+}

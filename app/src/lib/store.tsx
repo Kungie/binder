@@ -175,8 +175,14 @@ export function StoreProvider({
     [api],
   );
 
-  // A container alert brings the Server screen up, so the window opens on it.
-  useEffect(() => api.onWatchAlert(() => setScreen("server")), [api]);
+  // A container alert brings the Server screen up, so the window opens on it; not while the owner works in it.
+  useEffect(
+    () =>
+      api.onWatchAlert(() => {
+        if (!document.hasFocus()) setScreen("server");
+      }),
+    [api],
+  );
 
   // The app reads and starts agent runs in the background; the board follows.
   useEffect(() => api.onTasksChanged(() => void reload()), [api, reload]);

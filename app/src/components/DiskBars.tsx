@@ -4,7 +4,10 @@ import { useStore } from "../lib/store";
 import type { Space } from "../lib/types";
 import { Progress } from "./Progress";
 
-/** The SD card's space, when the share has an SD card of its own: only the fast path can tell its disk apart. */
+/**
+ * The SD card's space, when the share has an SD card of its own: only the fast path can tell its disk apart. An SD
+ * folder with no card in it reports the SSD's own space, so a space equal to the share's is no card.
+ */
 export function useSdSpace(mounted: boolean): Space | null {
   const { api } = useStore();
   const [sd, setSd] = useState<Space | null>(null);
@@ -15,7 +18,9 @@ export function useSdSpace(mounted: boolean): Space | null {
       const fast = await api.cloudFastPath().catch(() => "smb");
       const root = fast === "ssh" ? await api.cloudList("", false).catch(() => []) : [];
       const space = root.some((e) => e.rel === "SD" && e.kind === "dir") ? await api.cloudSpace("SD").catch(() => null) : null;
-      if (live) setSd(space);
+      const ssd = space ? await api.cloudSpace("").catch(() => null) : null;
+      const same = space && ssd && space.total === ssd.total && space.free === ssd.free;
+      if (live) setSd(same ? null : space);
     })();
     return () => {
       live = false;

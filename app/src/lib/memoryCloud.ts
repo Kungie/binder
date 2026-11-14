@@ -7,6 +7,8 @@ export interface CloudSeed {
   trash?: TrashEntry[];
   /** What each zip holds, paths relative to the zip's folder. */
   zips?: Record<string, CloudEntry[]>;
+  /** False: the SD folder is only a folder on the SSD, with no card mounted on it. */
+  sdCard?: boolean;
 }
 
 const SD: Space = { total: 29e9, free: 21e9 };
@@ -279,7 +281,7 @@ export function memoryCloud(seed: CloudSeed | undefined, opts: { mounted: () => 
     },
     async cloudSpace(rel: string): Promise<Space> {
       mounted();
-      if (under(rel, "SD")) return { ...SD };
+      if (under(rel, "SD") && seed?.sdCard !== false) return { ...SD };
       const used = entries.reduce((s, e) => s + e.size, 0);
       return { total: 2e12, free: 2e12 - used - 600e9 };
     },

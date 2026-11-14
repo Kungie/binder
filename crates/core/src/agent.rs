@@ -190,16 +190,22 @@ pub fn poll_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Res
     get_run(&db, run)
 }
 
-/// Stops a live run and everything it started.
+/// Stops a live run and everything it started; a queued night run leaves the queue. Either way the task is no
+/// longer a night task, so the queue doesn't take it again.
 pub fn stop_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Result<AgentRun> {
     let r = get_run(&lock(db), run)?;
     if r.ended.is_some() {
         return Ok(r);
     }
-    let f = files(run);
-    remote.run(&format!("kill -- -\"$(cat {f}.pid)\" 2>/dev/null\nexit 0\n"), None)?;
+    let script = if r.queued {
+        format!("rm -f \"$HOME\"/.binder-agent/night/{}\nexit 0\n", quote(&format!("{run}.job")))
+    } else {
+        format!("kill -- -\"$(cat {}.pid)\" 2>/dev/null\nexit 0\n", files(run))
+    };
+    remote.run(&script, None)?;
     let mut db = lock(db);
-    db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3 WHERE run = ?1 AND ended IS NULL", params![run, now, STOPPED])?;
+    db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3, queued = 0 WHERE run = ?1 AND ended IS NULL", params![run, now, STOPPED])?;
     set_status(&mut db, r.task_id, Status::Todo, now)?;
+    db.update_task(r.task_id, TaskPatch { night: Some(false), ..Default::default() }, now)?;
     get_run(&db, run)
 }

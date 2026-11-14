@@ -5,7 +5,7 @@
 use crate::agent::{self, Access, AgentRun};
 use crate::model::Status;
 use crate::remote::{Remote, quote};
-use crate::{Db, Result};
+use crate::{Db, Error, Result};
 use rusqlite::params;
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -15,25 +15,39 @@ pub const MARK: &str = "# binder-night";
 const LINE: &str = "0 3 * * * \"$HOME\"/.binder-agent/night.sh # binder-night";
 
 /// `~/.binder-agent/night.sh`. Each job is a few `name=value` lines Binder wrote with every value quoted;
-/// its prompt is `<run>.prompt` next to the day runs' files.
+/// its prompt is `<run>.prompt` next to the day runs' files. The lock is `flock` on a file, so a reboot or a
+/// killed script can't leave it held. A job starts in a session of its own, as a day run does, so Stop can end
+/// it, and only while no day run is going.
 pub const SCRIPT: &str = r#"#!/bin/sh
 # Binder's night queue: the jobs in ~/.binder-agent/night, oldest first, one at a time, from 03:00 to 07:00.
 PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-q="$HOME/.binder-agent/night"
+d="$HOME/.binder-agent"
+q="$d/night"
 awake() { case "$(date +%H)" in 03|04|05|06) return 0 ;; *) return 1 ;; esac; }
+busy() {
+  for p in "$d"/*.pid; do
+    [ -f "$p" ] || continue
+    [ -f "${p%.pid}.exit" ] && continue
+    kill -0 "$(cat "$p" 2>/dev/null)" 2>/dev/null && return 0
+  done
+  return 1
+}
 awake || exit 0
-mkdir "$q/.running" 2>/dev/null || exit 0
-trap 'rmdir "$q/.running"' EXIT
-for job in $(ls -tr "$q"/*.job 2>/dev/null); do
-  awake || break
-  [ -f "$job" ] || continue
+mkdir -p "$q"
+exec 9>"$q/.lock"
+flock -n 9 || exit 0
+while awake; do
+  job=$(ls -tr "$q"/*.job 2>/dev/null | head -n 1)
+  [ -n "$job" ] || break
+  if busy; then sleep 60; continue; fi
+  text=$(cat "$job" 2>/dev/null) || continue
   run=$(basename "$job" .job)
-  f="$HOME/.binder-agent/$run"
+  f="$d/$run"
   dir=""; flag=""
-  . "$job"
-  rm -f "$job"
-  ( cd "$dir" && claude -p $flag < "$f.prompt" > "$f.log" 2>&1; echo $? > "$f.exit" ) &
+  eval "$text"
+  setsid sh -c 'cd "$1" && claude -p $2 < "$3.prompt" > "$3.log" 2>&1; echo $? > "$3.exit"' night "$dir" "$flag" "$f" 9>&- &
   echo $! > "$f.pid"
+  rm -f "$job"
   wait $!
 done
 "#;
@@ -42,10 +56,26 @@ fn after<'a>(out: &'a str, marker: &str) -> &'a str {
     out.rsplit_once(marker).map_or("", |(_, a)| a)
 }
 
-fn crontab(remote: &dyn Remote) -> Result<String> {
-    let out = remote.run("echo --binder:crontab--\ncrontab -l 2>/dev/null\nexit 0\n", None)?;
-    Ok(after(&out, "--binder:crontab--\n").to_string())
+/// Reads the crontab. "No crontab" is an empty one; any other failure is an error, so Binder never writes a
+/// crontab over one it couldn't read.
+const READ: &str = "echo --binder:crontab--\nif out=$(crontab -l 2>&1); then printf '%s\\n' \"$out\"; else case \"$out\" in *'no crontab'*) ;; *) echo --binder:crontab-failed-- ;; esac; fi\nexit 0\n";
+
+fn read_tab(out: &str) -> Result<String> {
+    if out.contains("--binder:script-failed--") {
+        return Err(Error::Remote("Couldn't write night.sh on the server.".into()));
+    }
+    if !out.contains("--binder:crontab--\n") || out.contains("--binder:crontab-failed--") {
+        return Err(Error::Remote("Couldn't read the crontab on the server.".into()));
+    }
+    Ok(after(out, "--binder:crontab--\n").to_string())
 }
+
+fn crontab(remote: &dyn Remote) -> Result<String> {
+    read_tab(&remote.run(READ, None)?)
+}
+
+/// Writes the crontab, keeping the one before it in `~/.binder-agent/crontab.bak`.
+const WRITE: &str = "mkdir -p \"$HOME\"/.binder-agent && crontab -l > \"$HOME\"/.binder-agent/crontab.bak 2>/dev/null\ncrontab -\n";
 
 fn lines(tab: &str) -> Vec<&str> {
     tab.lines().filter(|l| !l.trim().is_empty()).collect()
@@ -59,17 +89,19 @@ pub fn cron_state(remote: &dyn Remote) -> Result<bool> {
 /// Writes `night.sh` and adds Binder's line to the crontab, keeping every other line.
 pub fn cron_install(remote: &dyn Remote) -> Result<()> {
     let out = remote.run(
-        "mkdir -p \"$HOME\"/.binder-agent/night && cat > \"$HOME\"/.binder-agent/night.sh && chmod 755 \"$HOME\"/.binder-agent/night.sh\n\
-         echo --binder:crontab--\ncrontab -l 2>/dev/null\nexit 0\n",
+        &format!(
+            "{{ mkdir -p \"$HOME\"/.binder-agent/night && cat > \"$HOME\"/.binder-agent/night.sh && chmod 755 \"$HOME\"/.binder-agent/night.sh; }} || echo --binder:script-failed--\n{READ}"
+        ),
         Some(SCRIPT),
     )?;
-    let tab = after(&out, "--binder:crontab--\n");
+    let tab = read_tab(&out)?;
+    let tab = tab.as_str();
     if tab.lines().any(|l| l.contains(MARK)) {
         return Ok(());
     }
     let mut next: Vec<&str> = lines(tab);
     next.push(LINE);
-    remote.run("crontab -\n", Some(&format!("{}\n", next.join("\n"))))?;
+    remote.run(WRITE, Some(&format!("{}\n", next.join("\n"))))?;
     Ok(())
 }
 
@@ -81,7 +113,7 @@ pub fn cron_remove(remote: &dyn Remote) -> Result<()> {
     }
     let next: Vec<&str> = lines(&tab).into_iter().filter(|l| !l.contains(MARK)).collect();
     let body = if next.is_empty() { String::new() } else { format!("{}\n", next.join("\n")) };
-    remote.run("crontab -\n", Some(&body))?;
+    remote.run(WRITE, Some(&body))?;
     Ok(())
 }
 
@@ -127,8 +159,9 @@ pub fn sync(db: &Mutex<Db>, remote: &dyn Remote, now: i64) -> Result<()> {
         remote.run(&format!("rm -f {}\nexit 0\n", files.join(" ")), None)?;
     }
     {
+        // A dropped run whose job is gone was taken by night.sh: the poll reads it like any started run.
         let db = lock(db);
-        for run in &drop {
+        for run in drop.iter().filter(|r| on_server.contains(r)) {
             db.conn.execute("DELETE FROM agent_runs WHERE run = ?1 AND queued = 1", [run])?;
         }
     }
@@ -160,10 +193,17 @@ fn queue(db: &Mutex<Db>, remote: &dyn Remote, task_id: i64, dir: &str, now: i64)
     agent::get_run(&db, &run)
 }
 
-/// Removes every queued job and its run, for when the crontab line goes away.
+/// Removes every queued job and its run, for when the crontab line goes away. A run whose job night.sh
+/// already took is left for the poll to read.
 pub fn clear(db: &Mutex<Db>, remote: &dyn Remote) -> Result<()> {
-    remote.run("rm -f \"$HOME\"/.binder-agent/night/*.job\nexit 0\n", None)?;
-    lock(db).conn.execute("DELETE FROM agent_runs WHERE queued = 1 AND ended IS NULL", [])?;
+    let out = remote.run(
+        "echo --binder:jobs--\ncd \"$HOME\"/.binder-agent/night 2>/dev/null && ls -1 -- *.job 2>/dev/null && rm -f -- *.job\nexit 0\n",
+        None,
+    )?;
+    let db = lock(db);
+    for run in after(&out, "--binder:jobs--\n").lines().filter_map(|l| l.trim().strip_suffix(".job")) {
+        db.conn.execute("DELETE FROM agent_runs WHERE run = ?1 AND queued = 1 AND ended IS NULL", [run])?;
+    }
     Ok(())
 }
 

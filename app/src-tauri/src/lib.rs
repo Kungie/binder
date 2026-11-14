@@ -71,7 +71,11 @@ pub fn run() {
             let data = dir.clone();
             std::thread::spawn(move || commands::sync_and_tell(&handle, &data));
             commands::apply_zoom(app.handle());
-            background::start(app.handle());
+            // A development build shares binder.db and the server with the installed app, which already runs
+            // these: two would start the same task twice and send every alert twice.
+            if !cfg!(debug_assertions) {
+                background::start(app.handle());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

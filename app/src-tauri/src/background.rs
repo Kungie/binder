@@ -65,6 +65,8 @@ fn look(app: &AppHandle, watch: &mut Watch) {
         return;
     };
     let alerts = match server::fetch(&SshRemote::new(target), now(), Some(&sd)) {
+        // A failed `docker ps` says nothing about the containers: skip it rather than call them all removed.
+        Ok(status) if status.docker_failed => vec![],
         Ok(status) => watch.seen(&status.containers),
         Err(_) => watch.missed(),
     };

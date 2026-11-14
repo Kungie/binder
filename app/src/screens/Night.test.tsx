@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { Shell } from "../App";
 import { demoSeed, memoryApi } from "../lib/memory";
 import { type Screen, StoreProvider } from "../lib/store";
+import { runState } from "../components/AgentRun";
 
 function setup(initialScreen: Screen = "tasks") {
   const api = memoryApi(demoSeed());
@@ -76,5 +77,12 @@ describe("Settings › Claude Code", () => {
     expect(await screen.findByText("Runs at 03:00 on the server")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Remove" }));
     expect(await screen.findByText("Not set up")).toBeInTheDocument();
+  });
+});
+
+describe("A queued night run", () => {
+  it("reads_as_queued_not_running", () => {
+    const run = { id: 1, run: "orb-1-100", task_id: 1, dir: "~", access: "edits_only", started: 100, ended: null, exit_code: null, tail: "", queued: true } as const;
+    expect(runState(run)).toBe("Queued for tonight");
   });
 });

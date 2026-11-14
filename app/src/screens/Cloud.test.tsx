@@ -397,6 +397,21 @@ describe("Cloud", () => {
     expect(screen.getByText("SD card")).toBeInTheDocument();
   });
 
+  it("no_sd_bar_when_the_sd_folder_is_on_the_ssd", async () => {
+    const seed = demoSeed();
+    seed.cloud!.entries.push({ name: "SD", rel: "SD", kind: "dir", size: 0, modified: 1 });
+    seed.cloud!.sdCard = false;
+    render(
+      <StoreProvider api={memoryApi(seed)} initialScreen="overview">
+        <Shell />
+      </StoreProvider>,
+    );
+    const panel = await screen.findByRole("region", { name: "Cloud" });
+    expect(await within(panel).findByText("SSD")).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(within(panel).queryByText("SD card")).not.toBeInTheDocument();
+  });
+
   it("overview_shows_ssd_and_sd_bars", async () => {
     const seed = demoSeed();
     seed.cloud!.entries.push({ name: "SD", rel: "SD", kind: "dir", size: 0, modified: 1 });

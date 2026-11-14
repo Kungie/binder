@@ -25,7 +25,7 @@ fn one_alert_per_change() {
     let mut w = Watch::default();
     w.seen(&[c("db", "running", "Up 1 hour")]);
     let mut all = vec![];
-    for (state, status) in [("exited", "Exited (1) now"), ("exited", "Exited (1) 1 min"), ("running", "Up 3 seconds"), ("running", "Up 1 minute")] {
+    for (state, status) in [("exited", "Exited (1) now"), ("exited", "Exited (1) 1 min"), ("running", "Up 3 seconds"), ("running", "Up 1 minute"), ("running", "Up 2 minutes")] {
         all.extend(w.seen(&[c("db", state, status)]));
     }
     assert_eq!(all, vec![Alert::Stopped("db".into(), "Exited (1) now".into()), Alert::Running("db".into())]);
@@ -43,7 +43,10 @@ fn unhealthy_and_restarting() {
     let mut w = Watch::default();
     let first = w.seen(&[c("a", "running", "Up 5 minutes (unhealthy)"), c("b", "restarting", "Restarting (1) 4 seconds ago"), c("c", "running", "Up 1 hour (healthy)")]);
     assert_eq!(first, vec![Alert::Unhealthy("a".into(), "Up 5 minutes (unhealthy)".into()), Alert::Restarting("b".into(), "Restarting (1) 4 seconds ago".into())]);
-    assert_eq!(w.seen(&[c("a", "running", "Up 6 minutes (healthy)"), c("b", "restarting", "Restarting (1) 1 second ago"), c("c", "running", "Up 1 hour (healthy)")]), vec![Alert::Running("a".into())]);
+    let later = [c("a", "running", "Up 6 minutes (healthy)"), c("b", "restarting", "Restarting (1) 1 second ago"), c("c", "running", "Up 1 hour (healthy)")];
+    assert!(w.seen(&later).is_empty());
+    assert!(w.seen(&later).is_empty());
+    assert_eq!(w.seen(&later), vec![Alert::Running("a".into())], "back after three clean checks");
 }
 
 #[test]
@@ -67,4 +70,29 @@ fn titles_read_as_the_spec_says() {
     assert_eq!(Alert::Unreachable.title(), "Can't reach the server");
     assert_eq!(Alert::Back.title(), "The server is back");
     assert_eq!(Alert::Stopped("web".into(), "Exited (1)".into()).body(), "Exited (1)");
+}
+
+#[test]
+fn a_crash_loop_alerts_once() {
+    let mut w = Watch::default();
+    w.seen(&[c("api", "running", "Up 2 hours")]);
+    let mut all = vec![];
+    for _ in 0..4 {
+        for (state, status) in [("restarting", "Restarting (1) 2 seconds ago"), ("running", "Up 10 seconds"), ("exited", "Exited (1) 5 seconds ago")] {
+            all.extend(w.seen(&[c("api", state, status)]));
+        }
+    }
+    assert_eq!(all, vec![Alert::Restarting("api".into(), "Restarting (1) 2 seconds ago".into())]);
+}
+
+#[test]
+fn a_removed_container_that_returns_says_so() {
+    let mut w = Watch::default();
+    w.seen(&[c("web", "running", "Up 2 hours")]);
+    assert_eq!(w.seen(&[]), vec![Alert::Stopped("web".into(), "Removed".into())]);
+    assert!(w.seen(&[]).is_empty());
+    let up = [c("web", "running", "Up 1 minute")];
+    assert!(w.seen(&up).is_empty());
+    assert!(w.seen(&up).is_empty());
+    assert_eq!(w.seen(&up), vec![Alert::Running("web".into())]);
 }

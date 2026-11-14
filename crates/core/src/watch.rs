@@ -6,6 +6,9 @@ use std::collections::HashMap;
 
 /// Checks in a row that can't reach the server before it counts as down.
 const MISSES: u32 = 3;
+/// Clean checks in a row before a container in trouble counts as back, so a crash loop that is sometimes
+/// caught running doesn't send an alert each minute.
+const CLEAR: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Alert {
@@ -51,6 +54,8 @@ struct Seen {
     /// Seen running at some check, so stopping now is news.
     was_up: bool,
     trouble: Option<Trouble>,
+    /// Clean checks in a row while still counted in trouble.
+    clean: u32,
 }
 
 #[derive(Debug, Default)]
@@ -89,20 +94,33 @@ impl Watch {
         let mut next = HashMap::new();
         for c in containers {
             let before = self.containers.remove(&c.name).unwrap_or_default();
-            let now = trouble(c, before.was_up);
-            if now != before.trouble {
-                match now {
-                    Some(t) => out.push(alert(t, c)),
-                    None if before.trouble.is_some() => out.push(Alert::Running(c.name.clone())),
-                    None => {}
+            let was_up = before.was_up || c.state == "running";
+            let seen = match (before.trouble, trouble(c, before.was_up)) {
+                (None, None) => Seen { was_up, ..Default::default() },
+                (None, Some(t)) => {
+                    out.push(alert(t, c));
+                    Seen { was_up, trouble: Some(t), clean: 0 }
                 }
-            }
-            next.insert(c.name.clone(), Seen { was_up: before.was_up || c.state == "running", trouble: now });
+                // Still in trouble, of whatever kind: the alert already went out.
+                (Some(t), Some(_)) => Seen { was_up, trouble: Some(t), clean: 0 },
+                (Some(_), None) if before.clean + 1 >= CLEAR => {
+                    out.push(Alert::Running(c.name.clone()));
+                    Seen { was_up, ..Default::default() }
+                }
+                (Some(t), None) => Seen { was_up, trouble: Some(t), clean: before.clean + 1 },
+            };
+            next.insert(c.name.clone(), seen);
         }
-        // A container seen running that is gone from the list was removed.
-        let mut gone: Vec<_> = self.containers.drain().filter(|(_, s)| s.was_up && s.trouble.is_none()).map(|(n, _)| n).collect();
-        gone.sort();
-        out.extend(gone.into_iter().map(|n| Alert::Stopped(n, "Removed".into())));
+        // A container seen running that is gone from the list was removed; it stays known as stopped, so its
+        // return says so.
+        let mut gone: Vec<_> = self.containers.drain().filter(|(_, s)| s.was_up).collect();
+        gone.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, s) in gone {
+            if s.trouble.is_none() {
+                out.push(Alert::Stopped(name.clone(), "Removed".into()));
+            }
+            next.insert(name, Seen { was_up: true, trouble: Some(s.trouble.unwrap_or(Trouble::Stopped)), clean: 0 });
+        }
         self.containers = next;
         out
     }

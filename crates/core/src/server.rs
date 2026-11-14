@@ -35,11 +35,14 @@ pub struct ServerStatus {
     /// The SD card inside Cloud, when it is a disk of its own.
     pub sd_size: Option<u64>,
     pub sd_used: Option<u64>,
+    /// `docker ps` failed (the daemon restarting, say): the empty list says nothing about the containers.
+    #[serde(default)]
+    pub docker_failed: bool,
     pub at: i64,
 }
 
 /// Each read prints a marker first, and a read that fails prints nothing after it.
-const SCRIPT: &str = r#"echo --binder:docker--; docker ps -a --format '{{json .}}' 2>/dev/null
+const SCRIPT: &str = r#"echo --binder:docker--; docker ps -a --format '{{json .}}' 2>/dev/null || echo --binder:docker-failed--
 echo --binder:services--; systemctl list-units --type=service --state=running --no-legend --plain 2>/dev/null
 echo --binder:load--; cat /proc/loadavg 2>/dev/null
 echo --binder:mem--; cat /proc/meminfo 2>/dev/null
@@ -73,6 +76,7 @@ pub fn fetch(remote: &dyn Remote, now: i64, sd: Option<&str>) -> Result<ServerSt
         power_w: parse_power(part("power")),
         sd_size: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(s, _)| s),
         sd_used: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(_, u)| u),
+        docker_failed: out.contains("--binder:docker-failed--"),
         at: now,
     })
 }

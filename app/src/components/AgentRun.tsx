@@ -8,6 +8,7 @@ import { Button, Field, Notice, fieldClass } from "./ui";
 const FULL_WARNING = "Runs without asking. Use only for tasks you trust.";
 
 export function runState(r: Run): string {
+  if (r.ended === null && r.queued) return "Queued for tonight";
   if (r.ended === null) return `Running since ${clock(r.started)}`;
   if (r.exit_code === 0) return "Finished";
   if (r.exit_code === 143) return "Stopped";

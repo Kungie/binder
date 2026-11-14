@@ -511,8 +511,8 @@ export function memoryApi(
     async stopRun(run) {
       const r = findRun(run);
       if (r.ended === null) {
-        Object.assign(r, { ended: now(), exit_code: 143 });
-        task(r.task_id).status = "todo";
+        Object.assign(r, { ended: now(), exit_code: 143, queued: false });
+        Object.assign(task(r.task_id), { status: "todo", night: false });
       }
       return { ...r };
     },
