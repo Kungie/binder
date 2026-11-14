@@ -1,6 +1,7 @@
 mod apps;
 mod commands;
 mod printer;
+mod terminal;
 mod transfers;
 
 use binder_core::{Db, config::Config};
@@ -18,6 +19,8 @@ pub struct AppState {
     pub fast: Mutex<Option<bool>>,
     /// The Quick Look window, while it's open.
     pub quicklook: Mutex<Option<std::process::Child>>,
+    /// The Agents screen's two terminals.
+    pub terminals: terminal::Terminals,
 }
 
 #[derive(Clone, Copy, serde::Serialize)]
@@ -46,7 +49,7 @@ pub fn run() {
             let config = Config::load(&config_path)?;
             let db = Db::open(&dir.join("binder.db"))?;
             let printers = config.printers.clone();
-            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default(), transfers: Default::default(), fast: Default::default(), quicklook: Default::default() });
+            app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default(), transfers: Default::default(), fast: Default::default(), quicklook: Default::default(), terminals: Default::default() });
             for p in printers {
                 printer::start(app.handle(), p);
             }
@@ -148,7 +151,19 @@ pub fn run() {
             commands::cloud_quicklook,
             commands::cloud_apps_for,
             commands::cloud_open_with,
+            commands::term_open,
+            commands::term_write,
+            commands::term_resize,
+            commands::term_reconnect,
         ])
-        .run(tauri::generate_context!())
-        .expect("Binder could not start");
+        .build(tauri::generate_context!())
+        .expect("Binder could not start")
+        .run(|app, event| {
+            // Quitting ends the local ssh processes; the tmux sessions on the server stay.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<AppState>() {
+                    state.terminals.close_all();
+                }
+            }
+        });
 }

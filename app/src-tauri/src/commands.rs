@@ -23,6 +23,8 @@ use binder_core::{Db, Error, devices, hooks, repo, server};
 use tauri::Emitter;
 use std::path::Path;
 use tauri::State;
+use tauri::ipc::{Channel, InvokeResponseBody};
+use binder_core::agents::{self, Agent};
 use tauri_plugin_opener::OpenerExt;
 
 type Res<T> = Result<T, String>;
@@ -720,4 +722,50 @@ pub async fn cloud_open_with(state: State<'_, AppState>, rel: String, app: Strin
 pub async fn cloud_cancel(state: State<'_, AppState>, id: u64) -> Res<()> {
     state.transfers.cancel(id);
     Ok(())
+}
+
+#[derive(Clone, serde::Serialize)]
+struct TermExit {
+    agent: Agent,
+    message: String,
+}
+
+/// Starts the agent's `ssh` into its tmux session, or hands a running one's output to this window.
+fn term_start(app: tauri::AppHandle, state: &State<AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
+    let target = server_target(state)?;
+    state.terminals.open(
+        agent,
+        "ssh",
+        &agents::ssh_args(&target, agent),
+        cols,
+        rows,
+        move |bytes| {
+            let _ = output.send(InvokeResponseBody::Raw(bytes));
+        },
+        move |message| {
+            let _ = app.emit("term-exit", TermExit { agent, message });
+        },
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn term_open(app: tauri::AppHandle, state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
+    term_start(app, &state, agent, cols, rows, output)
+}
+
+#[tauri::command]
+pub async fn term_write(state: State<'_, AppState>, agent: Agent, data: String) -> Res<()> {
+    state.terminals.write(agent, data.as_bytes())
+}
+
+#[tauri::command]
+pub async fn term_resize(state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16) -> Res<()> {
+    state.terminals.resize(agent, cols, rows)
+}
+
+#[tauri::command]
+pub async fn term_reconnect(app: tauri::AppHandle, state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
+    state.terminals.close(agent);
+    term_start(app, &state, agent, cols, rows, output)
 }
