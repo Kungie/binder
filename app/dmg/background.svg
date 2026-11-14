@@ -14,5 +14,5 @@
 <text x="330" y="284" text-anchor="middle" font-family="Inter, -apple-system, Helvetica Neue, sans-serif" font-size="12" fill="#6B6B6B">Drag Binder to Applications</text>
 <text x="330" y="92" text-anchor="middle" font-family="Inter, -apple-system, Helvetica Neue, sans-serif" font-size="15" fill="#A1A1A1">One drag. The hardest thing Binder will ever ask of you.</text>
 <!-- Finder draws icon labels near-black over a background picture: these plates sit under them. -->
-<g fill="#A1A1A1"><rect x="138" y="318" width="64" height="19" rx="9.5"/><rect x="442" y="318" width="96" height="19" rx="9.5"/></g>
+<g fill="#A1A1A1"><rect x="138" y="314" width="64" height="19" rx="9.5"/><rect x="442" y="314" width="96" height="19" rx="9.5"/></g>
 </svg>
