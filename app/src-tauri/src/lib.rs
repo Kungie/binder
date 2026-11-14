@@ -155,6 +155,7 @@ pub fn run() {
             commands::term_write,
             commands::term_resize,
             commands::term_reconnect,
+            commands::copy_text,
         ])
         .build(tauri::generate_context!())
         .expect("Binder could not start")

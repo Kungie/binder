@@ -3,7 +3,7 @@ use binder_core::agents::*;
 #[test]
 fn remote_command_creates_or_attaches() {
     let c = remote_command(Agent::Claude);
-    assert!(c.starts_with("tmux start-server \\; set -g history-limit 10000 \\; new-session -A -s binder-claude "), "{c}");
+    assert!(c.starts_with("tmux -u start-server \\; set -g history-limit 10000 \\; new-session -A -s binder-claude "), "{c}");
     assert!(c.contains("bash -lc"));
     assert!(c.contains("claude; exec bash -l"));
     assert!(c.contains("set-option -t binder-claude status off"));
@@ -50,4 +50,13 @@ fn exit_messages() {
 fn agent_names_serialize_lowercase() {
     assert_eq!(serde_json::to_string(&Agent::Claude).unwrap(), "\"claude\"");
     assert_eq!(Agent::Qwen.session(), "binder-qwen");
+}
+
+#[test]
+fn a_dropped_session_shows_ssh_line_without_terminal_codes() {
+    let tail = "\x1b[?25l\x1b[3;5H\u{273b}\x1b[?25hTimeout, server lab not responding.\r\n";
+    assert_eq!(exit_message(Some(255), tail), "Timeout, server lab not responding.");
+    let osc = "\x1b]52;c;aGk=\x07\x1b[0mConnection to lab closed by remote host.\r\n";
+    assert_eq!(exit_message(Some(255), osc), "Connection to lab closed by remote host.");
+    assert_eq!(exit_message(Some(255), "\x1b[2J\x1b[H"), "Couldn't reach the server.");
 }

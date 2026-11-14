@@ -30,12 +30,13 @@ impl Agent {
 }
 
 /// The command the server's login shell runs: create the session or attach to it, with scrollback set first
-/// (tmux applies `history-limit` only to new panes) and the session's own look set after.
+/// (tmux applies `history-limit` only to new panes) and the session's own look set after. `-u` makes tmux send
+/// UTF-8 whatever locale the server gives a session from an app opened in Finder, which has no `LANG`.
 pub fn remote_command(agent: Agent) -> String {
     let session = agent.session();
     let inner = format!("bash -lc {}", quote(agent.program()));
     format!(
-        "tmux start-server \\; set -g history-limit 10000 \\; new-session -A -s {session} {} \\; set-option -t {session} status off \\; set-option -t {session} mouse on \\; set-option -t {session} set-clipboard on",
+        "tmux -u start-server \\; set -g history-limit 10000 \\; new-session -A -s {session} {} \\; set-option -t {session} status off \\; set-option -t {session} mouse on \\; set-option -t {session} set-clipboard on",
         quote(&inner)
     )
 }
@@ -67,14 +68,54 @@ pub fn exit_message(code: Option<i32>, last_output: &str) -> String {
     match code {
         Some(127) => "tmux isn't installed on the server.".into(),
         Some(255) => last_output
-            .lines()
-            .map(str::trim)
+            .split(['\r', '\n'])
+            .map(plain)
             .filter(|l| !l.is_empty())
             .last()
-            .unwrap_or("Couldn't reach the server.")
-            .to_string(),
+            .unwrap_or_else(|| "Couldn't reach the server.".into()),
         Some(0) => "Detached.".into(),
         None => "Disconnected.".into(),
         Some(_) => "Session ended.".into(),
     }
+}
+
+/// What a line of terminal output says after its last escape sequence, without control characters. When a session
+/// that was showing drops, the line holds tmux's last redraw and then `ssh`'s own message.
+fn plain(line: &str) -> String {
+    let mut after = 0;
+    let mut chars = line.char_indices().peekable();
+    while let Some((_, c)) = chars.next() {
+        if c != '\x1b' {
+            continue;
+        }
+        match chars.next() {
+            // CSI: parameters, then one final byte in @..~.
+            Some((_, '[')) => {
+                for (_, c) in chars.by_ref() {
+                    if ('@'..='~').contains(&c) {
+                        break;
+                    }
+                }
+            }
+            // OSC: up to BEL or ESC \.
+            Some((_, ']')) => {
+                while let Some((_, c)) = chars.next() {
+                    if c == '\x07' {
+                        break;
+                    }
+                    if c == '\x1b' {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            // Character set selection takes one more character.
+            Some((_, '(' | ')' | '*' | '+')) => {
+                chars.next();
+            }
+            _ => {}
+        }
+        after = chars.peek().map_or(line.len(), |&(i, _)| i);
+    }
+    line[after..].chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string()
 }

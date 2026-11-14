@@ -72,6 +72,8 @@ export function Terminal({ agent, name, session, registerFocus }: { agent: Agent
     [api, agent],
   );
 
+  const onCopy = useCallback((text: string) => void api.copyText(text).catch(() => {}), [api]);
+
   // Every key goes to the terminal; only ⌘K and ⌘1/⌘2 travel on to Binder.
   const keep = (e: KeyboardEvent) => {
     if (!(e.metaKey && PASS.has(e.key.toLowerCase()))) e.stopPropagation();
@@ -100,7 +102,7 @@ export function Terminal({ agent, name, session, registerFocus }: { agent: Agent
       <div className="flex min-h-0 flex-1 flex-col border-t border-line" onKeyDown={keep} onMouseDown={() => focus.current()}>
         {message && <p className="px-3 pt-2 font-mono text-[11px] text-bad">{message}</p>}
         <div className="min-h-0 flex-1 p-2">
-          <XtermView onData={onData} onResize={onResize} register={register} />
+          <XtermView onData={onData} onResize={onResize} onCopy={onCopy} register={register} />
         </div>
       </div>
     </Panel>

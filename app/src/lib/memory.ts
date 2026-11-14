@@ -90,6 +90,7 @@ export function memoryApi(
   let reachable = true;
   const terms = new Map<Agent, (bytes: Uint8Array) => void>();
   const encoder = new TextEncoder();
+  const copied: string[] = [];
   async function openTerm(agent: Agent, onData: (bytes: Uint8Array) => void) {
     if (!config.server) throw new Error("No server set.");
     if (options.termFail) throw new Error(options.termFail);
@@ -199,6 +200,9 @@ export function memoryApi(
     },
     async termResize() {},
     termReconnect: (agent, _cols, _rows, onData) => openTerm(agent, onData),
+    async copyText(text) {
+      copied.push(text);
+    },
     onTermExit() {
       return () => {};
     },

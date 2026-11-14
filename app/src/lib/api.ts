@@ -137,6 +137,8 @@ export interface Api {
   termResize(agent: Agent, cols: number, rows: number): Promise<void>;
   /** Ends the local ssh and connects again; the tmux session on the server stays. */
   termReconnect(agent: Agent, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
+  /** Puts text on the Mac clipboard from the app, which works without a click. */
+  copyText(text: string): Promise<void>;
   /** A terminal's ssh ended, with one line saying why. */
   onTermExit(cb: (agent: Agent, message: string) => void): () => void;
 }
@@ -271,6 +273,7 @@ export const tauriApi: Api = {
   termWrite: (agent, data) => call("term_write", { agent, data }),
   termResize: (agent, cols, rows) => call("term_resize", { agent, cols, rows }),
   termReconnect: (agent, cols, rows, onData) => call("term_reconnect", { agent, cols, rows, output: bytesChannel(onData) }),
+  copyText: (text) => call("copy_text", { text }),
   onTermExit: (cb) => subscribe<{ agent: Agent; message: string }>("term-exit", (e) => cb(e.agent, e.message)),
 };
 

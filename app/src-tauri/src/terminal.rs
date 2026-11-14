@@ -151,6 +151,21 @@ impl Drop for Terminals {
     }
 }
 
+/// Runs `program` with `input` on its stdin and waits for it. The terminals copy through `pbcopy` this way, since
+/// the window can't write the clipboard without a click.
+pub fn pipe_to(program: &str, args: &[&str], input: &str) -> Result<(), String> {
+    let mut child = std::process::Command::new(program)
+        .args(args)
+        // An app opened from Finder has no LANG, and pbcopy would then read the bytes as Mac Roman.
+        .env("LANG", "en_US.UTF-8")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    child.stdin.take().ok_or("No stdin.")?.write_all(input.as_bytes()).map_err(|e| e.to_string())?;
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if status.success() { Ok(()) } else { Err(format!("{program} failed.")) }
+}
+
 fn read_loop(mut reader: Box<dyn Read + Send>, sink: Sink, tail: Arc<Mutex<Vec<u8>>>, done: mpsc::Sender<()>) {
     let mut buf = [0u8; 8192];
     loop {
@@ -236,6 +251,24 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert_eq!(t.pid(Agent::Claude), None);
+    }
+
+    #[test]
+    fn piped_text_reaches_the_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("clip");
+        let script = format!("cat > '{}'", out.display());
+        pipe_to("/bin/sh", &["-c", &script], "gül ✻").unwrap();
+        assert_eq!(std::fs::read_to_string(out).unwrap(), "gül ✻");
+    }
+
+    #[test]
+    fn piped_programs_read_utf8_without_a_lang() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("lang");
+        let script = format!("printf %s \"$LANG\" > '{}'", out.display());
+        pipe_to("/bin/sh", &["-c", &script], "").unwrap();
+        assert_eq!(std::fs::read_to_string(out).unwrap(), "en_US.UTF-8");
     }
 
     #[test]

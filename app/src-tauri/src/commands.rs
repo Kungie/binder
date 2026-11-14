@@ -754,6 +754,12 @@ pub async fn term_open(app: tauri::AppHandle, state: State<'_, AppState>, agent:
     term_start(app, &state, agent, cols, rows, output)
 }
 
+/// The terminals' copies, from a tmux selection or ⌘C.
+#[tauri::command]
+pub async fn copy_text(text: String) -> Res<()> {
+    crate::terminal::pipe_to("/usr/bin/pbcopy", &[], &text)
+}
+
 #[tauri::command]
 pub async fn term_write(state: State<'_, AppState>, agent: Agent, data: String) -> Res<()> {
     state.terminals.write(agent, data.as_bytes())
