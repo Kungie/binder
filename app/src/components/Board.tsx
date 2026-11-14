@@ -1,4 +1,4 @@
-import { type DragEvent, type KeyboardEvent, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from "react";
 import { useStore } from "../lib/store";
 import { STATUS_LABEL, type Status, type Task } from "../lib/types";
 import { BoardCard } from "./BoardCard";
@@ -21,7 +21,9 @@ export function Board({ tasks }: { tasks: Task[] }) {
   const [focusId, setFocusId] = useState<number | null>(null);
   const [prioFor, setPrioFor] = useState<number | null>(null);
   const [over, setOver] = useState<{ status: Status; before: number | null } | null>(null);
-  const dragging = useRef<number | null>(null);
+  const [ghost, setGhost] = useState<{ task: Task; x: number; y: number } | null>(null);
+  /** Set for the click that ends a drag, so dropping a card doesn't open it. */
+  const justDragged = useRef(false);
   const root = useRef<HTMLDivElement>(null);
 
   const byColumn = useMemo(() => Object.fromEntries(COLUMNS.map((s) => [s, ordered(tasks.filter((t) => t.status === s))])) as Record<Status, Task[]>, [tasks]);
@@ -56,13 +58,48 @@ export function Board({ tasks }: { tasks: Task[] }) {
     else await store.reload();
   };
 
-  const dropped = (e: DragEvent, status: Status, beforeId: number | null) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const id = dragging.current ?? Number(e.dataTransfer.getData("text/plain"));
-    dragging.current = null;
-    setOver(null);
-    if (id) void place(id, status, beforeId);
+  /** The column and the card under the pointer: the card dropped goes before that card, or at the column's end. */
+  const targetAt = (x: number, y: number): { status: Status; before: number | null } | null => {
+    const el = document.elementFromPoint?.(x, y);
+    const col = el?.closest<HTMLElement>("[data-status]");
+    if (!col) return null;
+    const card = el?.closest<HTMLElement>("[data-id]");
+    return { status: col.dataset.status as Status, before: card && col.contains(card) ? Number(card.dataset.id) : null };
+  };
+
+  /**
+   * A card moves with pointer events, not HTML5 drag and drop: in the app the webview's file-drop handler (for files
+   * from Finder into Cloud) takes every HTML5 drag, so those events never reach the page. A press becomes a drag
+   * after 4 px.
+   */
+  const pressed = (e: PointerEvent, task: Task) => {
+    if (e.button !== 0) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let moving = false;
+    const move = (ev: globalThis.PointerEvent | MouseEvent) => {
+      if (!moving && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+      moving = true;
+      setGhost({ task, x: ev.clientX, y: ev.clientY });
+      const t = targetAt(ev.clientX, ev.clientY);
+      setOver((o) => (o?.status === t?.status && o?.before === t?.before ? o : t));
+    };
+    const end = (ev: globalThis.PointerEvent | MouseEvent, drop: boolean) => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", cancel);
+      if (!moving) return;
+      setGhost(null);
+      setOver(null);
+      justDragged.current = true;
+      window.setTimeout(() => (justDragged.current = false), 0);
+      const t = drop ? targetAt(ev.clientX, ev.clientY) : null;
+      if (t) void place(task.id, t.status, t.before);
+    };
+    const up = (ev: globalThis.PointerEvent | MouseEvent) => end(ev, true);
+    const cancel = (ev: globalThis.PointerEvent | MouseEvent) => end(ev, false);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", cancel);
   };
 
   const focusCard = (t: Task | undefined) => {
@@ -109,11 +146,7 @@ export function Board({ tasks }: { tasks: Task[] }) {
           <section
             key={status}
             aria-label={label}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (over?.status !== status || over.before !== null) setOver({ status, before: null });
-            }}
-            onDrop={(e) => dropped(e, status, null)}
+            data-status={status}
             className={`flex min-w-[248px] max-w-[360px] flex-1 flex-col rounded-panel bg-panel ${over?.status === status ? "ring-1 ring-line-strong" : ""}`}
           >
             <header className="flex h-10 shrink-0 items-center gap-2 px-3">
@@ -154,24 +187,11 @@ export function Board({ tasks }: { tasks: Task[] }) {
                       />
                     )
                   }
-                  onOpen={() => flow.open(task.id)}
+                  onOpen={() => !justDragged.current && flow.open(task.id)}
                   onFocus={() => setFocusId(task.id)}
                   onKeyDown={(e) => onKey(e, status, index, task)}
-                  onDragStart={(e) => {
-                    dragging.current = task.id;
-                    e.dataTransfer.setData("text/plain", String(task.id));
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragEnd={() => {
-                    dragging.current = null;
-                    setOver(null);
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (over?.status !== status || over.before !== task.id) setOver({ status, before: task.id });
-                  }}
-                  onDrop={(e) => dropped(e, status, task.id)}
+                  onPointerDown={(e) => pressed(e, task)}
+                  lifted={ghost?.task.id === task.id}
                 />
               ))}
             </ul>
@@ -183,6 +203,15 @@ export function Board({ tasks }: { tasks: Task[] }) {
           </section>
         );
       })}
+      {ghost && (
+        <div
+          aria-hidden="true"
+          className="pop-in pointer-events-none fixed z-50 w-[240px] -translate-x-1/2 -translate-y-1/2 rotate-[1.5deg] rounded-panel border border-line-strong bg-raised px-3 py-2.5 text-[13px] font-medium text-text shadow-menu"
+          style={{ left: ghost.x, top: ghost.y }}
+        >
+          <span className="block truncate">{ghost.task.title}</span>
+        </div>
+      )}
       {flow.overlays}
     </div>
   );

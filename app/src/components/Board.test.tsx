@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { Shell } from "../App";
@@ -24,18 +24,23 @@ const cards = (name: string) => within(column(name)).queryAllByRole("button", { 
 const card = (key: string) => screen.getByRole("button", { name: new RegExp(`^${key} `) });
 const byKey = async (api: ReturnType<typeof memoryApi>, key: string) => (await api.listTasks({ kind: "all" }, true)).find((t) => t.key === key)!;
 
-/** jsdom has no DataTransfer; the board only needs get and set. */
-function dataTransfer() {
-  const data: Record<string, string> = {};
-  return { setData: (k: string, v: string) => (data[k] = v), getData: (k: string) => data[k] ?? "", dropEffect: "move", effectAllowed: "move", types: [] as string[] };
-}
-
+/**
+ * A pointer drag, as the app sees one: the webview's file-drop handler takes every HTML5 drag, so the board moves
+ * cards with pointer events. jsdom has no layout, so `elementFromPoint` is pointed at the target for the drag.
+ */
 function drag(from: HTMLElement, to: HTMLElement) {
-  const dt = dataTransfer();
-  fireEvent.dragStart(from, { dataTransfer: dt });
-  fireEvent.dragOver(to, { dataTransfer: dt });
-  fireEvent.drop(to, { dataTransfer: dt });
-  fireEvent.dragEnd(from, { dataTransfer: dt });
+  const at = document.elementFromPoint;
+  document.elementFromPoint = () => to;
+  const fire = (target: EventTarget, type: string, x: number) =>
+    act(() => {
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: x }));
+    });
+  fire(from, "pointerdown", 10);
+  fire(document, "pointermove", 20);
+  fire(document, "pointermove", 40);
+  fire(document, "pointerup", 40);
+  fire(to, "click", 40);
+  document.elementFromPoint = at;
 }
 
 describe("Board", () => {
@@ -74,6 +79,19 @@ describe("Board", () => {
     await waitFor(async () => expect((await byKey(api, "ORB-3")).status).toBe("done"));
     expect(await screen.findAllByLabelText("Log to orbit")).toHaveLength(1);
     expect(within(column("Done")).getByRole("button", { name: /^ORB-3 / })).toBeInTheDocument();
+  });
+
+  it("cards_are_not_html5_draggable", async () => {
+    await setup();
+    // The webview's file-drop handler swallows HTML5 drags in the app, so they must never start.
+    expect(card("ORB-3")).not.toHaveAttribute("draggable", "true");
+  });
+
+  it("a_drag_doesnt_open_the_card", async () => {
+    await setup();
+    drag(card("ORB-3"), column("Done"));
+    await waitFor(() => expect(within(column("Done")).getByRole("button", { name: /^ORB-3 / })).toBeInTheDocument());
+    expect(screen.queryByRole("dialog", { name: "ORB-3" })).toBeNull();
   });
 
   it("reorder_in_column_keeps_status_and_no_prompt", async () => {

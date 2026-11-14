@@ -1,5 +1,5 @@
 import { Moon } from "./Moon";
-import type { DragEvent, KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { dueLabel, localDay, plainText } from "../lib/tasks";
 import { type Project, STATUS_LABEL, type Task } from "../lib/types";
 import { Chip } from "./Chip";
@@ -38,14 +38,14 @@ export interface BoardCardProps {
   onOpen(): void;
   onFocus(): void;
   onKeyDown(e: KeyboardEvent): void;
-  onDragStart(e: DragEvent): void;
-  onDragEnd(): void;
-  onDragOver(e: DragEvent): void;
-  onDrop(e: DragEvent): void;
+  /** Starts a pointer drag; HTML5 drags never reach the page in the app. */
+  onPointerDown(e: PointerEvent): void;
+  /** The card being dragged: it stays in place, faded, while its ghost follows the pointer. */
+  lifted?: boolean;
 }
 
 /** One soft card: the title, two lines of notes, then chips for status, due, project and the agent. */
-export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFocus, onKeyDown, onDragStart, onDragEnd, onDragOver, onDrop }: BoardCardProps) {
+export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFocus, onKeyDown, onPointerDown, lifted = false }: BoardCardProps) {
   const notes = plainText(task.notes);
   const due = task.due ? dueLabel(task.due, task.due_time, localDay()) : null;
   return (
@@ -57,15 +57,11 @@ export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFo
         data-id={task.id}
         data-key={task.key}
         aria-label={`${task.key} ${task.title}`}
-        draggable
         onClick={onOpen}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        className="flex cursor-default flex-col gap-1.5 rounded-panel border border-line bg-card p-3 text-left transition-colors duration-[120ms] hover:border-line-strong hover:bg-raised focus:outline-none focus-visible:border-text-3"
+        onPointerDown={onPointerDown}
+        className={`${lifted ? "opacity-40" : ""} flex cursor-default select-none flex-col gap-1.5 rounded-panel border border-line bg-card p-3 text-left transition-colors duration-[120ms] hover:border-line-strong hover:bg-raised focus:outline-none focus-visible:border-text-3`}
       >
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text">{task.title}</span>
