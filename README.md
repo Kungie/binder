@@ -48,6 +48,8 @@ Binder is mostly black and white, with a few colours that each mean something, k
 
 Download `Binder.dmg` from the [latest release](https://github.com/Kungie/binder/releases/latest) and drag Binder into Applications. It runs on Apple silicon Macs. Binder isn't notarized, so the first launch needs System Settings › Privacy & Security › Open Anyway.
 
+After that, Binder looks for a new release when it opens and puts a dot beside Settings when there is one. Settings › Binder installs it and restarts, with no download or Open Anyway. Updates are signed, and Binder checks the signature before it replaces itself.
+
 ## Setup
 
 - **Server:** Settings › Home server takes an SSH target, `user@host` or a `Host` from `~/.ssh/config`. Binder uses your keys through the system `ssh` and never stores a password.
@@ -69,6 +71,7 @@ make dev      # run the app with hot reload
 make test     # Rust and interface tests
 make build    # build Binder.app, with binder-cli inside
 make install  # build, then replace /Applications/Binder.app
+make release  # Binder.dmg and the signed update files in build/, for a GitHub release
 make preview  # the interface alone in a browser, with demo data
 ```
 

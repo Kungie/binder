@@ -21,7 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          n=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].assets[].download_count' | awk '{s += $1} END {print s + 0}')
+          n=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].assets[] | select(.name != "latest.json" and (.name | endswith(".app.tar.gz") | not)) | .download_count' | awk '{s += $1} END {print s + 0}')
           echo "downloads: $n"
           git init -q badges && cd badges
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
