@@ -44,7 +44,7 @@ export function Server() {
           )}
           {status && (
             <>
-              <div className={`grid grid-cols-4 gap-3 ${error ? "opacity-60" : ""}`}>
+              <div className={`grid grid-cols-5 gap-3 ${error ? "opacity-60" : ""}`}>
                 <LoadMetric load={status.load} cores={status.cores} />
                 <Metric
                   title="Memory"
@@ -53,6 +53,7 @@ export function Server() {
                 />
                 <Metric title="Disk" value={percent(status.disk_used, status.disk_size)} detail={`${gb(status.disk_used)} of ${gb(status.disk_size)} GB`} />
                 <Metric title="Temperature" value={status.temp_c === null ? "None" : `${status.temp_c.toFixed(0)}°C`} />
+                <Metric title="Power" value={status.power_w === null ? "None" : `${status.power_w.toFixed(1)} W`} detail="Pi board" />
               </div>
               <div className={`grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start gap-3 ${error ? "opacity-60" : ""}`}>
                 <Containers status={status} />

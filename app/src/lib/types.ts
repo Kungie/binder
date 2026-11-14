@@ -170,6 +170,8 @@ export interface ServerStatus {
   disk_size: number;
   disk_used: number;
   temp_c: number | null;
+  /** The Pi board's draw in watts, from its PMIC; null when it has none. */
+  power_w: number | null;
   /** From nproc; 0 when unknown. */
   cores: number;
   at: number;

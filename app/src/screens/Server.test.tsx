@@ -29,6 +29,19 @@ describe("Server", () => {
     expect(screen.getByRole("list", { name: "Running services" })).toHaveTextContent("tailscaled");
   });
 
+  it("shows the server's power at the right end", async () => {
+    setup();
+    const power = await screen.findByRole("group", { name: "Power: 4.5 W" });
+    const row = power.parentElement!;
+    expect(row.lastElementChild).toBe(power);
+    expect(within(power).getByText("Pi board")).toBeInTheDocument();
+  });
+
+  it("power reads None when the server has none", async () => {
+    setup({}, (s) => (s.power_w = null));
+    expect(await screen.findByRole("group", { name: "Power: None" })).toBeInTheDocument();
+  });
+
   it("server_error_shows_last_read", async () => {
     const { api, user } = setup();
     await screen.findByRole("table", { name: "Containers" });

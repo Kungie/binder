@@ -626,6 +626,7 @@ export function demoSeed(): Seed {
       disk_size: 58 * GB,
       disk_used: 47 * GB,
       temp_c: 48.3,
+      power_w: 4.5,
       at: t,
     },
     printers: [
