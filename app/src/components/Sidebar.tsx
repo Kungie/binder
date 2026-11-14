@@ -73,7 +73,7 @@ export function Sidebar() {
           ))}
       </div>
       <div className="mt-auto">
-        <Item active={screen === "settings"} onClick={() => setScreen("settings")} icon={<Glyph d="M7 4.6a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8zM7 1v1.6M7 11.4V13M1 7h1.6M11.4 7H13M2.8 2.8l1.1 1.1M10.1 10.1l1.1 1.1M2.8 11.2l1.1-1.1M10.1 3.9l1.1-1.1" />}>
+        <Item active={screen === "settings"} onClick={() => setScreen("settings")} icon={<Glyph d="M5.74 2.89L6.01 1.39h1.98l.27 1.5A4.3 4.3 0 0 1 9.93 3.86l1.44-.52.99 1.71-1.17.98a4.3 4.3 0 0 1 0 1.94l1.17.98-.99 1.71-1.44-.52a4.3 4.3 0 0 1-1.67.97l-.27 1.5H6.01l-.27-1.5a4.3 4.3 0 0 1-1.67-.97l-1.44.52-.99-1.71 1.17-.98a4.3 4.3 0 0 1 0-1.94L1.64 5.05l.99-1.71 1.44.52a4.3 4.3 0 0 1 1.67-.97zM7 5.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6z" />}>
           Settings
         </Item>
       </div>
