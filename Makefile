@@ -42,8 +42,9 @@ release-check:
 	@security find-generic-password $(UPDATER_KEY) >/dev/null 2>&1 || { echo "No update signing key in the Keychain."; exit 1; }
 
 # Binder.dmg for a GitHub release: the app signed ad hoc as a whole (not notarized, so the first
-# launch needs Privacy & Security > Open Anyway) beside a link to /Applications. Next to it, the
-# update Binder installs from Settings: the same app as a signed tarball, and latest.json.
+# launch needs Privacy & Security > Open Anyway) beside a link to /Applications, in a window laid out
+# by scripts/dmg.sh over app/dmg/background.tiff (drawn from background.svg by scripts/dmg-background.swift).
+# Next to it, the update Binder installs from Settings: the same app as a signed tarball, and latest.json.
 release: release-check build
 	rm -rf $(CARGO_TARGET_DIR)/dmg build/Binder.dmg build/Binder.app.tar.gz build/Binder.app.tar.gz.sig build/latest.json
 	mkdir -p $(CARGO_TARGET_DIR)/dmg build
@@ -51,7 +52,7 @@ release: release-check build
 	codesign --force --deep --sign - $(CARGO_TARGET_DIR)/dmg/Binder.app
 	codesign --verify --deep --strict $(CARGO_TARGET_DIR)/dmg/Binder.app
 	ln -s /Applications $(CARGO_TARGET_DIR)/dmg/Applications
-	hdiutil create -quiet -volname Binder -srcfolder $(CARGO_TARGET_DIR)/dmg -format UDZO -ov build/Binder.dmg
+	scripts/dmg.sh $(CARGO_TARGET_DIR)/dmg app/dmg/background.tiff build/Binder.dmg
 	COPYFILE_DISABLE=1 tar -czf build/Binder.app.tar.gz -C $(CARGO_TARGET_DIR)/dmg Binder.app
 	@echo "Signing build/Binder.app.tar.gz"
 	@TAURI_SIGNING_PRIVATE_KEY="$$(security find-generic-password $(UPDATER_KEY) -w)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
