@@ -6,6 +6,8 @@
 
 <p align="center">A small desktop app for running one developer's workshop: tasks for you and a Claude Code agent, your GitHub projects, the home server, a file manager over it and a 3D printer.</p>
 
+<p align="center"><a href="https://binder.erenkahraman.dev">binder.erenkahraman.dev</a></p>
+
 <p align="center">
   <a href="https://github.com/Kungie/binder/releases/latest"><img src="https://img.shields.io/github/v/release/Kungie/binder?label=release&color=1c1c1f&labelColor=0b0b0c" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20silicon-1c1c1f?labelColor=0b0b0c" alt="macOS on Apple silicon">

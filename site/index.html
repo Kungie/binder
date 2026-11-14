@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binder</title>
+<meta name="description" content="A desktop app for one developer's workshop: tasks for you and a Claude Code agent, your GitHub projects, the home server, a file manager over it and a 3D printer.">
+<meta name="theme-color" content="#0b0b0c">
+<meta property="og:title" content="Binder">
+<meta property="og:description" content="Your whole workshop, in one quiet window.">
+<meta property="og:image" content="https://binder.erenkahraman.dev/assets/shots/overview.png">
+<meta property="og:url" content="https://binder.erenkahraman.dev/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="preload" href="assets/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/inter-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Inter";font-weight:400;font-display:swap;src:url("assets/fonts/inter-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Inter";font-weight:500;font-display:swap;src:url("assets/fonts/inter-latin-500-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:400;font-display:swap;src:url("assets/fonts/geist-mono-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:500;font-display:swap;src:url("assets/fonts/geist-mono-latin-500-normal.woff2") format("woff2")}
+:root{--bg:#0b0b0c;--panel:#141416;--card:#1c1c1f;--raised:#242428;--line:#26262a;--line-strong:#34343a;--text:#ededed;--text-2:#a1a1a1;--text-3:#8a8a8a;--st-backlog:#6b6b6b;--st-todo:#d4d4d4;--st-progress:#f2c94c;--st-done:#8b7cf6;--urgent:#f2994a;--ok:#4cb782;--bad:#eb5757;--font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;--font-mono:"Geist Mono",ui-monospace,monospace;--radius-xs:4px;--radius-control:8px;--radius-panel:10px;--radius-pill:999px;--control-height:28px;--chip-height:24px;--sidebar-width:208px}
+html{scroll-behavior:smooth}
+body{margin:0;background:#0b0b0c;color:#ededed;font-family:"Inter",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#ededed;text-decoration:none}a:hover{color:#ffffff}
+a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
+@media (max-width:720px){.hide-sm{display:none !important}.hero-h{font-size:44px !important;line-height:46px !important}.big-h{font-size:32px !important;line-height:36px !important}}
+
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div style="background: #0b0b0c; color: #ededed; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; overflow: hidden;">
+
+<header style="position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; padding: 20px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+<a href="#top" style="display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 15px;"><img src="assets/mark.svg" alt="" style="width: 24px; height: 24px; display: block;">Binder</a>
+<nav aria-label="Main" style="display: flex; gap: 20px; font-size: 13px; margin-left: auto; flex-wrap: wrap; align-items: center;">
+<a href="#features" class="hide-sm" style="color: #a1a1a1;">Features</a>
+<a href="#principles" class="hide-sm" style="color: #a1a1a1;">How it works</a>
+<a href="https://github.com/Kungie/binder" style="color: #a1a1a1;">GitHub</a>
+<a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; background: #ededed; color: #0b0b0c; font-weight: 500; font-size: 12px;">Download</a>
+</nav>
+</header>
+
+<section id="top" style="position: relative; max-width: 1200px; margin: 0 auto; padding: 72px 20px 0; display: flex; flex-direction: column; align-items: center; gap: 24px; text-align: center;">
+<a href="https://github.com/Kungie/binder/releases/tag/v2.2.0" style="display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #26262a; background: #141416; font-size: 12px; color: #a1a1a1;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #8b7cf6; display: inline-block;"></span>2.2 is out: a real file manager and a mascot</a>
+<h1 class="hero-h" style="margin: 0; max-width: 880px; font-size: 76px; line-height: 76px; font-weight: 500; letter-spacing: -0.035em; text-wrap: balance;">Your whole workshop, in one quiet window.</h1>
+<p style="margin: 0; max-width: 600px; font-size: 17px; line-height: 26px; color: #a1a1a1; text-wrap: balance;">Tasks for you and a Claude Code agent, every GitHub repo, the home server, a file manager over it and the 3D printer. Mostly black and white, keyboard first, built for one person.</p>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding-top: 8px;">
+<a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 10px; background: #ededed; color: #0b0b0c; font-weight: 500; font-size: 14px;"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1.5v8M3.5 6.5L7 10l3.5-3.5M2 12.5h10"></path></svg>Download for Mac</a>
+<a href="https://github.com/Kungie/binder" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #34343a; color: #ededed; font-size: 14px;">View on GitHub</a>
+</div>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">v2.2.0 · macOS · Apple silicon · AGPL-3.0</p>
+
+<div style="position: relative; width: 100%; margin-top: 48px;">
+<img src="assets/mascot.svg" alt="" aria-hidden="true" class="hide-sm" style="position: absolute; left: -150px; bottom: -2px; width: 300px; z-index: 0;">
+<figure style="position: relative; z-index: 1; margin: 0; border-radius: 14px; border: 1px solid #34343a; background: #141416; padding: 6px; box-shadow: 0 40px 120px rgba(0,0,0,0.7);">
+<img width="2000" height="1250" src="assets/shots/overview.png" alt="Binder's Overview: today's done lines, open tasks, the server, Cloud and the printer" style="display: block; width: 100%; height: auto; border-radius: 10px;">
+</figure>
+</div>
+</section>
+
+<section aria-label="Colour means something" style="max-width: 1200px; margin: 0 auto; padding: 56px 20px 0; display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: center; font-size: 12px; color: #a1a1a1;">
+<span style="display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#6b6b6b" stroke-width="1.4" stroke-dasharray="2 2"></circle></svg>Backlog</span>
+<span style="display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#d4d4d4" stroke-width="1.4"></circle></svg>Todo</span>
+<span style="display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#f2c94c" stroke-width="1.4"></circle><path d="M7 3.5a3.5 3.5 0 0 1 0 7z" fill="#f2c94c"></path></svg>In progress</span>
+<span style="display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.2" fill="#8b7cf6"></circle><path d="M4.5 7.2l1.7 1.7 3.3-3.6" fill="none" stroke="#0b0b0c" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Done</span>
+<span style="display: inline-flex; align-items: center; gap: 8px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #f2994a; display: inline-block;"></span>Needs attention</span>
+<span style="display: inline-flex; align-items: center; gap: 8px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #4cb782; display: inline-block;"></span>Online</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; color: #8a8a8a;">Every colour means something. Nothing else gets one.</span>
+</section>
+
+<section id="features" style="max-width: 1200px; margin: 0 auto; padding: 140px 20px 0; display: flex; flex-direction: column; gap: 40px;">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 640px;">
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">What it does</p>
+<h2 class="big-h" style="margin: 0; font-size: 44px; line-height: 48px; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance;">Six screens for the things you keep checking.</h2>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">
+
+<article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M5.5 8.2l1.7 1.7 3.3-3.6"></path></svg>
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Tasks</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A board of soft cards or a keyboard-first table. Hand a task to Claude Code on your server and it runs in the background.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">claude -p over SSH</p>
+</article>
+
+<article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z"></path></svg>
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Projects</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Every GitHub repo arrives on its own. Your edits stay, nothing is deleted, and each project keeps a note in Obsidian.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">gh repo list</p>
+</article>
+
+<article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v12M2 8h12M3.8 3.8l8.4 8.4M12.2 3.8l-8.4 8.4"></path></svg>
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Claude Code</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Three hooks catch the decisions each session makes and write them to the project's daily file. Overview shows today's.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Daily/2026-11-14.md</p>
+</article>
+
+<article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5a3 3 0 0 1-.3-6 4 4 0 0 1 7.7 1A2.5 2.5 0 0 1 11.5 12.5z"></path></svg>
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Cloud</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A small Finder for a folder on your server. Right-click, Quick Look, zips opened on the server, a trash on every disk.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">node_modules in 1.3 s</p>
+</article>
+
+<article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3" width="11" height="4" rx="1"></rect><rect x="2.5" y="9" width="11" height="4" rx="1"></rect><path d="M5 5h.01M5 11h.01"></path></svg>
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Server</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Containers, services, load, memory, disk and temperature, read over SSH every 30 seconds. It only ever reads.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">8 of 9 containers up</p>
+</article>
+
+<article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6V2.5h7V6M4.5 11.5H3A1 1 0 0 1 2 10.5V7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-1.5"></path><rect x="4.5" y="9.5" width="7" height="4"></rect></svg>
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Printer and devices</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A Bambu Lab printer in LAN mode with its job, progress and temperatures, and every machine you own with a dot for whether it answers.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">case-lid · 42% · 1 h 13 min left</p>
+</article>
+
+</div>
+</section>
+
+<section style="max-width: 1200px; margin: 0 auto; padding: 140px 20px 0; display: flex; flex-wrap: wrap; gap: 48px; align-items: center;">
+<div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px;">
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">The board</p>
+<h2 class="big-h" style="margin: 0; font-size: 36px; line-height: 40px; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance;">Cards you can read at a glance.</h2>
+<p style="margin: 0; font-size: 15px; line-height: 24px; color: #a1a1a1;">Two lines of notes and a row of chips: status, priority, due date, project and the agent. Drag a card to change its status. Press <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; border: 1px solid #34343a; border-radius: 4px; padding: 1px 5px; color: #ededed;">c</span> to add one anywhere.</p>
+</div>
+<figure style="flex: 2 1 560px; min-width: 0; margin: 0; border-radius: 14px; border: 1px solid #34343a; background: #141416; padding: 6px;">
+<img loading="lazy" width="2880" height="1800" src="assets/shots/tasks.png" alt="The task board with Backlog, Todo, In progress and Done columns" style="display: block; width: 100%; height: auto; border-radius: 10px;">
+</figure>
+</section>
+
+<section style="max-width: 1200px; margin: 0 auto; padding: 120px 20px 0; display: flex; flex-wrap: wrap-reverse; gap: 48px; align-items: center;">
+<figure style="flex: 2 1 560px; min-width: 0; margin: 0; border-radius: 14px; border: 1px solid #34343a; background: #141416; padding: 6px;">
+<img loading="lazy" width="2880" height="1800" src="assets/shots/server.png" alt="The Server screen with load, memory, disk, temperature, containers and services" style="display: block; width: 100%; height: auto; border-radius: 10px;">
+</figure>
+<div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px;">
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">The home server</p>
+<h2 class="big-h" style="margin: 0; font-size: 36px; line-height: 40px; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance;">Know it's fine without opening a terminal.</h2>
+<p style="margin: 0; font-size: 15px; line-height: 24px; color: #a1a1a1;">Binder reads your server over plain SSH with your own keys. A green dot means up, a hollow red ring means down. It never stores a password and never touches <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; color: #ededed;">~/.ssh</span>.</p>
+</div>
+</section>
+
+<section id="principles" style="max-width: 1200px; margin: 0 auto; padding: 140px 20px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px 48px;">
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #26262a; padding-top: 24px;">
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Keyboard first</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Arrows move, Enter opens, a letter creates. Everything else is one palette away.</p>
+<div style="display: flex; gap: 6px; flex-wrap: wrap;">
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; border: 1px solid #34343a; border-radius: 4px; padding: 2px 6px; color: #a1a1a1;">⌘K</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; border: 1px solid #34343a; border-radius: 4px; padding: 2px 6px; color: #a1a1a1;">c</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; border: 1px solid #34343a; border-radius: 4px; padding: 2px 6px; color: #a1a1a1;">↑ ↓</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; border: 1px solid #34343a; border-radius: 4px; padding: 2px 6px; color: #a1a1a1;">Enter</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #26262a; padding-top: 24px;">
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Your data stays home</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A SQLite file on your Mac, notes in your own vault, files on your own server. No account, no cloud of ours.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">~/Library/Application Support/…/binder.db</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #26262a; padding-top: 24px;">
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Small and fast</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A Rust core in a Tauri window, using the system's own web view. The whole app is 12 MB.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Binder.dmg · 6.8 MB</p>
+</div>
+</section>
+
+<section style="max-width: 1200px; margin: 0 auto; padding: 140px 20px 0;">
+<div style="position: relative; overflow: hidden; border-radius: 14px; border: 1px solid #26262a; background: #141416; min-height: 340px; padding: 56px 40px 56px 40px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 18px;">
+<img src="assets/mascot.svg" alt="" aria-hidden="true" style="position: absolute; left: 0; bottom: 0; width: 280px;">
+<p style="position: relative; margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">Nothing open. Press c to add a task.</p>
+<h2 class="big-h" style="position: relative; margin: 0; max-width: 560px; font-size: 44px; line-height: 48px; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance;">Give your workshop a window.</h2>
+<div style="position: relative; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+<a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 10px; background: #ededed; color: #0b0b0c; font-weight: 500; font-size: 14px;">Download for Mac</a>
+<a href="https://github.com/Kungie/binder#build" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #34343a; color: #ededed; font-size: 14px;">Build from source</a>
+</div>
+<p style="position: relative; margin: 0; max-width: 420px; font-size: 12px; line-height: 18px; color: #8a8a8a;">Not notarized yet: the first launch needs System Settings, Privacy and Security, Open Anyway.</p>
+</div>
+</section>
+
+<footer style="max-width: 1200px; margin: 0 auto; padding: 64px 20px 48px; display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; font-size: 12px; color: #8a8a8a;">
+<span style="display: inline-flex; align-items: center; gap: 8px; color: #ededed; font-weight: 500;"><img src="assets/mark.svg" alt="" style="width: 16px; height: 16px; display: block;">Binder</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px;">AGPL-3.0</span>
+<a href="https://github.com/Kungie/binder" style="color: #a1a1a1; margin-left: auto;">github.com/Kungie/binder</a>
+<a href="https://github.com/Kungie/binder/releases" style="color: #a1a1a1;">Releases</a>
+</footer>
+
+</div>
+</body>
+</html>

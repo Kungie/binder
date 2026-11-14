@@ -20,6 +20,7 @@ crates/cli/       binder-cli: the Claude Code hook (`hook <event>`) and the deta
 app/src-tauri/    Tauri app: thin commands over the core, the printer MQTT workers (printer.rs), Cloud copies
                   in flight (transfers.rs), "Open with" through Launch Services (apps.rs)
 app/src/          React + TypeScript + Tailwind interface
+site/             the website at binder.erenkahraman.dev: static HTML and assets, no build step
 ```
 
 The interface talks to an `Api` interface: Tauri `invoke` in the app, an in-memory fake (`app/src/lib/memory.ts`) in tests and in the browser preview.
@@ -58,3 +59,4 @@ Dark only and mostly black and white. Colour is small (an icon, a dot, a chip's 
 Meaning colours: backlog and canceled `#6B6B6B`, todo `#D4D4D4`, in progress `#F2C94C`, done `#8B7CF6`, urgent and needs attention `#F2994A`, error and offline `#EB5757`, online `#4CB782`. Each project has one of 8 colours (`#5E6AD2 #26B5CE #4CB782 #F2C94C #F2994A #EB5757 #B76EDB #8D8D8D`), from a hash of its name or chosen by the owner.
 
 Inter 13 px (12 px in tables), weights 400 and 500 only; Geist Mono for numbers, ids and paths. Radius 8 px on controls, 10 px on cards and panels; chips are 24 px pills. Sidebar 208 px, detail screens at most 960 px wide. Copy: plain English, no exclamation marks, no em dashes, no filler.
+- The website in `site/` runs on the home server in `~/sites/binder-site` (Caddy plus its own Cloudflare Tunnel, like the other sites there). To publish a change, `rsync -a --delete site/ <server>:sites/binder-site/public/`; Caddy serves it at once.
