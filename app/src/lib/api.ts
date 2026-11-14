@@ -1,7 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
   Access,
+  Agent,
   NewPrinter,
   PrinterCommand,
   PrinterView,
@@ -130,6 +131,14 @@ export interface Api {
   onDragOver(cb: (p: { x: number; y: number } | null) => void): () => void;
   /** Starts a native drag of these Mac paths, out to Finder or back onto the window. */
   startDrag(paths: string[]): Promise<void>;
+  /** Connects the agent's terminal, or hands a running one's output to `onData`. */
+  termOpen(agent: Agent, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
+  termWrite(agent: Agent, data: string): Promise<void>;
+  termResize(agent: Agent, cols: number, rows: number): Promise<void>;
+  /** Ends the local ssh and connects again; the tmux session on the server stays. */
+  termReconnect(agent: Agent, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
+  /** A terminal's ssh ended, with one line saying why. */
+  onTermExit(cb: (agent: Agent, message: string) => void): () => void;
 }
 
 export interface Dropped {
@@ -167,6 +176,13 @@ function dragIcon(count: number): string {
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
   const off = listen<T>(event, (e) => cb(e.payload));
   return () => void off.then((f) => f());
+}
+
+/** A channel for a terminal's raw output bytes. */
+function bytesChannel(onData: (bytes: Uint8Array) => void): Channel<ArrayBuffer | number[]> {
+  const output = new Channel<ArrayBuffer | number[]>();
+  output.onmessage = (m) => onData(m instanceof ArrayBuffer ? new Uint8Array(m) : Uint8Array.from(m));
+  return output;
 }
 
 /** Tauri sends a command's error as a string; make it an Error so callers handle one shape. */
@@ -251,6 +267,11 @@ export const tauriApi: Api = {
     const { startDrag } = await import("@crabnebula/tauri-plugin-drag");
     await startDrag({ item: paths, icon: dragIcon(paths.length) });
   },
+  termOpen: (agent, cols, rows, onData) => call("term_open", { agent, cols, rows, output: bytesChannel(onData) }),
+  termWrite: (agent, data) => call("term_write", { agent, data }),
+  termResize: (agent, cols, rows) => call("term_resize", { agent, cols, rows }),
+  termReconnect: (agent, cols, rows, onData) => call("term_reconnect", { agent, cols, rows, output: bytesChannel(onData) }),
+  onTermExit: (cb) => subscribe<{ agent: Agent; message: string }>("term-exit", (e) => cb(e.agent, e.message)),
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

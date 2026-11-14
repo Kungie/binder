@@ -13,6 +13,8 @@ import { Server } from "./screens/Server";
 import { Printer } from "./screens/Printer";
 import { Cloud } from "./screens/Cloud";
 import { Transfers } from "./components/Transfers";
+import { Agents } from "./screens/Agents";
+import { useState } from "react";
 
 function Screens() {
   const { screen } = useStore();
@@ -33,17 +35,23 @@ function Screens() {
       return <Printer />;
     case "settings":
       return <Settings />;
+    case "agents":
+      return null;
   }
 }
 
 export function Shell() {
-  const { creatingTask, creatingProject } = useStore();
+  const { creatingTask, creatingProject, screen } = useStore();
+  // Agents stays mounted once opened, so its terminals keep their connection and screen.
+  const [agentsSeen, setAgentsSeen] = useState(false);
+  if (screen === "agents" && !agentsSeen) setAgentsSeen(true);
   return (
     <div className="flex h-full">
       <Sidebar />
       <main className="relative flex min-w-0 flex-1 flex-col">
         <div className="h-3 shrink-0" data-tauri-drag-region />
         <Screens />
+        {agentsSeen && <Agents shown={screen === "agents"} />}
         <Transfers />
       </main>
       {creatingTask && <NewTask />}

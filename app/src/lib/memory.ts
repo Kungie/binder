@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { Agent, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -30,6 +30,8 @@ export interface MemoryOptions {
   server?: string | null;
   /** Device addresses that don't answer a probe. */
   offline?: string[];
+  /** When set, the agents' terminals fail to connect with this line. */
+  termFail?: string;
 }
 
 const FOLD: Record<string, string> = { ş: "S", Ş: "S", ı: "I", İ: "I", ğ: "G", Ğ: "G", ü: "U", Ü: "U", ö: "O", Ö: "O", ç: "C", Ç: "C" };
@@ -86,6 +88,14 @@ export function memoryApi(
   };
   const offline = options.offline ?? ["10.0.7.30"];
   let reachable = true;
+  const terms = new Map<Agent, (bytes: Uint8Array) => void>();
+  const encoder = new TextEncoder();
+  async function openTerm(agent: Agent, onData: (bytes: Uint8Array) => void) {
+    if (!config.server) throw new Error("No server set.");
+    if (options.termFail) throw new Error(options.termFail);
+    terms.set(agent, onData);
+    onData(encoder.encode("Connected to demo-dev@10.0.7.2 (demo)\r\n"));
+  }
   let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud" };
   let lastDone: number | null = seed.lastDone ?? null;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
@@ -181,6 +191,15 @@ export function memoryApi(
       opened.push(p.url);
     },
     onProjectsChanged() {
+      return () => {};
+    },
+    termOpen: (agent, _cols, _rows, onData) => openTerm(agent, onData),
+    async termWrite(agent, data) {
+      terms.get(agent)?.(encoder.encode(data));
+    },
+    async termResize() {},
+    termReconnect: (agent, _cols, _rows, onData) => openTerm(agent, onData),
+    onTermExit() {
       return () => {};
     },
     done,

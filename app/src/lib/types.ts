@@ -353,3 +353,6 @@ export interface Transfer {
   state: TransferState;
   error: string | null;
 }
+
+/** The Agents screen's two chats, each a tmux session on the home server. */
+export type Agent = "claude" | "qwen";
