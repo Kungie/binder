@@ -125,6 +125,8 @@ pub struct Task {
     pub attention: bool,
     /// Order inside its status column, lower first.
     pub sort: i64,
+    /// Runs on the server from 03:00 instead of being picked up during the day.
+    pub night: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -158,6 +160,8 @@ pub struct TaskPatch {
     pub clear_due_time: bool,
     pub attention: Option<bool>,
     pub sort: Option<i64>,
+    /// Marking a task for the night also assigns it to the agent.
+    pub night: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -166,6 +170,7 @@ pub enum TaskView {
     All,
     Mine,
     Agent,
+    Night,
     Project(i64),
 }
 

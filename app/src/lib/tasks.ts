@@ -23,6 +23,8 @@ export function viewTasks(tasks: Task[], view: TaskView, includeClosed: boolean)
           return t.assignee === "me";
         case "agent":
           return t.assignee === "agent";
+        case "night":
+          return t.night;
         case "project":
           return t.project_id === view.id;
         default:

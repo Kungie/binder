@@ -114,3 +114,22 @@ fn reopen_file_keeps_tasks() {
     let db = Db::open(&path).unwrap();
     assert_eq!(db.list_tasks(TaskView::All, false).unwrap()[0].title, "stays");
 }
+
+#[test]
+fn marking_night_assigns_the_agent() {
+    let mut db = Db::in_memory().unwrap();
+    let t = db.create_task(new("Back up the vault"), 1).unwrap();
+    assert!(!t.night);
+    let t = db.update_task(t.id, TaskPatch { night: Some(true), ..Default::default() }, 2).unwrap();
+    assert!(t.night);
+    assert_eq!(t.assignee, Assignee::Agent);
+}
+
+#[test]
+fn night_view_lists_only_night_tasks() {
+    let mut db = Db::in_memory().unwrap();
+    let a = db.create_task(new("a"), 1).unwrap();
+    db.create_task(new("b"), 2).unwrap();
+    db.update_task(a.id, TaskPatch { night: Some(true), ..Default::default() }, 3).unwrap();
+    assert_eq!(keys(&db.list_tasks(TaskView::Night, false).unwrap()), vec![a.key]);
+}

@@ -21,6 +21,8 @@ export interface Task {
   updated: number;
   attention: boolean;
   sort: number;
+  /** Runs on the server from 03:00 instead of being picked up during the day. */
+  night: boolean;
 }
 
 export interface NewTask {
@@ -48,9 +50,11 @@ export interface TaskPatch {
   clear_due_time?: boolean;
   attention?: boolean;
   sort?: number;
+  /** Marking a task for the night also assigns it to the agent. */
+  night?: boolean;
 }
 
-export type TaskView = { kind: "all" } | { kind: "mine" } | { kind: "agent" } | { kind: "project"; id: number };
+export type TaskView = { kind: "all" } | { kind: "mine" } | { kind: "agent" } | { kind: "night" } | { kind: "project"; id: number };
 
 export interface Project {
   id: number;
@@ -221,6 +225,8 @@ export interface AgentRun {
   ended: number | null;
   exit_code: number | null;
   tail: string;
+  /** A night run still waiting in the server's queue. */
+  queued: boolean;
 }
 
 export interface RepoStatus {

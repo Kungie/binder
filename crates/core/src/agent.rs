@@ -44,6 +44,8 @@ pub struct AgentRun {
     pub ended: Option<i64>,
     pub exit_code: Option<i32>,
     pub tail: String,
+    /// A night run still waiting in the server's queue.
+    pub queued: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,7 +69,7 @@ impl AgentRun {
 /// Exit code recorded when Binder stops a run (SIGTERM).
 pub const STOPPED: i32 = 143;
 
-const COLUMNS: &str = "id, task_id, run, dir, access, started, ended, exit_code, tail";
+const COLUMNS: &str = "id, task_id, run, dir, access, started, ended, exit_code, tail, queued";
 
 fn row_to_run(r: &Row) -> rusqlite::Result<AgentRun> {
     Ok(AgentRun {
@@ -80,6 +82,7 @@ fn row_to_run(r: &Row) -> rusqlite::Result<AgentRun> {
         ended: r.get(6)?,
         exit_code: r.get(7)?,
         tail: r.get(8)?,
+        queued: r.get(9)?,
     })
 }
 
@@ -179,7 +182,7 @@ pub fn poll_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Res
     db.conn.execute("UPDATE agent_runs SET ended = ?2, exit_code = ?3, tail = ?4 WHERE run = ?1 AND ended IS NULL", params![run, ended, code, tail])?;
     if ended.is_some() {
         set_status(&mut db, r.task_id, if code == Some(0) { Status::Done } else { Status::Todo }, now)?;
-        db.update_task(r.task_id, TaskPatch { attention: Some(true), ..Default::default() }, now)?;
+        db.update_task(r.task_id, TaskPatch { attention: Some(true), night: Some(false), ..Default::default() }, now)?;
     }
     get_run(&db, run)
 }

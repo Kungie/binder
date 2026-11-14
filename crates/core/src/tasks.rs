@@ -4,7 +4,7 @@ use crate::model::*;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
-const COLUMNS: &str = "id, key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, attention, sort";
+const COLUMNS: &str = "id, key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, attention, sort, night";
 
 /// Open work first, most urgent first, most recently touched first.
 const ORDER: &str = "ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'done' THEN 3 ELSE 4 END,
@@ -26,6 +26,7 @@ fn row_to_task(r: &Row) -> rusqlite::Result<Task> {
         due_time: r.get(11)?,
         attention: r.get(12)?,
         sort: r.get(13)?,
+        night: r.get(14)?,
     })
 }
 
@@ -105,6 +106,7 @@ impl Db {
             TaskView::All => {}
             TaskView::Mine => filters.push("assignee = 'me'"),
             TaskView::Agent => filters.push("assignee = 'agent'"),
+            TaskView::Night => filters.push("night = 1"),
             TaskView::Project(id) => {
                 filters.push("project_id = ?1");
                 project = Some(id);
@@ -162,10 +164,16 @@ impl Db {
         if let Some(s) = p.sort {
             t.sort = s;
         }
+        if let Some(n) = p.night {
+            t.night = n;
+            if n {
+                t.assignee = Assignee::Agent;
+            }
+        }
         self.conn.execute(
             "UPDATE tasks SET title = ?2, notes = ?3, status = ?4, priority = ?5, project_id = ?6, assignee = ?7, due = ?8, updated = ?9,
-             due_time = ?10, attention = ?11, sort = ?12 WHERE id = ?1",
-            params![id, t.title, t.notes, t.status.as_str(), t.priority.as_i64(), t.project_id, t.assignee.as_str(), t.due, now, t.due_time, t.attention, t.sort],
+             due_time = ?10, attention = ?11, sort = ?12, night = ?13 WHERE id = ?1",
+            params![id, t.title, t.notes, t.status.as_str(), t.priority.as_i64(), t.project_id, t.assignee.as_str(), t.due, now, t.due_time, t.attention, t.sort, t.night],
         )?;
         self.get_task(id)
     }

@@ -271,6 +271,7 @@ export function memoryApi(
         updated: now(),
         attention: false,
         sort,
+        night: false,
       };
       tasks.push(created);
       return { ...created };
@@ -296,6 +297,10 @@ export function memoryApi(
       }
       if (p.attention !== undefined) t.attention = p.attention;
       if (p.sort !== undefined) t.sort = p.sort;
+      if (p.night !== undefined) {
+        t.night = p.night;
+        if (p.night) t.assignee = "agent";
+      }
       t.updated = Math.max(now(), t.updated + 1);
       return { ...t };
     },
@@ -437,7 +442,7 @@ export function memoryApi(
     async startRun(taskId, dir, access) {
       if (!config.server) throw new Error("No server set.");
       const t = task(taskId);
-      const r: AgentRun = { id: nextId++, task_id: taskId, run: `${t.key.toLowerCase()}-${now()}`, dir, access, started: now(), ended: null, exit_code: null, tail: "" };
+      const r: AgentRun = { id: nextId++, task_id: taskId, run: `${t.key.toLowerCase()}-${now()}`, dir, access, started: now(), ended: null, exit_code: null, tail: "", queued: false };
       runs.unshift(r);
       t.status = "in_progress";
       return { ...r };
@@ -603,6 +608,7 @@ export function demoSeed(): Seed {
     due_time: null,
     attention: false,
     sort: id,
+    night: false,
     id: id + 10,
     key,
     title,

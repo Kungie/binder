@@ -89,6 +89,9 @@ const MIGRATIONS: &[&str] = &[
     "CREATE TABLE hidden_repos (id INTEGER PRIMARY KEY, github_id TEXT UNIQUE, name_with_owner TEXT NOT NULL, hidden_at INTEGER NOT NULL);
     ALTER TABLE pending_done ADD COLUMN time TEXT;
     CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+    // v6: night tasks, and night runs waiting in the server's queue
+    "ALTER TABLE tasks ADD COLUMN night INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN queued INTEGER NOT NULL DEFAULT 0;",
 ];
 
 impl Db {

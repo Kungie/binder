@@ -145,3 +145,13 @@ fn login_shell_chatter_before_the_state_is_ignored() {
     assert_eq!(p.state(), RunState::Running);
     assert_eq!(db.lock().unwrap().get_task(t.id).unwrap().status, Status::InProgress);
 }
+
+#[test]
+fn a_finished_run_clears_night() {
+    let (db, t, run, r) = started(vec![Ok("exit:0\n--binder:tail--\nDone.\n".into())]);
+    db.lock().unwrap().update_task(t.id, TaskPatch { night: Some(true), ..Default::default() }, 5).unwrap();
+    assert!(!run.queued);
+    poll_run(&db, &r, &run.run, 1_700_000_100).unwrap();
+    let t = db.lock().unwrap().get_task(t.id).unwrap();
+    assert_eq!((t.status, t.night), (Status::Done, false));
+}
