@@ -6,12 +6,16 @@ import type { PrinterView } from "./types";
 export function usePrinters() {
   const { api } = useStore();
   const [printers, setPrinters] = useState<PrinterView[]>([]);
-  const reload = useCallback(async () => setPrinters(await api.printers()), [api]);
+  const [loaded, setLoaded] = useState(false);
+  const reload = useCallback(async () => {
+    setPrinters(await api.printers());
+    setLoaded(true);
+  }, [api]);
   useEffect(() => {
     void reload();
     return api.onPrinter((v) => setPrinters((list) => list.map((p) => (p.config.serial === v.config.serial ? v : p))));
   }, [api, reload]);
-  return { printers, reload };
+  return { printers, loaded, reload };
 }
 
 export const STATE_LABEL: Record<string, string> = {

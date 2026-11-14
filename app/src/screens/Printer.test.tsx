@@ -5,8 +5,8 @@ import { Shell } from "../App";
 import { type Screen, StoreProvider } from "../lib/store";
 import { demoSeed, memoryApi } from "../lib/memory";
 
-function setup(initialScreen: Screen = "printer") {
-  const api = memoryApi(demoSeed());
+function setup(initialScreen: Screen = "printer", seed = demoSeed()) {
+  const api = memoryApi(seed);
   const user = userEvent.setup();
   render(
     <StoreProvider api={api} initialScreen={initialScreen}>
@@ -53,6 +53,36 @@ describe("Printer", () => {
     expect(await screen.findByRole("region", { name: "spare" })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("12345678");
     expect(JSON.stringify(await api.printers())).not.toContain("12345678");
+  });
+
+  it("overview_shows_an_idle_printer", async () => {
+    const seed = demoSeed();
+    seed.printers![0].state = { ...seed.printers![0].state, gcode_state: "IDLE", percent: null, job: null, nozzle_c: 24.6, nozzle_target_c: 0, bed_c: 23.1, bed_target_c: 0 };
+    setup("overview", seed);
+    const panel = await screen.findByRole("region", { name: "Printer" });
+    expect(within(panel).getByText("workshop")).toBeInTheDocument();
+    expect(within(panel).getByText("Idle")).toBeInTheDocument();
+    expect(within(panel).getByText("25 / 0°C")).toBeInTheDocument();
+    expect(within(panel).queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("overview_shows_an_offline_printer", async () => {
+    const seed = demoSeed();
+    seed.printers![0].online = false;
+    seed.printers![0].state = { ...seed.printers![0].state, gcode_state: null };
+    setup("overview", seed);
+    const panel = await screen.findByRole("region", { name: "Printer" });
+    expect(within(panel).getByText("Offline")).toBeInTheDocument();
+  });
+
+  it("overview_says_when_no_printer_is_set_up", async () => {
+    const seed = demoSeed();
+    seed.printers = [];
+    const { user } = setup("overview", seed);
+    const panel = await screen.findByRole("region", { name: "Printer" });
+    expect(within(panel).getByText("No printer set up.")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Set up" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument());
   });
 
   it("overview_shows_printing_printer", async () => {

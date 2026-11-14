@@ -36,14 +36,14 @@ describe("Done today", () => {
     expect(second).toHaveTextContent("Early one.");
   });
 
-  it("shows 8 then Show all", async () => {
+  it("shows every line, scrolling inside its panel", async () => {
     const lines = Array.from({ length: 10 }, (_, i) => at(`1${i}:00`, `Line ${i}.`));
-    const { user } = setup({ 1: lines });
+    setup({ 1: lines });
     const list = await screen.findByRole("list", { name: "Done today" });
-    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(8));
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(10));
     expect(within(list).getAllByRole("listitem")[0]).toHaveTextContent("Line 9.");
-    await user.click(screen.getByRole("button", { name: "Show all (10)" }));
-    expect(within(list).getAllByRole("listitem")).toHaveLength(10);
+    expect(screen.queryByRole("button", { name: /Show all/ })).not.toBeInTheDocument();
+    expect(list.parentElement).toHaveClass("overflow-y-auto");
   });
 
   it("empty says Nothing logged today.", async () => {

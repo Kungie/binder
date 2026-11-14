@@ -10,7 +10,7 @@ import type { DoneItem } from "../lib/types";
 import { clock, useServer } from "../lib/useServer";
 import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
-import { minutes, usePrinters } from "../lib/usePrinters";
+import { minutes, STATE_LABEL, temp, usePrinters } from "../lib/usePrinters";
 import { ago } from "../lib/time";
 import { loadPercent } from "../lib/load";
 import type { CloudEntry, CloudStatus } from "../lib/types";
@@ -53,28 +53,32 @@ export function Overview() {
           New task
         </Button>
       </header>
-      <div className="flex flex-col gap-3 px-5 pb-5">
-        <div className="grid grid-cols-3 gap-3">
+      {/* The two lists fill the window and scroll inside; below a usable height the page scrolls instead. */}
+      <div className="flex min-h-[620px] flex-1 flex-col gap-3 px-5 pb-5">
+        <div className="grid shrink-0 grid-cols-3 gap-3">
           <Metric title="Open" value={open.length} />
           <Metric title="In progress" value={doing} />
           <Metric title="Done this week" value={doneWeek} />
         </div>
-        <div className="grid grid-cols-2 items-start gap-3">
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
           <DoneToday items={doneToday} />
-          <div className="flex min-w-0 flex-col gap-3">
-          <ServerPanel />
-          <CloudPanel />
-          <PrinterPanel />
-          <Panel
-            title="Open tasks"
-            action={
-              <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("tasks")}>
-                View all
-              </button>
-            }
-          >
-            <TaskBoard tasks={open.slice(0, 8)} compact label="Open tasks" empty="Nothing open. Press c to add a task." />
-          </Panel>
+          <div className="flex min-h-0 min-w-0 flex-col gap-3">
+            <ServerPanel />
+            <CloudPanel />
+            <PrinterPanel />
+            <Panel
+              className="flex min-h-[180px] flex-1 flex-col"
+              title="Open tasks"
+              action={
+                <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("tasks")}>
+                  View all
+                </button>
+              }
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <TaskBoard tasks={open} compact label="Open tasks" empty="Nothing open. Press c to add a task." />
+              </div>
+            </Panel>
           </div>
         </div>
       </div>
@@ -82,32 +86,25 @@ export function Overview() {
   );
 }
 
-const DONE_SHOWN = 8;
-
-/** Today's done lines across projects, newest first: the newest 8, then all of them on request. */
+/** Today's done lines across projects, newest first, scrolling inside the panel. */
 function DoneToday({ items }: { items: DoneItem[] }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, DONE_SHOWN);
   return (
-    <Panel title="Done today" action={<span className="font-mono text-[11px] text-text-3">{items.length}</span>}>
-      <ul aria-label="Done today" className="border-t border-line">
-        {shown.map((d, i) => (
-          <li key={`${d.project_id}-${i}`} className="flex flex-col gap-0.5 border-b border-line px-3 py-2 text-[12px] last:border-b-0">
-            <span className="flex items-center gap-2 text-text-3">
-              {d.line.time && <span className="font-mono text-[11px]">{d.line.time}</span>}
-              <span data-dot className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} aria-hidden="true" />
-              <span className="truncate">{d.project}</span>
-            </span>
-            <span className="text-text-2">{d.line.text}</span>
-          </li>
-        ))}
-      </ul>
-      {items.length === 0 && <Empty>Nothing logged today.</Empty>}
-      {items.length > DONE_SHOWN && (
-        <button type="button" className="w-full border-t border-line px-3 py-2 text-left text-[12px] text-text-3 hover:text-text" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all (${items.length})`}
-        </button>
-      )}
+    <Panel className="flex min-h-0 flex-col" title="Done today" action={<span className="font-mono text-[11px] text-text-3">{items.length}</span>}>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <ul aria-label="Done today" className="border-t border-line">
+          {items.map((d, i) => (
+            <li key={`${d.project_id}-${i}`} className="flex flex-col gap-0.5 border-b border-line px-3 py-2 text-[12px] last:border-b-0">
+              <span className="flex items-center gap-2 text-text-3">
+                {d.line.time && <span className="font-mono text-[11px]">{d.line.time}</span>}
+                <span data-dot className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} aria-hidden="true" />
+                <span className="truncate">{d.project}</span>
+              </span>
+              <span className="text-text-2">{d.line.text}</span>
+            </li>
+          ))}
+        </ul>
+        {items.length === 0 && <Empty>Nothing logged today.</Empty>}
+      </div>
     </Panel>
   );
 }
@@ -192,27 +189,58 @@ function ServerPanel() {
 
 function PrinterPanel() {
   const { setScreen } = useStore();
-  const { printers } = usePrinters();
-  const p = printers.find((x) => isPrinting(x.state));
-  if (!p) return null;
+  const { printers, loaded } = usePrinters();
+  const p = printers.find((x) => isPrinting(x.state)) ?? printers[0];
   return (
     <Panel
       label="Printer"
       title="Printer"
       action={
-        <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("printer")}>
-          Open
-        </button>
+        p && (
+          <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("printer")}>
+            Open
+          </button>
+        )
       }
     >
-      <div className="flex flex-col gap-2 border-t border-line px-3 py-2.5 text-[12px]">
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 truncate text-text">{p.state.job ?? p.config.name}</span>
-          <span className="ml-auto font-mono text-[11px] text-text">{`${p.state.percent ?? 0}%`}</span>
+      {p && isPrinting(p.state) ? (
+        <div className="flex flex-col gap-2 border-t border-line px-3 py-2.5 text-[12px]">
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 truncate text-text">{p.state.job ?? p.config.name}</span>
+            <span className="ml-auto font-mono text-[11px] text-text">{`${p.state.percent ?? 0}%`}</span>
+          </div>
+          <Progress value={p.state.percent ?? 0} label="Progress" />
+          <span className="font-mono text-[11px] text-text-3">{`${minutes(p.state.remaining_min)} left`}</span>
         </div>
-        <Progress value={p.state.percent ?? 0} label="Progress" />
-        <span className="font-mono text-[11px] text-text-3">{`${minutes(p.state.remaining_min)} left`}</span>
-      </div>
+      ) : p ? (
+        <div className="flex flex-col gap-1.5 border-t border-line px-3 py-2.5 text-[12px]">
+          <div className="flex items-center gap-2">
+            <Dot on={p.online} />
+            <span className="min-w-0 truncate text-text">{p.config.name}</span>
+            <span className="ml-auto text-text-3">{p.online ? (STATE_LABEL[p.state.gcode_state ?? ""] ?? "Idle") : "Offline"}</span>
+          </div>
+          {p.online && (
+            <div className="flex gap-4 font-mono text-[11px] text-text-3">
+              <span>
+                Nozzle <span className="text-text-2">{temp(p.state.nozzle_c, p.state.nozzle_target_c)}</span>
+              </span>
+              <span>
+                Bed <span className="text-text-2">{temp(p.state.bed_c, p.state.bed_target_c)}</span>
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        loaded && (
+          <Empty
+            action={
+              <Button onClick={() => setScreen("printer")}>Set up</Button>
+            }
+          >
+            No printer set up.
+          </Empty>
+        )
+      )}
     </Panel>
   );
 }
