@@ -24,11 +24,11 @@ Binder is mostly black and white, with a few colours that each mean something, k
 
 ## What it does
 
-- **Tasks:** a board with Backlog, Todo, In progress and Done columns, or the same tasks as a keyboard-first table. Cards show two lines of notes and chips for status, priority, due date, project and the agent. Drag a card to change its status or its place. A task assigned to the agent gets a **Run** button that starts `claude -p` on the home server over SSH, in the background, and follows it until it ends; an orange dot marks it when the run ends.
+- **Tasks:** a board with Backlog, Todo, In progress and Done columns, or the same tasks as a keyboard-first table. Cards show two lines of notes and chips for status, priority, due date, project and the agent. Drag a card to change its status or its place. A task assigned to the agent gets a **Run** button that starts `claude -p` on the home server over SSH, in the background, and follows it until it ends; an orange dot marks it when the run ends. Binder also picks up the agent's tasks on its own every 10 minutes, one run at a time. A task marked as a night task, with a purple moon, waits in a queue on the server and runs there from 03:00, whether the Mac is awake or not.
 - **Projects:** your GitHub repos come in on their own through the `gh` CLI and its login, at start and with **Sync**. Your own edits stay, and nothing is deleted: a repo that's archived or gone moves to Archived, and a project you delete stays gone until you bring it back. Projects that aren't on GitHub can be added by hand. A project can have a local folder (branch, changes, ahead and behind, last commit) and an Obsidian folder with its note and a daily file of decisions.
 - **Claude Code:** Settings › Claude Code adds three hooks. Sessions are matched to a project by folder or by the repo's GitHub remote. When a session has enough new talk, Haiku picks out up to three key decisions, after secrets are masked, and writes them to the project's daily file. Overview shows today's lines.
-- **Cloud:** a file manager over a folder on the home server, shared over SMB. Right-click menu, multi-select, Quick Look, Open with, zip and unzip on the server, and a transfer tray with progress. With SSH set up, folders move as one stream, so a `node_modules` takes seconds. More than one disk works, each with its own trash. Your phone reaches the same folder from the Files app.
-- **Server:** containers, running services, load, memory, disk, temperature and the Pi board's power draw, read over SSH every 30 seconds. Read only.
+- **Cloud:** a file manager over a folder on the home server, shared over SMB. Right-click menu, multi-select, Quick Look, Open with, zip and unzip on the server, and a transfer tray with progress. With SSH set up, folders move as one stream, so a `node_modules` takes seconds. More than one disk works, each with its own trash, and the SSD and SD card each get a space bar. Your phone reaches the same folder from the Files app.
+- **Server:** containers, running services, load, memory, disk (the SSD and the SD card together), temperature and the Pi board's power draw, read over SSH every 30 seconds. Press Load, Memory or Disk for the biggest processes or folders. Read only. Binder keeps watching the containers after its window closes and sends a Mac notification when one stops, keeps restarting or turns unhealthy, and when it is back.
 - **Agents:** two terminals side by side, Claude Code on the left and a small local model (Qwen3 4B in Ollama) on the right, each a tmux session on the home server reached with the system `ssh`. They stay connected while Binder runs, and the sessions keep going after it quits.
 - **Devices:** your machines and whether each one answers.
 - **Printer:** a Bambu Lab printer in LAN mode over MQTT: job, progress, temperatures, pause, resume and stop.
@@ -51,12 +51,15 @@ After that, Binder looks for a new release when it opens and puts a dot beside S
 ## Setup
 
 - **Server:** Settings › Home server takes an SSH target, `user@host` or a `Host` from `~/.ssh/config`. Binder uses your keys through the system `ssh` and never stores a password.
+- **Night tasks:** Settings › Claude Code › Night tasks › Set up writes `~/.binder-agent/night.sh` on the server and adds one line to your crontab; Remove takes it out again.
 - **Agents:** the server needs `tmux`, Claude Code signed in, and Ollama in a Docker container named `ollama` with `qwen3:4b` pulled.
 - **Vault:** the Obsidian vault can live anywhere that mounts as a folder, such as an SMB share. Each project gets a folder with its note and daily files. Binder writes only when the vault is mounted; done lines wait otherwise.
 - **GitHub:** install the GitHub CLI and run `gh auth login` once. Binder never reads or stores a token.
 - **Cloud:** on the server, run `sudo scripts/cloud-share.sh <user>` once. It creates `/srv/cloud` and shares it as `[cloud]`. On the Mac, connect to `smb://<server>/cloud` in Finder, save the password in the Keychain, add the share to Login Items and put the same address in Settings › Cloud. On a phone, use Files › Connect to Server with the server's Tailscale address.
-- **Printer:** the access code goes to the login Keychain, never to a file.
+- **Printer:** the access code goes to the login Keychain, never to a file. Printers that send an older (version 1) certificate connect too.
 - macOS asks once for Local Network access. Allow it, or Binder can't reach addresses on your LAN.
+
+Settings › Display sets the interface size (100 to 150%, or ⌘+ ⌘- ⌘0) for large displays. Closing the window keeps Binder running in the Dock; ⌘Q quits.
 
 Settings live in `~/Library/Application Support/io.github.kungie.binder/config.toml`, data in `binder.db` beside it.
 
