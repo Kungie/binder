@@ -36,6 +36,7 @@ pub mod devices;
 pub mod github;
 pub mod hooks;
 pub mod model;
+pub mod pickup;
 pub mod notes;
 pub mod printer;
 pub mod projects;
