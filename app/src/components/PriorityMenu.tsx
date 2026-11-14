@@ -30,7 +30,7 @@ export function PriorityMenu({ value, onPick, onClose }: { value: Priority; onPi
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && onClose()}
-      className="fade-in z-30 w-44 rounded-control border border-line-strong bg-raised p-1 shadow-menu outline-none"
+      className="pop-in z-30 w-44 rounded-control border border-line-strong bg-raised p-1 shadow-menu outline-none"
     >
       {ORDER.map((p, i) => (
         <div

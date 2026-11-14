@@ -68,7 +68,12 @@ export function Shell() {
       <Sidebar />
       <main className="relative flex min-w-0 flex-1 flex-col">
         <div className="h-3 shrink-0" data-tauri-drag-region />
-        <Screens />
+        {/* Keyed by screen, so each one arrives with its own animation. */}
+        {screen !== "agents" && (
+          <div key={screen} data-testid="screen" data-screen={screen} className="screen-in flex min-h-0 flex-1 flex-col">
+            <Screens />
+          </div>
+        )}
         {agentsSeen && <Agents shown={screen === "agents"} />}
         <Transfers />
       </main>

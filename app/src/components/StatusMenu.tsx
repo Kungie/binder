@@ -4,7 +4,7 @@ import { StatusIcon } from "./StatusIcon";
 /** The status picker the table opens with `s`. The table owns the keys; this only draws. */
 export function StatusMenu({ active, onPick }: { active: number; onPick(s: Status): void }) {
   return (
-    <div role="listbox" aria-label="Set status" className="fade-in absolute right-3 z-20 w-48 rounded-panel bg-raised p-1 shadow-menu">
+    <div role="listbox" aria-label="Set status" className="pop-in absolute right-3 z-20 w-48 rounded-panel bg-raised p-1 shadow-menu">
       {STATUSES.map((s, i) => (
         <div
           key={s}

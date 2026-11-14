@@ -26,11 +26,11 @@ export function NewTask() {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/60 pt-[18vh]" onMouseDown={close}>
+    <div className="backdrop-in fixed inset-0 z-40 flex items-start justify-center bg-black/60 pt-[18vh]" onMouseDown={close}>
       <div
         role="dialog"
         aria-label="New task"
-        className="fade-in w-[520px] rounded-panel border border-line-strong bg-panel p-4 shadow-menu"
+        className="pop-in w-[520px] rounded-panel border border-line-strong bg-panel p-4 shadow-menu"
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();

@@ -1,5 +1,6 @@
 import { Moon } from "./Moon";
 import { useEffect, useRef, useState } from "react";
+import { animates } from "../lib/motion";
 import { useStore } from "../lib/store";
 import { STATUSES, STATUS_LABEL, type Task } from "../lib/types";
 import { AgentRun } from "./AgentRun";
@@ -24,6 +25,13 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
   // Closing doesn't blur the fields, so text typed since the last blur is saved here.
   const latest = useRef({ title, notes, task });
   latest.current = { title, notes, task };
+  const [leaving, setLeaving] = useState(false);
+  // Gone when the slide-out (160 ms) is over.
+  useEffect(() => {
+    if (!leaving) return;
+    const t = window.setTimeout(onClose, 160);
+    return () => window.clearTimeout(t);
+  }, [leaving, onClose]);
   const close = useRef(() => {});
   close.current = () => {
     const { title: t, notes: n, task: current } = latest.current;
@@ -31,7 +39,9 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
     if (t.trim() && t !== current.title) patch.title = t;
     if (n !== current.notes) patch.notes = n;
     if (patch.title !== undefined || patch.notes !== undefined) void updateTask(current.id, patch);
-    onClose();
+    // The sheet slides out first; without motion it goes at once.
+    if (animates()) setLeaving(true);
+    else onClose();
   };
 
   // Opening a task is reading it: what needed attention no longer does.
@@ -48,7 +58,11 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
   }, []);
 
   return (
-    <aside role="dialog" aria-label={task.key} className="fade-in absolute inset-y-0 right-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel shadow-menu">
+    <aside
+      role="dialog"
+      aria-label={task.key}
+      className={`${leaving ? "sheet-out" : "sheet-in"} absolute inset-y-0 right-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel shadow-menu`}
+    >
       <header className="flex h-11 items-center gap-2 border-b border-line px-4">
         <span className="font-mono text-[11px] text-text-3">{task.key}</span>
         <Button variant="ghost" className="ml-auto" onClick={() => close.current()} aria-label="Close">

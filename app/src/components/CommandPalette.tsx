@@ -28,8 +28,8 @@ export function CommandPalette() {
   const item = "flex h-8 cursor-default items-center rounded-[4px] px-2 text-[13px] text-text-2 data-[selected=true]:bg-line-strong data-[selected=true]:text-text";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[16vh]" onMouseDown={() => setOpen(false)}>
-      <div role="dialog" aria-label="Command palette" className="fade-in w-[560px] overflow-hidden rounded-panel border border-line-strong bg-panel shadow-menu" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="backdrop-in fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[16vh]" onMouseDown={() => setOpen(false)}>
+      <div role="dialog" aria-label="Command palette" className="pop-in w-[560px] overflow-hidden rounded-panel border border-line-strong bg-panel shadow-menu" onMouseDown={(e) => e.stopPropagation()}>
         <Command
           label="Command palette"
           loop

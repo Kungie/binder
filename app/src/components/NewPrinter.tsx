@@ -26,11 +26,11 @@ export function NewPrinter({ onClose, onAdded }: { onClose(): void; onAdded(): v
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/60 pt-[18vh]" onMouseDown={onClose}>
+    <div className="backdrop-in fixed inset-0 z-40 flex items-start justify-center bg-black/60 pt-[18vh]" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-label="Add printer"
-        className="fade-in flex w-[460px] flex-col gap-3 rounded-panel border border-line-strong bg-panel p-4 shadow-menu"
+        className="pop-in flex w-[460px] flex-col gap-3 rounded-panel border border-line-strong bg-panel p-4 shadow-menu"
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();

@@ -111,7 +111,7 @@ function DeviceSheet({ device, onClose, onChanged }: { device: Device; onClose()
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
-    <aside role="dialog" aria-label={device.name} className="fade-in absolute inset-y-0 right-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel shadow-menu">
+    <aside role="dialog" aria-label={device.name} className="sheet-in absolute inset-y-0 right-0 z-30 flex w-[380px] flex-col border-l border-line bg-panel shadow-menu">
       <header className="flex h-11 items-center gap-2 border-b border-line px-4">
         <span className="text-[13px] font-medium">{device.name}</span>
         <Button variant="ghost" className="ml-auto" onClick={() => close.current()} aria-label="Close">

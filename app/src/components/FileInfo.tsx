@@ -41,7 +41,7 @@ export function FileInfo({ rel, onClose }: { rel: string; onClose(): void }) {
       role="dialog"
       aria-label="Info"
       onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onClose())}
-      className="fade-in absolute bottom-0 right-0 top-0 z-30 flex w-[320px] flex-col border-l border-line-strong bg-panel"
+      className="sheet-in absolute bottom-0 right-0 top-0 z-30 flex w-[320px] flex-col border-l border-line-strong bg-panel"
     >
       <header className="flex h-12 items-center gap-2 px-4">
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{info?.entry.name ?? ""}</span>

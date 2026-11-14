@@ -25,11 +25,11 @@ export function NewProject() {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/60 pt-[18vh]" onMouseDown={close}>
+    <div className="backdrop-in fixed inset-0 z-40 flex items-start justify-center bg-black/60 pt-[18vh]" onMouseDown={close}>
       <div
         role="dialog"
         aria-label="New project"
-        className="fade-in flex w-[460px] flex-col gap-3 rounded-panel border border-line-strong bg-panel p-4 shadow-menu"
+        className="pop-in flex w-[460px] flex-col gap-3 rounded-panel border border-line-strong bg-panel p-4 shadow-menu"
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();

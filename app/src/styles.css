@@ -116,6 +116,83 @@
   }
 }
 
+/* Motion: short, eased out, never in the way. One curve for everything that arrives. */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Controls change colour softly instead of snapping. */
+button,
+a,
+input,
+select,
+textarea,
+[role="option"],
+[role="menuitem"],
+[role="tab"] {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+/* A screen arriving: a short rise and fade. */
+.screen-in {
+  animation: screen-in 220ms var(--ease-out);
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* The side sheets slide in from the right edge and back out. */
+.sheet-in {
+  animation: sheet-in 240ms var(--ease-out);
+}
+
+.sheet-out {
+  animation: sheet-out 160ms ease-in forwards;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes sheet-out {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+/* Dialogs and menus grow from just under their size; their backdrop fades. */
+.pop-in {
+  animation: pop-in 160ms var(--ease-out);
+  transform-origin: top center;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+}
+
+.backdrop-in {
+  animation: backdrop-in 160ms ease-out;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

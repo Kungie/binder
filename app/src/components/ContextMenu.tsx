@@ -89,7 +89,7 @@ export function ContextMenu({
         }
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className={`${nested ? "absolute left-full top-0 ml-1" : "fixed z-50"} min-w-[200px] rounded-control border border-line-strong bg-raised py-1 shadow-menu focus:outline-none`}
+      className={`pop-in ${nested ? "absolute left-full top-0 ml-1" : "fixed z-50"} min-w-[200px] rounded-control border border-line-strong bg-raised py-1 shadow-menu focus:outline-none`}
     >
       {items.map((item, i) =>
         item === "separator" ? (
