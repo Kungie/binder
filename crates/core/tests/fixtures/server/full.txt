@@ -19,3 +19,30 @@ Filesystem        1B-blocks        Used   Available Use% Mounted on
 48312
 --binder:cores--
 4
+--binder:power--
+ 3V7_WL_SW_A current(0)=0.00390372A
+   3V3_SYS_A current(1)=0.13467840A
+   1V8_SYS_A current(2)=0.19713790A
+  DDR_VDD2_A current(3)=0.00878337A
+  DDR_VDDQ_A current(4)=0.00000000A
+   1V1_SYS_A current(5)=0.18347480A
+    0V8_SW_A current(6)=0.31522540A
+  VDD_CORE_A current(7)=3.77739000A
+   3V3_DAC_A current(17)=0.00000000A
+   3V3_ADC_A current(18)=0.00006105A
+   0V8_AON_A current(16)=0.00299145A
+      HDMI_A current(22)=0.01269840A
+ 3V7_WL_SW_V volt(8)=3.74153500V
+   3V3_SYS_V volt(9)=3.30168200V
+   1V8_SYS_V volt(10)=1.80317300V
+  DDR_VDD2_V volt(11)=1.10292900V
+  DDR_VDDQ_V volt(12)=0.60879060V
+   1V1_SYS_V volt(13)=1.10915600V
+    0V8_SW_V volt(14)=0.80036550V
+  VDD_CORE_V volt(15)=0.83540820V
+   3V3_DAC_V volt(20)=3.31043600V
+   3V3_ADC_V volt(21)=3.30311000V
+   0V8_AON_V volt(19)=0.79941320V
+      HDMI_V volt(23)=5.13488000V
+     EXT5V_V volt(24)=5.16168000V
+      BATT_V volt(25)=0.00000000V

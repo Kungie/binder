@@ -68,3 +68,25 @@ fn unreachable_is_remote_error() {
     let r = FakeRemote::new(vec![Err(Error::Remote("Can't reach lab".into()))]);
     assert!(matches!(fetch(&r, 0), Err(Error::Remote(_))));
 }
+
+const PMIC: &str = include_str!("fixtures/server/pmic.txt");
+
+#[test]
+fn power_sums_volts_times_amps() {
+    let w = parse_power(PMIC).unwrap();
+    assert!((w - 4.50).abs() < 0.01, "{w}");
+}
+
+#[test]
+fn power_is_none_without_pairs() {
+    assert_eq!(parse_power(""), None);
+    assert_eq!(parse_power("garbage\nEXT5V_V volt(24)=5.16V\n"), None);
+}
+
+#[test]
+fn status_reads_power_and_survives_without_it() {
+    let s = fetch(&FakeRemote::new(vec![Ok(FULL.into())]), 1).unwrap();
+    assert!((s.power_w.unwrap() - 4.50).abs() < 0.01);
+    let without = FULL[..FULL.find("--binder:power--").unwrap()].to_string();
+    assert_eq!(fetch(&FakeRemote::new(vec![Ok(without)]), 1).unwrap().power_w, None);
+}

@@ -30,6 +30,8 @@ pub struct ServerStatus {
     pub temp_c: Option<f32>,
     /// From `nproc`; 0 when unknown.
     pub cores: u32,
+    /// The Pi 5's board draw in watts, from its PMIC; `None` on other servers.
+    pub power_w: Option<f32>,
     pub at: i64,
 }
 
@@ -41,6 +43,7 @@ echo --binder:mem--; cat /proc/meminfo 2>/dev/null
 echo --binder:disk--; df -B1 / 2>/dev/null
 echo --binder:temp--; cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null
 echo --binder:cores--; nproc 2>/dev/null
+echo --binder:power--; vcgencmd pmic_read_adc 2>/dev/null
 exit 0
 "#;
 
@@ -59,6 +62,7 @@ pub fn fetch(remote: &dyn Remote, now: i64) -> Result<ServerStatus> {
         disk_used,
         temp_c: parse_temp(part("temp")),
         cores: parse_cores(part("cores")),
+        power_w: parse_power(part("power")),
         at: now,
     })
 }
@@ -125,4 +129,21 @@ pub fn parse_cores(s: &str) -> u32 {
 
 pub fn parse_temp(s: &str) -> Option<f32> {
     s.trim().parse::<f32>().ok().map(|m| m / 1000.0)
+}
+
+/// Sums volts times amps over the rails `vcgencmd pmic_read_adc` reports with both a current and a voltage line
+/// (`3V3_SYS_A current(1)=0.13A`, `3V3_SYS_V volt(9)=3.30V`). Rails with only one side are skipped.
+pub fn parse_power(s: &str) -> Option<f32> {
+    let mut rails: std::collections::HashMap<&str, (Option<f32>, Option<f32>)> = std::collections::HashMap::new();
+    for line in s.lines() {
+        let Some((name, value)) = line.trim().split_once(' ') else { continue };
+        let Some((rail, side)) = name.rsplit_once('_') else { continue };
+        let Some((_, number)) = value.split_once('=') else { continue };
+        let unit = if side == "A" { 'A' } else if side == "V" { 'V' } else { continue };
+        let Some(Ok(x)) = number.strip_suffix(unit).map(str::parse::<f32>) else { continue };
+        let entry = rails.entry(rail).or_default();
+        if side == "A" { entry.0 = Some(x) } else { entry.1 = Some(x) }
+    }
+    let pairs: Vec<f32> = rails.values().filter_map(|(a, v)| Some((*a)? * (*v)?)).collect();
+    (!pairs.is_empty()).then(|| pairs.iter().sum())
 }
