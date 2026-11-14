@@ -39,19 +39,24 @@ pub struct Round {
 
 fn live_runs(db: &Mutex<Db>) -> Result<Vec<String>> {
     let db = db.lock().unwrap_or_else(|e| e.into_inner());
-    let mut stmt = db.conn.prepare("SELECT run FROM agent_runs WHERE ended IS NULL AND queued = 0 ORDER BY started")?;
+    let mut stmt = db.conn.prepare("SELECT run FROM agent_runs WHERE ended IS NULL ORDER BY started")?;
     let runs = stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?;
     Ok(runs)
 }
 
-/// One round: reads every run still going, then starts the next task when `pick_up` is on and nothing runs.
-/// Only one run at a time, the owner's own included.
-pub fn round(db: &Mutex<Db>, remote: &dyn Remote, now: i64, pick_up: bool) -> Result<Round> {
+/// One round: with `night` (the crontab line is there) the server's night queue is brought up to date first;
+/// then every run not yet ended is read (a queued one only to see whether `night.sh` started it); then, when
+/// `pick_up` is on and nothing runs, the next task starts. Only one run at a time, the owner's own included.
+pub fn round(db: &Mutex<Db>, remote: &dyn Remote, now: i64, pick_up: bool, night: bool) -> Result<Round> {
+    if night {
+        crate::night::sync(db, remote, now)?;
+    }
     let mut out = Round::default();
     let mut still = 0;
     for run in live_runs(db)? {
         out.polled += 1;
-        if agent::poll_run(db, remote, &run, now)?.ended.is_none() {
+        let r = agent::poll_run(db, remote, &run, now)?;
+        if r.ended.is_none() && !r.queued {
             still += 1;
         }
     }

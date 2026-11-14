@@ -18,14 +18,14 @@ pub enum Access {
 }
 
 impl Access {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Access::EditsOnly => "edits_only",
             Access::Full => "full",
         }
     }
 
-    fn flag(self) -> &'static str {
+    pub(crate) fn flag(self) -> &'static str {
         match self {
             Access::EditsOnly => "--permission-mode acceptEdits",
             Access::Full => "--dangerously-skip-permissions",
@@ -87,7 +87,7 @@ fn row_to_run(r: &Row) -> rusqlite::Result<AgentRun> {
 }
 
 /// A folder for `cd` on the server: `~` and `~/…` keep pointing at the home folder, everything else is quoted whole.
-fn shell_dir(dir: &str) -> String {
+pub(crate) fn shell_dir(dir: &str) -> String {
     let dir = dir.trim();
     match dir {
         "" | "~" => "\"$HOME\"".into(),
@@ -98,11 +98,11 @@ fn shell_dir(dir: &str) -> String {
     }
 }
 
-fn files(run: &str) -> String {
+pub(crate) fn files(run: &str) -> String {
     format!("\"$HOME\"/.binder-agent/{run}")
 }
 
-fn get_run(db: &Db, run: &str) -> Result<AgentRun> {
+pub(crate) fn get_run(db: &Db, run: &str) -> Result<AgentRun> {
     db.conn
         .query_row(&format!("SELECT {COLUMNS} FROM agent_runs WHERE run = ?1"), [run], row_to_run)
         .optional()?
@@ -115,7 +115,7 @@ pub fn list_runs(db: &Db, task_id: i64) -> Result<Vec<AgentRun>> {
     Ok(stmt.query_map([task_id], row_to_run)?.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-fn set_status(db: &mut Db, task_id: i64, status: Status, now: i64) -> Result<()> {
+pub(crate) fn set_status(db: &mut Db, task_id: i64, status: Status, now: i64) -> Result<()> {
     db.update_task(task_id, TaskPatch { status: Some(status), ..Default::default() }, now).map(|_| ())
 }
 
@@ -157,6 +157,9 @@ pub fn poll_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Res
     let r = get_run(&lock(db), run)?;
     if r.ended.is_some() {
         return Ok(r);
+    }
+    if r.queued && !crate::night::started(db, remote, &r, now)? {
+        return get_run(&lock(db), run);
     }
     let f = files(run);
     // A login shell may print first, so the answer starts after a marker.

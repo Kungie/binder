@@ -81,7 +81,7 @@ fn a_round_starts_the_next_task_with_edits_only() {
     let t = agent_task(&mut db, Some(p), "do it", Priority::High, 1);
     let db = Mutex::new(db);
     let r = FakeRemote::new(vec![Ok(String::new())]);
-    let done = round(&db, &r, 100, true).unwrap();
+    let done = round(&db, &r, 100, true, false).unwrap();
     let run = done.started.unwrap();
     assert_eq!((run.task_id, run.access, run.dir.as_str()), (t.id, Access::EditsOnly, "~/code/orbit"));
     assert_eq!(db.lock().unwrap().get_task(t.id).unwrap().status, Status::InProgress);
@@ -95,7 +95,7 @@ fn nothing_starts_while_a_run_is_live() {
     let db = Mutex::new(db);
     let r = FakeRemote::new(vec![Ok(String::new()), Ok("running\n--binder:tail--\n".into())]);
     start_run(&db, &r, busy.id, "~/code/orbit", Access::Full, 10).unwrap();
-    let done = round(&db, &r, 100, true).unwrap();
+    let done = round(&db, &r, 100, true, false).unwrap();
     assert_eq!((done.polled, done.started.is_none()), (1, true));
     assert_eq!(r.seen.borrow().len(), 2, "one start, one poll, no second start");
 }
@@ -108,7 +108,7 @@ fn a_finished_run_frees_the_slot_in_the_same_round() {
     let db = Mutex::new(db);
     let r = FakeRemote::new(vec![Ok(String::new()), Ok("exit:0\n--binder:tail--\n".into()), Ok(String::new())]);
     start_run(&db, &r, first.id, "~/code/orbit", Access::EditsOnly, 10).unwrap();
-    let done = round(&db, &r, 100, true).unwrap();
+    let done = round(&db, &r, 100, true, false).unwrap();
     assert_eq!(done.started.unwrap().task_id, second.id);
 }
 
@@ -118,7 +118,29 @@ fn a_round_with_pick_up_off_only_polls() {
     agent_task(&mut db, Some(p), "waiting", Priority::High, 1);
     let db = Mutex::new(db);
     let r = FakeRemote::new(vec![]);
-    let done = round(&db, &r, 100, false).unwrap();
+    let done = round(&db, &r, 100, false, false).unwrap();
     assert_eq!((done.polled, done.started.is_none()), (0, true));
     assert!(r.seen.borrow().is_empty());
+}
+
+#[test]
+fn a_round_with_night_syncs_the_queue_first() {
+    let (db, _) = db();
+    let db = Mutex::new(db);
+    let r = FakeRemote::new(vec![Ok("--binder:jobs--\n".into())]);
+    round(&db, &r, 100, false, true).unwrap();
+    assert!(r.seen.borrow()[0].0.contains("--binder:jobs--"));
+}
+
+#[test]
+fn a_waiting_night_run_does_not_hold_up_the_day() {
+    let (mut db, p) = db();
+    let n = agent_task(&mut db, Some(p), "tonight", Priority::High, 1);
+    db.update_task(n.id, TaskPatch { night: Some(true), ..Default::default() }, 2).unwrap();
+    let day = agent_task(&mut db, Some(p), "now", Priority::Low, 3);
+    let db = Mutex::new(db);
+    // sync: list, queue; poll of the queued run: still queued; then the day task starts.
+    let r = FakeRemote::new(vec![Ok("--binder:jobs--\n".into()), Ok(String::new()), Ok("--binder:state--\nqueued\n".into()), Ok(String::new())]);
+    let done = round(&db, &r, 100, true, true).unwrap();
+    assert_eq!(done.started.unwrap().task_id, day.id);
 }
