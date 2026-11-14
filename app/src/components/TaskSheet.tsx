@@ -1,10 +1,11 @@
+import { Moon } from "./Moon";
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../lib/store";
 import { STATUSES, STATUS_LABEL, type Task } from "../lib/types";
 import { AgentRun } from "./AgentRun";
 import { PRIORITY_SHORT, PriorityChip } from "./PriorityIcon";
 import { PriorityMenu } from "./PriorityMenu";
-import { Button, Field, fieldClass } from "./ui";
+import { Button, Field, Switch, fieldClass } from "./ui";
 
 /** The side sheet for one task. Text saves on blur, menus save on change. */
 export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): void; onStatus(status: Task["status"]): void }) {
@@ -114,6 +115,13 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
             <option value="me">Me</option>
             <option value="agent">Agent</option>
           </select>
+        </Field>
+        <Field label="Night">
+          <span className="flex items-center gap-2">
+            <Switch label="Night task" checked={task.night} onChange={(night) => void updateTask(task.id, { night })} />
+            {task.night && <Moon />}
+            <span className="text-text-3">{task.night ? "Runs on the server from 03:00" : "Off"}</span>
+          </span>
         </Field>
         <Field label="Due">
           <div className="flex gap-2">

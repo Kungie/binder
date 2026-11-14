@@ -44,6 +44,7 @@ export function Tasks() {
     [{ kind: "all" }, "All"],
     [{ kind: "mine" }, "Mine"],
     [{ kind: "agent" }, "Agent"],
+    [{ kind: "night" }, "Night"],
   ];
   const found = (list: typeof tasks) => list.filter((t) => matches(t, query));
   return (

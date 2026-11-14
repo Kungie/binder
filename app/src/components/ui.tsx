@@ -37,3 +37,22 @@ export function Kbd({ children }: { children: ReactNode }) {
 export function Notice({ children }: { children: ReactNode }) {
   return <p className="text-[12px] text-text-2">{children}</p>;
 }
+
+/** An on/off switch: a small pill with a knob, its state read out as checked. */
+export function Switch({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange(next: boolean): void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={label}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border transition-colors duration-[120ms] disabled:opacity-50 ${
+        checked ? "border-text bg-text" : "border-line-strong bg-card"
+      }`}
+    >
+      <span className={`absolute size-2.5 rounded-full transition-transform duration-[120ms] ${checked ? "translate-x-[13px] bg-bg" : "translate-x-[2px] bg-text-3"}`} />
+    </button>
+  );
+}

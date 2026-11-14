@@ -2,11 +2,58 @@ import { useEffect, useState } from "react";
 import { BinderPanel } from "../components/BinderPanel";
 import { Panel } from "../components/Panel";
 import { ServerTargetForm } from "../components/ServerTargetForm";
-import { Button, Field, Notice, fieldClass } from "../components/ui";
+import { Button, Field, Notice, Switch, fieldClass } from "../components/ui";
 import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
 import { useVault } from "../lib/useVault";
 import { ago } from "../lib/time";
+
+/** The agent on the server: picking up its tasks by day, and the crontab line that runs night tasks. */
+function AgentWork() {
+  const { api } = useStore();
+  const [pickUp, setPickUp] = useState<boolean | null>(null);
+  const [night, setNight] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void api.getConfig().then((c) => setPickUp(c.pick_up));
+    void api.nightState().then(setNight, () => setNight(null));
+  }, [api]);
+  const savePickUp = async (on: boolean) => {
+    setPickUp(on);
+    await api.setConfig({ ...(await api.getConfig()), pick_up: on });
+  };
+  const changeNight = async (run: () => Promise<boolean>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setNight(await run());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <div className="flex items-center gap-2 text-[12px]">
+        <span className="text-text-2">Pick up agent tasks</span>
+        <span className="text-text-3">every 10 minutes, one at a time</span>
+        {pickUp !== null && <Switch label="Pick up agent tasks" checked={pickUp} onChange={(on) => void savePickUp(on)} />}
+      </div>
+      {night !== null && (
+        <div className="flex items-center gap-2 text-[12px]">
+          <span className="text-text-2">Night tasks</span>
+          <span className="text-text-3">{night ? "Runs at 03:00 on the server" : "Not set up"}</span>
+          <Button className="ml-auto" disabled={busy} onClick={() => void changeNight(night ? api.nightRemove : api.nightSetup)}>
+            {night ? "Remove" : "Set up"}
+          </Button>
+        </div>
+      )}
+      {error && <Notice>{error}</Notice>}
+    </>
+  );
+}
 
 function ClaudeCode() {
   const { api } = useStore();
@@ -38,6 +85,7 @@ function ClaudeCode() {
           )}
         </div>
         {error && <Notice>{error}</Notice>}
+        <AgentWork />
         <Notice>
           Adds three hooks to ~/.claude/settings.json. When a session in a project's repo has new talk, Haiku picks out up to three key decisions for the
           project's done log. It runs with your own Claude plan, after secrets are masked.

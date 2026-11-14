@@ -1,3 +1,4 @@
+import { Moon } from "./Moon";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import { dueLabel, localDay, plainText } from "../lib/tasks";
 import { type Project, STATUS_LABEL, type Task } from "../lib/types";
@@ -81,6 +82,7 @@ export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFo
           )}
           {project && <Chip icon={<ProjectDot color={project.color} />}>{project.name}</Chip>}
           {task.assignee === "agent" && <Chip icon={<ClaudeMark />}>Claude</Chip>}
+          {task.night && <Chip icon={<Moon />}>{task.status === "todo" ? "Tonight" : "Night"}</Chip>}
         </div>
       </div>
       {menu && <div className="absolute left-2 top-full z-30 mt-1">{menu}</div>}

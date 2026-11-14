@@ -160,6 +160,9 @@ export function StoreProvider({
     void reload();
   }, [reload]);
 
+  // The app reads and starts agent runs in the background; the board follows.
+  useEffect(() => api.onTasksChanged(() => void reload()), [api, reload]);
+
   // The app syncs GitHub at start; projects reload when it lands.
   useEffect(
     () =>

@@ -1,3 +1,4 @@
+import { Moon } from "./Moon";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { type Assignee, type Priority, type Project, STATUSES, type Status, type Task, isClosed } from "../lib/types";
 import { PriorityIcon } from "./PriorityIcon";
@@ -172,8 +173,9 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
               <span role="gridcell" className="font-mono text-[11px] text-text-3">
                 {t.key}
               </span>
-              <span role="gridcell" className={`truncate ${closed ? "text-text-3 line-through" : "text-text"}`} onClick={() => onOpen(t.id)}>
-                {t.title}
+              <span role="gridcell" className={`flex min-w-0 items-center gap-1.5 ${closed ? "text-text-3 line-through" : "text-text"}`} onClick={() => onOpen(t.id)}>
+                <span className="truncate">{t.title}</span>
+                {t.night && <Moon />}
               </span>
               <span role="gridcell" className="truncate text-text-3">
                 {t.project_id ? names.get(t.project_id) : ""}
