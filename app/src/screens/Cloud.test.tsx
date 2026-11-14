@@ -395,6 +395,10 @@ describe("Cloud", () => {
     expect(screen.getByText(/free of 2 TB/)).toBeInTheDocument();
     expect(screen.getByText("SSD")).toBeInTheDocument();
     expect(screen.getByText("SD card")).toBeInTheDocument();
+    // Side by side in the header's middle, so the second bar doesn't spill over the toolbar.
+    const disks = screen.getByRole("group", { name: "Disk space" });
+    expect(disks).toHaveClass("flex-row");
+    expect(disks.closest("header")).not.toBeNull();
   });
 
   it("no_sd_bar_when_the_sd_folder_is_on_the_ssd", async () => {

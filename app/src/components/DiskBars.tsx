@@ -42,11 +42,11 @@ function Bar({ label, space }: { label: string; space: Space }) {
   );
 }
 
-/** The SSD and, under it, the SD card. */
-export function DiskBars({ ssd, sd }: { ssd: Space | null; sd: Space | null }) {
+/** The SSD and the SD card: stacked in a panel, or side by side (`row`) where height is short, as in a header. */
+export function DiskBars({ ssd, sd, row = false }: { ssd: Space | null; sd: Space | null; row?: boolean }) {
   if (!ssd && !sd) return null;
   return (
-    <div className="flex flex-col gap-2">
+    <div role="group" aria-label="Disk space" className={row ? "flex flex-row gap-5 [&>*]:w-52" : "flex flex-col gap-2"}>
       {ssd && <Bar label="SSD" space={ssd} />}
       {sd && <Bar label="SD card" space={sd} />}
     </div>

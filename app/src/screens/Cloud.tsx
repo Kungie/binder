@@ -400,7 +400,7 @@ export function Cloud() {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
+      <header className="grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-5" data-tauri-drag-region>
         <nav aria-label="Path" className="flex min-w-0 items-center gap-1 text-[13px]">
           {["", ...crumbs.map((_, i) => crumbs.slice(0, i + 1).join("/"))].map((to, i) => (
             <span key={to || "root"} className="flex min-w-0 items-center gap-1">
@@ -417,11 +417,7 @@ export function Cloud() {
             </span>
           ))}
         </nav>
-        <div className="ml-auto">
-          <div className="w-56">
-            <DiskBars ssd={status?.space ?? space} sd={sd} />
-          </div>
-        </div>
+        <DiskBars ssd={status?.space ?? space} sd={sd} row />
       </header>
       <div className="flex h-10 shrink-0 items-center gap-2 px-5">
         <div className="flex h-7 items-center rounded-control border border-line bg-card p-0.5">
