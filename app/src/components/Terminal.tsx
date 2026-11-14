@@ -6,8 +6,8 @@ import { Panel } from "./Panel";
 import { Button } from "./ui";
 import { XtermView } from "./XtermView";
 
-/** ⌘ keys that still reach Binder while a terminal has focus. */
-const PASS = new Set(["k", "1", "2"]);
+/** ⌘ keys that still reach Binder while a terminal has focus: the palette, the panes, the interface size. */
+const PASS = new Set(["k", "1", "2", "=", "+", "-", "0"]);
 
 /** One agent's terminal: its tmux session on the server, over ssh. Connects once, on mount. */
 export function Terminal({ agent, name, session, registerFocus }: { agent: Agent; name: string; session: string; registerFocus(focus: () => void): void }) {

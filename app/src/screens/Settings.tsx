@@ -1,3 +1,4 @@
+import { ZOOMS } from "../lib/zoom";
 import { useEffect, useState } from "react";
 import { BinderPanel } from "../components/BinderPanel";
 import { Panel } from "../components/Panel";
@@ -52,6 +53,52 @@ function AgentWork() {
       )}
       {error && <Notice>{error}</Notice>}
     </>
+  );
+}
+
+/** Interface size, for large displays: the whole window scales. */
+function Display() {
+  const { zoom, setZoom } = useStore();
+  return (
+    <Panel title="Display">
+      <div className="flex items-center gap-2 border-t border-line p-3 text-[12px]">
+        <span className="text-text-2">Interface size</span>
+        <div className="ml-auto flex h-7 items-center rounded-control border border-line bg-card p-0.5">
+          {ZOOMS.map((z) => (
+            <button
+              key={z}
+              type="button"
+              aria-pressed={z === zoom}
+              onClick={() => void setZoom(z)}
+              className={`h-6 rounded-[6px] px-2 font-mono text-[11px] ${z === zoom ? "bg-raised text-text" : "text-text-3 hover:text-text"}`}
+            >
+              {z}%
+            </button>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** Mac notifications when a container on the server stops, keeps restarting or turns unhealthy. */
+function WatchSwitch() {
+  const { api } = useStore();
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    void api.getConfig().then((c) => setOn(c.watch));
+  }, [api]);
+  if (on === null) return null;
+  const save = async (next: boolean) => {
+    setOn(next);
+    await api.setConfig({ ...(await api.getConfig()), watch: next });
+  };
+  return (
+    <div className="flex items-center gap-2 text-[12px]">
+      <span className="text-text-2">Notify me about containers</span>
+      <span className="text-text-3">when one stops, keeps restarting or turns unhealthy</span>
+      <Switch label="Notify me about containers" checked={on} onChange={(next) => void save(next)} />
+    </div>
   );
 }
 
@@ -174,6 +221,7 @@ export function Settings() {
       </header>
       <div className="flex max-w-[960px] flex-col gap-4 px-5">
         <BinderPanel />
+        <Display />
         <Panel title="Obsidian vault">
           <div className="flex flex-col gap-3 border-t border-line p-3">
             <Field label="Vault folder">
@@ -204,6 +252,7 @@ export function Settings() {
           <div className="flex flex-col gap-3 border-t border-line p-3">
             {server !== undefined && <ServerTargetForm initial={server ?? ""} onSaved={() => setServerSaved(true)} />}
             {serverSaved && <span className="text-[12px] text-text-3">Saved</span>}
+            <WatchSwitch />
             <Notice>Binder uses your ssh keys and ~/.ssh/config. It never stores a password.</Notice>
           </div>
         </Panel>

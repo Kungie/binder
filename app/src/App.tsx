@@ -1,6 +1,7 @@
 import type { Api } from "./lib/api";
 import { type Screen, StoreProvider, useStore } from "./lib/store";
 import { Sidebar } from "./components/Sidebar";
+import { ZOOMS } from "./lib/zoom";
 import { NewTask } from "./components/NewTask";
 import { Tasks } from "./screens/Tasks";
 import { Projects } from "./screens/Projects";
@@ -14,7 +15,7 @@ import { Printer } from "./screens/Printer";
 import { Cloud } from "./screens/Cloud";
 import { Transfers } from "./components/Transfers";
 import { Agents } from "./screens/Agents";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function Screens() {
   const { screen } = useStore();
@@ -40,8 +41,25 @@ function Screens() {
   }
 }
 
+function useZoomKeys() {
+  const { zoom, setZoom } = useStore();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey) return;
+      const i = ZOOMS.indexOf(zoom);
+      const next = e.key === "=" || e.key === "+" ? ZOOMS[Math.min(i + 1, ZOOMS.length - 1)] : e.key === "-" ? ZOOMS[Math.max(i - 1, 0)] : e.key === "0" ? 100 : null;
+      if (next === null) return;
+      e.preventDefault();
+      if (next !== zoom) void setZoom(next).catch(() => {});
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom, setZoom]);
+}
+
 export function Shell() {
   const { creatingTask, creatingProject, screen } = useStore();
+  useZoomKeys();
   // Agents stays mounted once opened, so its terminals keep their connection and screen.
   const [agentsSeen, setAgentsSeen] = useState(false);
   if (screen === "agents" && !agentsSeen) setAgentsSeen(true);

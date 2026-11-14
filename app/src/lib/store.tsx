@@ -50,6 +50,9 @@ export interface Store {
   install: InstallState;
   /** Downloads and installs the update; the app restarts when it lands. */
   installUpdate(): Promise<void>;
+  /** The interface size in percent. */
+  zoom: number;
+  setZoom(percent: number): Promise<void>;
   /** Whether a Cloud copy is in flight. */
   transferring: boolean;
 }
@@ -98,6 +101,7 @@ export function StoreProvider({
   const [app, setApp] = useState<AppInfo | null>(null);
   const [update, setUpdate] = useState<UpdateState>({ kind: "idle" });
   const [install, setInstall] = useState<InstallState>({ kind: "idle" });
+  const [zoom, setZoomState] = useState(100);
   const [running, setRunning] = useState<ReadonlySet<number>>(new Set());
   const checked = useRef(false);
 
@@ -159,6 +163,20 @@ export function StoreProvider({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    void api.getConfig().then((c) => setZoomState(c.zoom || 100), () => {});
+  }, [api]);
+  const setZoom = useCallback(
+    async (percent: number) => {
+      await api.setZoom(percent);
+      setZoomState(percent);
+    },
+    [api],
+  );
+
+  // A container alert brings the Server screen up, so the window opens on it.
+  useEffect(() => api.onWatchAlert(() => setScreen("server")), [api]);
 
   // The app reads and starts agent runs in the background; the board follows.
   useEffect(() => api.onTasksChanged(() => void reload()), [api, reload]);
@@ -238,8 +256,10 @@ export function StoreProvider({
       install,
       installUpdate,
       transferring: running.size > 0,
+      zoom,
+      setZoom,
     }),
-    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub, app, update, checkUpdate, install, installUpdate, running],
+    [api, tasks, projects, screen, view, selectedProject, creatingTask, setCreatingTask, newTaskStatus, creatingProject, reload, after, doneVersion, cloudClipboard, github, syncing, syncGithub, app, update, checkUpdate, install, installUpdate, running, zoom, setZoom],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
