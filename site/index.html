@@ -44,14 +44,14 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 </header>
 
 <section id="top" style="position: relative; max-width: 1200px; margin: 0 auto; padding: 72px 20px 0; display: flex; flex-direction: column; align-items: center; gap: 24px; text-align: center;">
-<a href="https://github.com/Kungie/binder/releases/tag/v2.2.0" style="display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #26262a; background: #141416; font-size: 12px; color: #a1a1a1;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #8b7cf6; display: inline-block;"></span>2.2 is out: a real file manager and a mascot</a>
+<a href="https://github.com/Kungie/binder/releases/tag/v2.6.2" style="display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #26262a; background: #141416; font-size: 12px; color: #a1a1a1;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #8b7cf6; display: inline-block;"></span>2.6 is out: an agent that works at night, container alerts and smoother screens</a>
 <h1 class="hero-h" style="margin: 0; max-width: 880px; font-size: 76px; line-height: 76px; font-weight: 500; letter-spacing: -0.035em; text-wrap: balance;">Your whole workshop, in one quiet window.</h1>
 <p style="margin: 0; max-width: 600px; font-size: 17px; line-height: 26px; color: #a1a1a1; text-wrap: balance;">Tasks for you and a Claude Code agent, every GitHub repo, the home server, a file manager over it and the 3D printer. Mostly black and white, keyboard first, built for one person.</p>
 <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding-top: 8px;">
 <a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 10px; background: #ededed; color: #0b0b0c; font-weight: 500; font-size: 14px;"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1.5v8M3.5 6.5L7 10l3.5-3.5M2 12.5h10"></path></svg>Download for Mac</a>
 <a href="https://github.com/Kungie/binder" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #34343a; color: #ededed; font-size: 14px;">View on GitHub</a>
 </div>
-<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">v2.2.0 · macOS · Apple silicon · AGPL-3.0</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">v2.6.2 · macOS · Apple silicon · AGPL-3.0</p>
 
 <div style="position: relative; width: 100%; margin-top: 48px;">
 <img src="assets/mascot.svg" alt="" aria-hidden="true" class="hide-sm" style="position: absolute; left: -150px; bottom: -2px; width: 300px; z-index: 0;">
@@ -81,8 +81,8 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 <article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M5.5 8.2l1.7 1.7 3.3-3.6"></path></svg>
 <h3 style="margin: 0; font-size: 15px; font-weight: 500;">Tasks</h3>
-<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A board of soft cards or a keyboard-first table. Hand a task to Claude Code on your server and it runs in the background.</p>
-<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">claude -p over SSH</p>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A board of soft cards or a keyboard-first table. Claude Code on your server picks up its tasks by itself, and night tasks run there from 03:00.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Tonight · runs at 03:00</p>
 </article>
 
 <article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
@@ -95,7 +95,7 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 <article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v12M2 8h12M3.8 3.8l8.4 8.4M12.2 3.8l-8.4 8.4"></path></svg>
 <h3 style="margin: 0; font-size: 15px; font-weight: 500;">Claude Code</h3>
-<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Three hooks catch the decisions each session makes and write them to the project's daily file. Overview shows today's.</p>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Hooks write the decisions each session makes to the project's daily file. Agents keeps Claude Code and a local model open on your server.</p>
 <p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Daily/2026-11-14.md</p>
 </article>
 
@@ -109,8 +109,8 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 <article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ededed" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3" width="11" height="4" rx="1"></rect><rect x="2.5" y="9" width="11" height="4" rx="1"></rect><path d="M5 5h.01M5 11h.01"></path></svg>
 <h3 style="margin: 0; font-size: 15px; font-weight: 500;">Server</h3>
-<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Containers, services, load, memory, disk and temperature, read over SSH every 30 seconds. It only ever reads.</p>
-<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">8 of 9 containers up</p>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">Containers, services, load, memory, both disks and temperature over SSH. A Mac notification when a container stops or turns unhealthy.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">web stopped · Exited (137)</p>
 </article>
 
 <article style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 10px; border: 1px solid #26262a; background: #141416;">
@@ -163,8 +163,8 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 </div>
 <div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #26262a; padding-top: 24px;">
 <h3 style="margin: 0; font-size: 15px; font-weight: 500;">Small and fast</h3>
-<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A Rust core in a Tauri window, using the system's own web view. The whole app is 12 MB.</p>
-<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Binder.dmg · 6.8 MB</p>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A Rust core in a Tauri window, using the system's own web view. The whole app is 14 MB, and it updates itself from Settings.</p>
+<p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Binder.dmg · 7.1 MB</p>
 </div>
 </section>
 
