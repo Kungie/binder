@@ -252,6 +252,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "portable-pty",
+ "ring",
  "rumqttc",
  "rustls",
  "serde",

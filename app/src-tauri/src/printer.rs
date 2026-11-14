@@ -6,7 +6,6 @@ use binder_core::config::PrinterConfig;
 use binder_core::printer::{self, PinCheck, PrinterCommand, PrinterState};
 use rumqttc::{AsyncClient, ConnectionError, Event, MqttOptions, Packet, QoS, TlsConfiguration, Transport};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::crypto::CryptoProvider;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
 use serde::Serialize;
@@ -65,7 +64,6 @@ struct Pin {
     /// A fingerprint pinned during this connection, waiting to be saved to the config.
     fresh: Mutex<Option<String>>,
     changed: AtomicBool,
-    provider: Arc<CryptoProvider>,
 }
 
 impl ServerCertVerifier for Pin {
@@ -93,16 +91,111 @@ impl ServerCertVerifier for Pin {
     }
 
     fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_signed(cert.as_ref(), dss.scheme, message, dss.signature())
     }
 
     fn verify_tls13_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        // TLS 1.3 forbids PKCS#1 v1.5 signatures in the handshake.
+        if matches!(dss.scheme, SignatureScheme::RSA_PKCS1_SHA256 | SignatureScheme::RSA_PKCS1_SHA384 | SignatureScheme::RSA_PKCS1_SHA512) {
+            return Err(rustls::Error::PeerMisbehaved(rustls::PeerMisbehaved::SignedHandshakeWithUnadvertisedSigScheme));
+        }
+        verify_signed(cert.as_ref(), dss.scheme, message, dss.signature())
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider.signature_verification_algorithms.supported_schemes()
+        SCHEMES.iter().map(|(s, _, _)| *s).collect()
     }
+}
+
+/// The key types a printer certificate can carry.
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum KeyKind {
+    Rsa,
+    EcP256,
+    EcP384,
+}
+
+/// The handshake signatures Binder checks, each with the key it needs and ring's algorithm for it.
+const SCHEMES: &[(SignatureScheme, KeyKind, &dyn ring::signature::VerificationAlgorithm)] = &[
+    (SignatureScheme::RSA_PSS_SHA256, KeyKind::Rsa, &ring::signature::RSA_PSS_2048_8192_SHA256),
+    (SignatureScheme::RSA_PSS_SHA384, KeyKind::Rsa, &ring::signature::RSA_PSS_2048_8192_SHA384),
+    (SignatureScheme::RSA_PSS_SHA512, KeyKind::Rsa, &ring::signature::RSA_PSS_2048_8192_SHA512),
+    (SignatureScheme::RSA_PKCS1_SHA256, KeyKind::Rsa, &ring::signature::RSA_PKCS1_2048_8192_SHA256),
+    (SignatureScheme::RSA_PKCS1_SHA384, KeyKind::Rsa, &ring::signature::RSA_PKCS1_2048_8192_SHA384),
+    (SignatureScheme::RSA_PKCS1_SHA512, KeyKind::Rsa, &ring::signature::RSA_PKCS1_2048_8192_SHA512),
+    (SignatureScheme::ECDSA_NISTP256_SHA256, KeyKind::EcP256, &ring::signature::ECDSA_P256_SHA256_ASN1),
+    (SignatureScheme::ECDSA_NISTP384_SHA384, KeyKind::EcP384, &ring::signature::ECDSA_P384_SHA384_ASN1),
+];
+
+/// Checks a handshake signature against the certificate's key. Bambu printers send X.509 version 1
+/// certificates, which webpki (and so rustls's own check) refuses, so the key is read here instead.
+fn verify_signed(cert: &[u8], scheme: SignatureScheme, message: &[u8], signature: &[u8]) -> Result<HandshakeSignatureValid, rustls::Error> {
+    let (kind, key) = public_key(cert).ok_or(rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
+    let (_, want, alg) = SCHEMES
+        .iter()
+        .find(|(s, _, _)| *s == scheme)
+        .ok_or(rustls::Error::PeerMisbehaved(rustls::PeerMisbehaved::SignedHandshakeWithUnadvertisedSigScheme))?;
+    if *want != kind {
+        return Err(rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature));
+    }
+    ring::signature::UnparsedPublicKey::new(*alg, key)
+        .verify(message, signature)
+        .map(|_| HandshakeSignatureValid::assertion())
+        .map_err(|_| rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature))
+}
+
+/// One DER element: its tag, its contents and what follows it.
+fn der(input: &[u8]) -> Option<(u8, &[u8], &[u8])> {
+    let (&tag, rest) = input.split_first()?;
+    let (&first, rest) = rest.split_first()?;
+    let (len, rest) = if first < 0x80 {
+        (first as usize, rest)
+    } else {
+        let n = (first & 0x7f) as usize;
+        if n == 0 || n > 4 || rest.len() < n {
+            return None;
+        }
+        (rest[..n].iter().fold(0usize, |l, b| (l << 8) | *b as usize), &rest[n..])
+    };
+    (rest.len() >= len).then(|| (tag, &rest[..len], &rest[len..]))
+}
+
+const RSA: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01];
+const EC: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+const P256: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+const P384: &[u8] = &[0x2b, 0x81, 0x04, 0x00, 0x22];
+
+/// The public key in a certificate of any X.509 version: its kind and the bytes ring takes
+/// (an RSAPublicKey for RSA, the uncompressed point for EC).
+fn public_key(cert: &[u8]) -> Option<(KeyKind, &[u8])> {
+    let (0x30, cert, _) = der(cert)? else { return None };
+    let (0x30, tbs, _) = der(cert)? else { return None };
+    let mut rest = tbs;
+    // Version 1 has no [0] version field; later versions do.
+    if let Some((0xa0, _, after)) = der(rest) {
+        rest = after;
+    }
+    // serialNumber, signature, issuer, validity, subject
+    for _ in 0..5 {
+        rest = der(rest)?.2;
+    }
+    let (0x30, spki, _) = der(rest)? else { return None };
+    let (0x30, alg, spki) = der(spki)? else { return None };
+    let (0x03, bits, _) = der(spki)? else { return None };
+    let (&0, key) = bits.split_first()? else { return None };
+    let (0x06, oid, params) = der(alg)? else { return None };
+    let kind = if oid == RSA {
+        KeyKind::Rsa
+    } else if oid == EC {
+        match der(params)? {
+            (0x06, curve, _) if curve == P256 => KeyKind::EcP256,
+            (0x06, curve, _) if curve == P384 => KeyKind::EcP384,
+            _ => return None,
+        }
+    } else {
+        return None;
+    };
+    Some((kind, key))
 }
 
 pub fn keychain(serial: &str) -> keyring::Result<keyring::Entry> {
@@ -150,7 +243,7 @@ async fn run(app: AppHandle, config: PrinterConfig) {
         return;
     };
     let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let pin = Arc::new(Pin { pinned: Mutex::new(config.cert_sha256.clone()), fresh: Mutex::new(None), changed: AtomicBool::new(false), provider: provider.clone() });
+    let pin = Arc::new(Pin { pinned: Mutex::new(config.cert_sha256.clone()), fresh: Mutex::new(None), changed: AtomicBool::new(false) });
     let tls = match rustls::ClientConfig::builder_with_provider(provider).with_safe_default_protocol_versions() {
         Ok(b) => b.dangerous().with_custom_certificate_verifier(pin.clone()).with_no_client_auth(),
         Err(e) => return report(&app, &serial, |v| v.error = Some(format!("TLS setup failed: {e}"))),
@@ -208,4 +301,40 @@ pub async fn send(app: &AppHandle, serial: &str, kind: PrinterCommand) -> Result
         .publish(printer::request_topic(serial), QoS::AtMostOnce, false, printer::command(seq, kind))
         .await
         .map_err(|_| "The printer isn't connected.".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CERT: &[u8] = include_bytes!("../tests/fixtures/printer/cert.der");
+    const MSG: &[u8] = include_bytes!("../tests/fixtures/printer/msg.bin");
+    const SIG: &[u8] = include_bytes!("../tests/fixtures/printer/sig.bin");
+
+    #[test]
+    fn the_key_is_read_from_a_version_1_certificate() {
+        let (kind, key) = public_key(CERT).unwrap();
+        assert_eq!(kind, KeyKind::Rsa);
+        assert_eq!(key[0], 0x30, "an RSAPublicKey SEQUENCE");
+    }
+
+    #[test]
+    fn a_version_1_certificate_still_verifies() {
+        assert!(verify_signed(CERT, SignatureScheme::RSA_PKCS1_SHA256, MSG, SIG).is_ok());
+    }
+
+    #[test]
+    fn a_wrong_signature_is_refused() {
+        let mut bad = SIG.to_vec();
+        bad[10] ^= 1;
+        assert!(verify_signed(CERT, SignatureScheme::RSA_PKCS1_SHA256, MSG, &bad).is_err());
+        assert!(verify_signed(CERT, SignatureScheme::RSA_PKCS1_SHA256, b"other params", SIG).is_err());
+        assert!(verify_signed(CERT, SignatureScheme::ECDSA_NISTP256_SHA256, MSG, SIG).is_err());
+    }
+
+    #[test]
+    fn garbage_is_not_a_certificate() {
+        assert!(public_key(b"\x30\x03\x02\x01").is_none());
+        assert!(public_key(&[]).is_none());
+    }
 }
