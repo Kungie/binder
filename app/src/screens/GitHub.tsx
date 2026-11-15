@@ -244,7 +244,8 @@ function DetailView({ picked, project, onChanged }: { picked: Picked; project: P
   const why = !ready ? null : !ready.folder ? "Set the project's agent folder first." : null;
   const pushWhy = !ready ? null : (why ?? (!ready.gh ? "Sign in to gh on the server to let the agent push." : null));
   const row = picked.row as PullRow;
-  const needsFix = pull && (row.ci === "failing" || row.review === "changes_requested");
+  // Only the owner's own pull requests: the run checks out the branch and runs its code with full access.
+  const needsFix = pull && row.mine && (row.ci === "failing" || row.review === "changes_requested");
   const base = detail?.base ?? "main";
 
   return (

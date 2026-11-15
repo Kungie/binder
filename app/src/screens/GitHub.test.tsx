@@ -99,12 +99,14 @@ describe("GitHub screen", () => {
     await user.click(within(await list()).getByRole("button", { name: /#41/ }));
     const d = await detail();
     await user.click(within(d).getByRole("button", { name: "Review with the agent" }));
-    await user.click(within(d).getByRole("button", { name: "Discard" }, await within(d).findByLabelText("Agent's review")));
+    await within(d).findByLabelText("Agent's review");
+    await user.click(within(d).getByRole("button", { name: "Discard" }));
     await new Promise((r) => setTimeout(r, 50));
     expect(within(d).queryByLabelText("Agent's review")).toBeNull();
     expect(within(d).queryByText(/The agent is reviewing/)).toBeNull();
     await user.click(within(d).getByRole("button", { name: "Review with the agent" }));
-    await user.click(within(d).getByRole("button", { name: "Post as comment" }, await within(d).findByLabelText("Agent's review")));
+    await within(d).findByLabelText("Agent's review");
+    await user.click(within(d).getByRole("button", { name: "Post as comment" }));
     await waitFor(() => expect(api.ghActions).toHaveLength(1));
     await new Promise((r) => setTimeout(r, 50));
     expect(within(d).queryByLabelText("Agent's review")).toBeNull();
@@ -125,6 +127,24 @@ describe("GitHub screen", () => {
     answer = "Looks fine.";
     expect(((await within(d).findByLabelText("Agent's review", {}, { timeout: 12_000 })) as HTMLTextAreaElement).value).toBe("Looks fine.");
   }, 15_000);
+
+  it("fix_with_the_agent_is_only_for_your_own_pull_requests", async () => {
+    const { api, user } = setup(true);
+    const real = api.ghList.bind(api);
+    vi.spyOn(api, "ghList").mockImplementation(async (f, p) => {
+      const l = await real(f, p);
+      return { ...l, pulls: l.pulls.map((r) => (r.number === 41 ? { ...r, ci: "failing" as const } : r)) };
+    });
+    await list();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(api.ghList).toHaveBeenCalled());
+    await user.click(within(await list()).getByRole("button", { name: /#41/ }));
+    const theirs = await screen.findByRole("region", { name: /^#41/ });
+    await within(theirs).findByRole("button", { name: "Review with the agent" });
+    expect(within(theirs).queryByRole("button", { name: "Fix with the agent" })).toBeNull();
+    await user.click(within(await list()).getByRole("button", { name: /#40/ }));
+    expect(await within(await screen.findByRole("region", { name: /^#40/ })).findByRole("button", { name: "Fix with the agent" })).toBeInTheDocument();
+  });
 
   it("agent_buttons_explain_why_they_are_off", async () => {
     const { user } = setup(false);

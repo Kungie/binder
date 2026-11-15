@@ -351,7 +351,7 @@ export type PrinterCommand = "pause" | "resume" | "stop";
 /** A job is on the plate: printing, paused or getting ready. */
 export const isPrinting = (s: PrinterState) => ["RUNNING", "PAUSE", "PREPARE"].includes(s.gcode_state ?? "");
 
-export type Access = "edits_only" | "full";
+export type Access = "edits_only" | "full" | "read_only";
 
 export interface AgentRun {
   id: number;

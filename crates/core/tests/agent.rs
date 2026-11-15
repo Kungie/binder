@@ -177,3 +177,18 @@ fn output_reads_the_whole_log_up_to_a_limit() {
     let script = &r.seen.borrow()[0].0;
     assert!(script.contains("tail -c 40000") && script.contains("orb-1-5.log"), "{script}");
 }
+
+#[test]
+fn a_read_only_run_can_neither_edit_nor_run_commands() {
+    let (db, t) = setup();
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    let run = start_run_with(&db, &r, t.id, "~/orbit", Access::ReadOnly, "Review this diff", 5).unwrap();
+    let script = r.seen.borrow()[0].0.clone();
+    assert!(script.contains("claude -p --permission-mode default --disallowedTools"), "{script}");
+    for tool in ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch"] {
+        assert!(script.contains(tool), "{tool} missing from {script}");
+    }
+    assert!(!script.contains("acceptEdits") && !script.contains("dangerously"));
+    assert_eq!(run.access, Access::ReadOnly);
+    assert_eq!(list_runs(&db.lock().unwrap(), t.id).unwrap()[0].access, Access::ReadOnly);
+}

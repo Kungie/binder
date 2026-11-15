@@ -342,7 +342,7 @@ pub async fn gh_review(state: State<'_, AppState>, project_id: i64, repo: String
     let diff = gh.diff(&repo, number).map_err(text)?;
     let task = gh_work::review_task(&mut state.db.lock().unwrap(), p.id, &repo, number, &detail.title, now()).map_err(text)?;
     let prompt = gh_work::review_prompt(&detail.title, &detail.body, &diff);
-    agent::start_run_with(&state.db, &SshRemote::new(target), task.id, &dir, Access::EditsOnly, &prompt, now()).map_err(text)
+    agent::start_run_with(&state.db, &SshRemote::new(target), task.id, &dir, Access::ReadOnly, &prompt, now()).map_err(text)
 }
 
 /// The review a run wrote once it ended well; `None` while it runs.

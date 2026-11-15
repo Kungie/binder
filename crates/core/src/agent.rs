@@ -15,6 +15,8 @@ pub enum Access {
     #[default]
     EditsOnly,
     Full,
+    /// Reads only: for work on text anyone can write, such as a pull request's body and diff.
+    ReadOnly,
 }
 
 impl Access {
@@ -22,6 +24,7 @@ impl Access {
         match self {
             Access::EditsOnly => "edits_only",
             Access::Full => "full",
+            Access::ReadOnly => "read_only",
         }
     }
 
@@ -29,6 +32,9 @@ impl Access {
         match self {
             Access::EditsOnly => "--permission-mode acceptEdits",
             Access::Full => "--dangerously-skip-permissions",
+            // Default mode asks before any tool that changes something, and `-p` can't answer, so those are refused;
+            // the list takes the changing tools away outright, whatever the server's settings say.
+            Access::ReadOnly => "--permission-mode default --disallowedTools Bash Edit MultiEdit Write NotebookEdit WebFetch",
         }
     }
 }
@@ -77,7 +83,11 @@ fn row_to_run(r: &Row) -> rusqlite::Result<AgentRun> {
         task_id: r.get(1)?,
         run: r.get(2)?,
         dir: r.get(3)?,
-        access: if r.get::<_, String>(4)? == "full" { Access::Full } else { Access::EditsOnly },
+        access: match r.get::<_, String>(4)?.as_str() {
+            "full" => Access::Full,
+            "read_only" => Access::ReadOnly,
+            _ => Access::EditsOnly,
+        },
         started: r.get(5)?,
         ended: r.get(6)?,
         exit_code: r.get(7)?,

@@ -387,7 +387,7 @@ export function memoryApi(
       const p = ghProject(projectId);
       if (!p.agent_dir) throw new Error("Set the project's agent folder first.");
       const t = await this.createTask({ title: `Review #${number}: pull request`, project_id: p.id, assignee: "agent", status: "in_progress" });
-      return this.startRun(t.id, p.agent_dir, "edits_only");
+      return this.startRun(t.id, p.agent_dir, "read_only");
     },
     async ghReviewDraft() {
       return DRAFT;
