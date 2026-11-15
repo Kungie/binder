@@ -221,4 +221,12 @@ impl Db {
         let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM hidden_issues WHERE issue_repo = ?1 AND issue_number = ?2", params![repo, number], |r| r.get(0))?;
         Ok(n > 0)
     }
+
+    /// The task an issue made, if there is one.
+    pub fn issue_task_id(&self, repo: &str, number: i64) -> Result<Option<i64>> {
+        Ok(self
+            .conn
+            .query_row("SELECT id FROM tasks WHERE lower(issue_repo) = lower(?1) AND issue_number = ?2", params![repo, number], |r| r.get(0))
+            .optional()?)
+    }
 }

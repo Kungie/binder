@@ -128,11 +128,17 @@ fn lock(db: &Mutex<Db>) -> MutexGuard<'_, Db> {
 
 pub fn start_run(db: &Mutex<Db>, remote: &dyn Remote, task_id: i64, dir: &str, access: Access, now: i64) -> Result<AgentRun> {
     let task = lock(db).get_task(task_id)?;
+    let prompt = if task.notes.trim().is_empty() { task.title.clone() } else { format!("{}\n\n{}", task.title, task.notes) };
+    start_run_with(db, remote, task_id, dir, access, &prompt, now)
+}
+
+/// A run for a task with a prompt of Binder's making, such as a review of a pull request.
+pub fn start_run_with(db: &Mutex<Db>, remote: &dyn Remote, task_id: i64, dir: &str, access: Access, prompt: &str, now: i64) -> Result<AgentRun> {
+    let task = lock(db).get_task(task_id)?;
     let run = format!("{}-{now}", task.key).to_lowercase();
     if get_run(&lock(db), &run).is_ok() {
         return Err(Error::Invalid("That task just started a run.".into()));
     }
-    let prompt = if task.notes.trim().is_empty() { task.title.clone() } else { format!("{}\n\n{}", task.title, task.notes) };
     let f = files(&run);
     let script = format!(
         "mkdir -p \"$HOME\"/.binder-agent && cat > {f}.prompt\n\
@@ -141,7 +147,7 @@ pub fn start_run(db: &Mutex<Db>, remote: &dyn Remote, task_id: i64, dir: &str, a
         dir = shell_dir(dir),
         flag = access.flag(),
     );
-    remote.run(&script, Some(&prompt))?;
+    remote.run(&script, Some(prompt))?;
     let mut db = lock(db);
     db.conn.execute(
         "INSERT INTO agent_runs (task_id, run, dir, access, started) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -208,4 +214,16 @@ pub fn stop_run(db: &Mutex<Db>, remote: &dyn Remote, run: &str, now: i64) -> Res
     set_status(&mut db, r.task_id, Status::Todo, now)?;
     db.update_task(r.task_id, TaskPatch { night: Some(false), ..Default::default() }, now)?;
     get_run(&db, run)
+}
+
+/// Whether `gh` is signed in on the server, so the agent can push and open pull requests.
+pub fn server_gh(remote: &dyn Remote) -> Result<bool> {
+    Ok(remote.run("gh auth status >/dev/null 2>&1 && echo yes\nexit 0\n", None)?.trim() == "yes")
+}
+
+/// A run's whole log, up to its last 40 000 bytes: what a review run wrote.
+pub fn output(remote: &dyn Remote, run: &str) -> Result<String> {
+    let out = remote.run(&format!("echo --binder:log--\ntail -c 40000 {}.log 2>/dev/null\nexit 0\n", files(run)), None)?;
+    let body = out.split_once("--binder:log--").map_or("", |(_, b)| b);
+    Ok(body.trim_matches('\n').to_string())
 }

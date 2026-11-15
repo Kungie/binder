@@ -155,3 +155,25 @@ fn a_finished_run_clears_night() {
     let t = db.lock().unwrap().get_task(t.id).unwrap();
     assert_eq!((t.status, t.night), (Status::Done, false));
 }
+
+#[test]
+fn a_custom_prompt_reaches_the_server() {
+    let (db, t) = setup();
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    start_run_with(&db, &r, t.id, "~/orbit", Access::EditsOnly, "Review this diff", 5).unwrap();
+    assert_eq!(r.seen.borrow()[0].1.as_deref(), Some("Review this diff"));
+}
+
+#[test]
+fn server_gh_reads_yes() {
+    assert!(server_gh(&FakeRemote::new(vec![Ok("yes\n".into())])).unwrap());
+    assert!(!server_gh(&FakeRemote::new(vec![Ok(String::new())])).unwrap());
+}
+
+#[test]
+fn output_reads_the_whole_log_up_to_a_limit() {
+    let r = FakeRemote::new(vec![Ok("--binder:log--\nLine one\nLine two\n".into())]);
+    assert_eq!(output(&r, "orb-1-5").unwrap(), "Line one\nLine two");
+    let script = &r.seen.borrow()[0].0;
+    assert!(script.contains("tail -c 40000") && script.contains("orb-1-5.log"), "{script}");
+}

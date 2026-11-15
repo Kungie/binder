@@ -303,3 +303,68 @@ impl GhWork for GhCli {
         issue_number_of(&out).ok_or_else(|| bad("no issue number"))
     }
 }
+
+/// Diffs longer than this are cut before they reach the agent.
+const DIFF_LIMIT: usize = 200_000;
+
+/// What the agent reads to review a pull request. It answers in its output; Binder shows that as a draft.
+pub fn review_prompt(title: &str, body: &str, diff: &str) -> String {
+    let (diff, cut) = if diff.len() > DIFF_LIMIT {
+        let mut end = DIFF_LIMIT;
+        while !diff.is_char_boundary(end) {
+            end -= 1;
+        }
+        (&diff[..end], format!("\n\nThe diff was cut at {DIFF_LIMIT} characters."))
+    } else {
+        (diff, String::new())
+    };
+    format!(
+        "Review this pull request. Write a short review in Markdown: what it does in two or three sentences, the risks, \
+         then concrete fixes with the file and line. Plain words, no praise. Don't post anything and don't change any \
+         files: your answer is a draft the owner reads first.\n\nTitle: {title}\n\n{body}\n\n```diff\n{diff}\n```{cut}"
+    )
+}
+
+/// What the agent is asked when the owner hands it an issue.
+pub fn work_prompt(key: &str, repo: &str, number: i64, title: &str, body: &str) -> String {
+    let branch = format!("binder/{}", key.to_lowercase());
+    format!(
+        "Work on issue #{number} of {repo}: {title}\n\n{body}\n\nIn this folder, make a branch {branch} from the default \
+         branch, fix the issue with small commits, run the tests, then `git push -u origin {branch}` and open a draft pull \
+         request with `gh pr create --draft --repo {repo}` whose body says `Closes #{number}`. Don't merge anything."
+    )
+}
+
+/// What the agent is asked to fix a pull request's failing checks or requested changes.
+pub fn fix_prompt(repo: &str, number: i64, branch: &str) -> String {
+    format!(
+        "Fix pull request #{number} of {repo} on its branch {branch}. Run `gh pr checkout {number} --repo {repo}`, read the \
+         failed checks with `gh run list --repo {repo} --branch {branch}` and `gh run view <id> --repo {repo} --log-failed`, \
+         and the review comments with `gh pr view {number} --repo {repo} --comments`. Fix them with small commits, run the \
+         tests and push to the same branch. Don't merge or close anything."
+    )
+}
+
+/// A task for the agent's review of a pull request, in progress until the run ends.
+pub fn review_task(db: &mut crate::Db, project_id: i64, repo: &str, number: i64, title: &str, now: i64) -> Result<crate::model::Task> {
+    use crate::model::{Assignee, NewTask, Status};
+    let _ = repo;
+    db.create_task(
+        NewTask { title: format!("Review #{number}: {title}"), project_id: Some(project_id), assignee: Some(Assignee::Agent), status: Some(Status::InProgress), ..Default::default() },
+        now,
+    )
+}
+
+/// The issue's task, made if sync hasn't brought it in, and given to the agent.
+pub fn issue_task(db: &mut crate::Db, project_id: i64, issue: &crate::github::Issue, now: i64) -> Result<crate::model::Task> {
+    use crate::model::{Assignee, NewTask, TaskPatch};
+    let id = match db.issue_task_id(&issue.repo, issue.number)? {
+        Some(id) => id,
+        None => {
+            let t = db.create_task(NewTask { title: issue.title.clone(), notes: Some(issue.body.clone()), project_id: Some(project_id), ..Default::default() }, now)?;
+            db.link_issue(t.id, &issue.repo, issue.number, &issue.url)?;
+            t.id
+        }
+    };
+    db.update_task(id, TaskPatch { assignee: Some(Assignee::Agent), ..Default::default() }, now)
+}

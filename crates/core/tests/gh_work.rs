@@ -83,3 +83,35 @@ fn a_new_issue_url_gives_its_number() {
     assert_eq!(issue_number_of("https://github.com/demo-dev/orbit/issues/57\n"), Some(57));
     assert_eq!(issue_number_of("nothing"), None);
 }
+
+#[test]
+fn review_prompt_cuts_a_huge_diff() {
+    let p = review_prompt("Sync status", "Adds a dot", "x".repeat(250_000).as_str());
+    assert!(p.contains("Sync status") && p.contains("Adds a dot"));
+    assert!(p.len() < 205_000, "{}", p.len());
+    assert!(p.contains("The diff was cut at 200000 characters."));
+    assert!(p.contains("Don't post anything"));
+    let short = review_prompt("t", "b", "diff --git a/x b/x");
+    assert!(!short.contains("was cut"));
+}
+
+#[test]
+fn work_prompt_names_the_branch_and_closes_the_issue() {
+    let p = work_prompt("ORB-7", "demo-dev/orbit", 12, "Crash", "Steps");
+    assert!(p.contains("binder/orb-7") && p.contains("Closes #12") && p.contains("gh pr create --draft") && p.contains("demo-dev/orbit"));
+    let f = fix_prompt("demo-dev/orbit", 41, "feature");
+    assert!(f.contains("gh pr checkout 41") && f.contains("gh run view") && f.contains("--log-failed") && f.contains("feature"));
+}
+
+#[test]
+fn issue_task_reuses_the_synced_task() {
+    let mut db = binder_core::Db::in_memory().unwrap();
+    let p = db.create_project(binder_core::model::NewProject { name: "orbit".into(), ..Default::default() }, 1).unwrap();
+    let issue = binder_core::github::Issue { repo: "demo-dev/orbit".into(), number: 12, title: "Crash".into(), body: "Steps".into(), url: "https://github.com/demo-dev/orbit/issues/12".into() };
+    let a = issue_task(&mut db, p.id, &issue, 10).unwrap();
+    assert_eq!((a.assignee, a.issue_number), (binder_core::model::Assignee::Agent, Some(12)));
+    let b = issue_task(&mut db, p.id, &issue, 20).unwrap();
+    assert_eq!(a.id, b.id);
+    let r = review_task(&mut db, p.id, "demo-dev/orbit", 41, "Sync status", 30).unwrap();
+    assert_eq!((r.title.as_str(), r.assignee, r.status), ("Review #41: Sync status", binder_core::model::Assignee::Agent, binder_core::model::Status::InProgress));
+}
