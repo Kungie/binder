@@ -91,7 +91,8 @@ describe("review fixes", () => {
     await user.keyboard("c");
     const dialog = screen.getByRole("dialog", { name: "New task" });
     await user.type(within(dialog).getByLabelText("Task title"), "Fix the hinge");
-    await user.selectOptions(within(dialog).getByLabelText("Priority"), "urgent");
+    await user.click(within(dialog).getByRole("button", { name: /^Priority:/ }));
+    await user.click(within(screen.getByRole("listbox", { name: "Set priority" })).getByRole("option", { name: /Urgent/ }));
     await user.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(async () => expect((await api.listTasks({ kind: "all" }, true)).find((t) => t.title === "Fix the hinge")?.priority).toBe("urgent"));
   });

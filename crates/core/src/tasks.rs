@@ -161,6 +161,10 @@ impl Db {
         }
         if let Some(a) = p.assignee {
             t.assignee = a;
+            // Night tasks are the agent's: giving one to the owner ends its night.
+            if a == Assignee::Me {
+                t.night = false;
+            }
         }
         if p.clear_due {
             t.due = None;

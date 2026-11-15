@@ -348,7 +348,10 @@ export function memoryApi(
       if (p.priority) t.priority = p.priority;
       if (p.clear_project) t.project_id = null;
       else if (p.project_id !== undefined) t.project_id = project(p.project_id).id;
-      if (p.assignee) t.assignee = p.assignee;
+      if (p.assignee) {
+        t.assignee = p.assignee;
+        if (p.assignee === "me") t.night = false;
+      }
       if (p.clear_due) (t.due = null), (t.due_time = null);
       else if (p.due !== undefined) t.due = p.due;
       if (p.clear_due_time) t.due_time = null;

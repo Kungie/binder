@@ -174,3 +174,11 @@ fn deleting_an_issue_task_hides_the_issue() {
     db.delete_task(t.id).unwrap();
     assert!(db.issue_hidden("demo-dev/orbit", 12).unwrap());
 }
+
+#[test]
+fn giving_a_night_task_to_me_ends_night() {
+    let mut db = Db::in_memory().unwrap();
+    let t = db.create_task(NewTask { title: "n".into(), night: Some(true), ..Default::default() }, 1).unwrap();
+    let t = db.update_task(t.id, TaskPatch { assignee: Some(Assignee::Me), ..Default::default() }, 2).unwrap();
+    assert!(!t.night);
+}
