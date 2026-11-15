@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Brief,
+import type { SiteCheck, Site, Brief,
   Access,
   Agent,
   NewPrinter,
@@ -63,6 +63,14 @@ export interface Api {
   /** The morning brief: what happened since the last dismiss. */
   brief(): Promise<Brief>;
   dismissBrief(): Promise<void>;
+  /** The websites on the server, with their containers and figures. */
+  sites(): Promise<Site[]>;
+  /** Whether an https address answers within 5 s, and whether it may be framed. Asked from the Mac. */
+  siteCheck(url: string): Promise<SiteCheck>;
+  /** Saves the address of a site Binder found none for; returns it as kept (https added). */
+  setSiteAddress(name: string, url: string): Promise<string>;
+  /** Opens an https link in the browser. */
+  openLink(url: string): Promise<void>;
   getConfig(): Promise<Config>;
   setConfig(config: Config): Promise<void>;
   vaultConnected(): Promise<boolean>;
@@ -242,6 +250,10 @@ export const tauriApi: Api = {
   lastDone: () => call("last_done"),
   brief: () => call("brief"),
   dismissBrief: () => call("dismiss_brief"),
+  sites: () => call("sites"),
+  siteCheck: (url) => call("site_check", { url }),
+  setSiteAddress: (name, url) => call("set_site_address", { name, url }),
+  openLink: (url) => call("open_link", { url }),
   getConfig: () => call("get_config"),
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),

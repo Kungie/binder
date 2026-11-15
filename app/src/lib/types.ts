@@ -112,6 +112,28 @@ export interface DoneLine {
 }
 
 /** A done line with its project, for Overview's Done today. */
+export interface SiteContainer {
+  name: string;
+  state: string;
+}
+
+/** A website on the home server: a folder in ~/sites with a docker-compose.yml. */
+export interface Site {
+  name: string;
+  /** https://…; null when none was found or saved. */
+  address: string | null;
+  containers: SiteContainer[];
+  cpu: number;
+  mem_bytes: number;
+  disk_bytes: number;
+}
+
+export interface SiteCheck {
+  status: number | null;
+  frameable: boolean;
+  error: string | null;
+}
+
 /** One line of the morning brief; the interface words it. Times are Unix seconds. */
 export type BriefItem =
   | { kind: "run"; task_id: number; key: string; ok: boolean; night: boolean; at: number }

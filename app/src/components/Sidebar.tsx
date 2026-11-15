@@ -52,6 +52,7 @@ const NAV: { screen: Screen; label: string; d: string }[] = [
   { screen: "projects", label: "Projects", d: "M1.8 3.5h4l1.2 1.4h5.2v6.6H1.8z" },
   { screen: "devices", label: "Devices", d: "M2 3h10v6.5H2zM5 12h4M7 9.5V12" },
   { screen: "server", label: "Server", d: "M2 2.5h10v3.5H2zM2 8h10v3.5H2zM4.2 4.25h.01M4.2 9.75h.01" },
+  { screen: "sites", label: "Sites", d: "M7 1.8a5.2 5.2 0 1 1 0 10.4A5.2 5.2 0 0 1 7 1.8zM1.8 7h10.4M7 1.8c1.5 1.4 2.2 3.1 2.2 5.2S8.5 10.8 7 12.2C5.5 10.8 4.8 9.1 4.8 7S5.5 3.2 7 1.8z" },
   { screen: "agents", label: "Agents", d: "M2.5 4l3 3-3 3M7 10.5h4.5" },
   { screen: "cloud", label: "Cloud", d: "M4 11h6.2a2.8 2.8 0 0 0 .4-5.57A3.8 3.8 0 0 0 3.3 6.2 2.4 2.4 0 0 0 4 11z" },
   { screen: "printer", label: "3D Printer", d: "M2 12.5V1.8h10v10.7M2 4.8h10M6.2 4.8v2.4h1.6V4.8M7 7.2v1M4 10.5h6" },

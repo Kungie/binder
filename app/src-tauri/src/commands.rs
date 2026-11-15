@@ -197,6 +197,53 @@ pub async fn restart_container(state: State<'_, AppState>, name: String) -> Res<
 }
 
 #[tauri::command]
+pub async fn sites(state: State<'_, AppState>) -> Res<Vec<binder_core::sites::Site>> {
+    let target = server_target(&state)?;
+    let saved = state.config.lock().unwrap().site_addresses.clone();
+    binder_core::sites::read(&SshRemote::new(target), &saved).map_err(text)
+}
+
+/// Asks the address from the Mac with the system curl, the url as one argument and never through a shell.
+#[tauri::command]
+pub async fn site_check(url: String) -> Res<binder_core::sites::SiteCheck> {
+    if !url.starts_with("https://") {
+        return Err("Only https addresses are checked.".into());
+    }
+    let out = std::process::Command::new("/usr/bin/curl")
+        .args(["-sS", "-o", "/dev/null", "-D", "-", "--max-time", "5", "--proto", "=https", "--proto-redir", "=https", "-L", "--", &url])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        let error = if out.status.code() == Some(28) { "No answer in 5 s".to_string() } else { "No answer".to_string() };
+        return Ok(binder_core::sites::SiteCheck { status: None, frameable: false, error: Some(error) });
+    }
+    Ok(binder_core::sites::parse_check(&String::from_utf8_lossy(&out.stdout)))
+}
+
+#[tauri::command]
+pub async fn set_site_address(state: State<'_, AppState>, name: String, url: String) -> Res<String> {
+    let url = url.trim();
+    let host = url.trim_start_matches("https://").trim_start_matches("http://").trim_end_matches('/');
+    if host.is_empty() || host.contains(char::is_whitespace) {
+        return Err("Give it an address like example.com.".into());
+    }
+    let kept = format!("https://{host}");
+    let mut config = state.config.lock().unwrap();
+    config.site_addresses.insert(name, kept.clone());
+    config.save(&state.config_path).map_err(text)?;
+    Ok(kept)
+}
+
+/// Opens an https link in the browser; nothing else.
+#[tauri::command]
+pub async fn open_link(app: tauri::AppHandle, url: String) -> Res<()> {
+    if !url.starts_with("https://") {
+        return Err("Only https links open.".into());
+    }
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn list_devices(state: State<'_, AppState>) -> Res<Vec<Device>> {
     state.db.lock().unwrap().list_devices().map_err(text)
 }

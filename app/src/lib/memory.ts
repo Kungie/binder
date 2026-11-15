@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { Site, BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -69,6 +69,8 @@ export function memoryApi(
   printerCommands: [string, PrinterCommand][];
   /** Containers restarted, in order. */
   restarted: string[];
+  /** Links opened in the browser. */
+  openedLinks: string[];
   cloudOpened: string[];
   /** Items Quick Look was asked to show. */
   quickLooked: string[];
@@ -97,6 +99,13 @@ export function memoryApi(
   const printers: PrinterView[] = (seed.printers ?? []).map((p) => ({ ...p, config: { ...p.config }, state: { ...p.state } }));
   const printerCommands: [string, PrinterCommand][] = [];
   const restarted: string[] = [];
+  const openedLinks: string[] = [];
+  const MB = 1024 * 1024;
+  const sites: Site[] = [
+    { name: "blog", address: "https://blog.example.com", containers: [{ name: "blog-site-1", state: "running" }, { name: "blog-cloudflared-1", state: "running" }], cpu: 0.4, mem_bytes: 38 * MB, disk_bytes: 12 * MB },
+    { name: "shop", address: "https://shop.example.com", containers: [{ name: "shop-site-1", state: "exited" }], cpu: 0, mem_bytes: 0, disk_bytes: 240 * MB },
+    { name: "notes", address: null, containers: [{ name: "notes-site-1", state: "running" }], cpu: 1.2, mem_bytes: 1536 * MB, disk_bytes: 3 * MB },
+  ];
   const printer = (serial: string) => {
     const p = printers.find((x) => x.config.serial === serial);
     if (!p) throw new Error(`No printer ${serial}.`);
@@ -302,6 +311,24 @@ export function memoryApi(
     done,
     printerCommands,
     restarted,
+    openedLinks,
+    async sites() {
+      if (!config.server) throw new Error("No server set.");
+      return sites.map((s) => ({ ...s, address: config.site_addresses[s.name] ?? s.address, containers: s.containers.map((c) => ({ ...c })) }));
+    },
+    async siteCheck(url) {
+      if (!url.startsWith("https://")) throw new Error("Only https addresses are checked.");
+      return { status: 200, frameable: !url.includes("shop."), error: null };
+    },
+    async setSiteAddress(name, url) {
+      const kept = url.trim().startsWith("https://") ? url.trim() : `https://${url.trim().replace(/^http:\/\//, "")}`;
+      config = { ...config, site_addresses: { ...config.site_addresses, [name]: kept } };
+      return kept;
+    },
+    async openLink(url) {
+      if (!url.startsWith("https://")) throw new Error("Only https links open.");
+      openedLinks.push(url);
+    },
     setServerReachable(v) {
       reachable = v;
     },

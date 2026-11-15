@@ -15,6 +15,7 @@ import { Printer } from "./screens/Printer";
 import { Cloud } from "./screens/Cloud";
 import { Transfers } from "./components/Transfers";
 import { Agents } from "./screens/Agents";
+import { Sites } from "./screens/Sites";
 import { useEffect, useState } from "react";
 
 function Screens() {
@@ -30,6 +31,8 @@ function Screens() {
       return <Devices />;
     case "server":
       return <Server />;
+    case "sites":
+      return <Sites />;
     case "cloud":
       return <Cloud />;
     case "printer":
