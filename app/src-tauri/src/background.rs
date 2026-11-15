@@ -13,12 +13,8 @@ use tauri_plugin_notification::NotificationExt;
 const PICK_UP_FIRST: Duration = Duration::from_secs(30);
 const PICK_UP_EVERY: Duration = Duration::from_secs(600);
 const WATCH_EVERY: Duration = Duration::from_secs(60);
-/// More than this since the last good check, and the server's own times fill the gap.
-const GAP: i64 = 300;
 /// Events are kept five weeks, for the weekly note.
 const KEEP_EVENTS: i64 = 35 * 86_400;
-/// An owner's restart keeps that container quiet this long.
-const OWNER_QUIET: i64 = 120;
 
 fn now() -> i64 {
     chrono::Utc::now().timestamp()
@@ -88,18 +84,20 @@ fn look(app: &AppHandle, watch: &mut Watch) {
     let state = app.state::<AppState>();
     let (quiet, last, boot) = {
         let db = state.db.lock().unwrap();
+        let meta = |k: &str| db.meta(k).ok().flatten().and_then(|v| v.parse::<i64>().ok());
+        let last = meta("watch_last");
         let owner: Vec<(String, i64)> = db
-            .events_between(now - OWNER_QUIET, now + 1)
+            .events_between(watch::owner_since(last, now), now + 1)
             .unwrap_or_default()
             .into_iter()
             .filter(|e| e.kind == EventKind::OwnerRestart)
             .map(|e| (e.subject, e.at))
             .collect();
-        let meta = |k: &str| db.meta(k).ok().flatten().and_then(|v| v.parse::<i64>().ok());
-        (owner, meta("watch_last"), meta("server_boot"))
+        (owner, last, meta("server_boot"))
     };
     let quiet_names: Vec<String> = quiet.iter().map(|(n, _)| n.clone()).collect();
     let mut logged: Vec<(i64, EventKind, String, String)> = vec![];
+    let mut caught: Vec<(i64, EventKind, String)> = vec![];
     let alerts = match server::fetch(&remote, now, Some(&sd)) {
         // A failed `docker ps` says nothing about the containers: skip it rather than call them all removed.
         Ok(status) if status.docker_failed => vec![],
@@ -108,11 +106,10 @@ fn look(app: &AppHandle, watch: &mut Watch) {
                 logged.push((at, EventKind::ServerRestart, String::new(), String::new()));
             }
             // The Mac slept or Binder was closed: read what the server remembers about the gap.
-            if let Some(last) = last.filter(|l| now - l > GAP) {
+            if let Some(last) = last.filter(|l| now - l > watch::GAP) {
                 if let Ok(times) = server::container_times(&remote) {
-                    for (at, kind, name) in watch::catch_up(last, now, &times, &quiet) {
-                        logged.push((at, kind, name, String::new()));
-                    }
+                    caught = watch::catch_up(last, now, &times, &quiet);
+                    logged.extend(caught.iter().map(|(at, kind, name)| (*at, *kind, name.clone(), String::new())));
                 }
             }
             let mut db = state.db.lock().unwrap();
@@ -125,11 +122,7 @@ fn look(app: &AppHandle, watch: &mut Watch) {
         }
         Err(_) => watch.missed(),
     };
-    for alert in &alerts {
-        if let Some(kind) = alert.kind() {
-            logged.push((now, kind, alert.subject().to_string(), alert.body()));
-        }
-    }
+    logged.extend(watch::live_events(&alerts, &caught, now));
     if !logged.is_empty() {
         let mut db = state.db.lock().unwrap();
         for (at, kind, subject, detail) in &logged {

@@ -164,6 +164,30 @@ impl Watch {
 /// Seconds after an owner's restart during which a container's stop and start are theirs.
 const OWNER_WINDOW: i64 = 120;
 
+/// A gap longer than this between good checks means the Mac slept or Binder was closed.
+pub const GAP: i64 = 300;
+
+/// Where to start reading the owner's restarts: two minutes before the last good check after a gap, so a restart
+/// just before the Mac slept still quiets the catch-up, else two minutes before now.
+pub fn owner_since(last: Option<i64>, now: i64) -> i64 {
+    match last {
+        Some(l) if now - l > GAP => l - OWNER_WINDOW,
+        _ => now - OWNER_WINDOW,
+    }
+}
+
+/// The live alerts as events, without a stop the catch-up just logged for a container still down: that stop
+/// keeps the server's own time.
+pub fn live_events(alerts: &[Alert], caught: &[(i64, EventKind, String)], now: i64) -> Vec<(i64, EventKind, String, String)> {
+    let still_down = |name: &str| caught.iter().rev().find(|c| c.2 == name).is_some_and(|c| c.1 == EventKind::ContainerStopped);
+    alerts
+        .iter()
+        .filter_map(|a| a.kind().map(|k| (a, k)))
+        .filter(|(a, k)| !(*k == EventKind::ContainerStopped && still_down(a.subject())))
+        .map(|(a, k)| (now, k, a.subject().to_string(), a.body()))
+        .collect()
+}
+
 /// What happened to the containers between the last check and now, from Docker's own times: a stop in the gap,
 /// and the start after it when the container came back. A start with no stop before it (a fresh deploy) isn't news.
 pub fn catch_up(last: i64, now: i64, times: &[ContainerTimes], quiet: &[(String, i64)]) -> Vec<(i64, EventKind, String)> {

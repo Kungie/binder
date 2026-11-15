@@ -159,3 +159,27 @@ fn alerts_name_their_event_kind() {
     assert_eq!(Alert::Running("a".into()).kind(), Some(EventKind::ContainerBack));
     assert_eq!(Alert::Unreachable.kind(), None);
 }
+
+#[test]
+fn a_catch_up_sees_an_owner_restart_from_before_the_gap() {
+    use binder_core::watch::owner_since;
+    // Last good check 23:00:00, now 07:30: the restart at 22:59:30 still counts for the gap.
+    let (last, now) = (23 * 3600, 31 * 3600 + 1800);
+    assert!(owner_since(Some(last), now) <= last - 30);
+    // Without a gap the window is the last two minutes.
+    assert_eq!(owner_since(Some(now - 60), now), now - 120);
+    assert_eq!(owner_since(None, now), now - 120);
+}
+
+#[test]
+fn a_stop_the_catch_up_logged_is_not_logged_again_live() {
+    use binder_core::watch::live_events;
+    let caught = vec![(500, EventKind::ContainerStopped, "web".to_string())];
+    let alerts = vec![Alert::Stopped("web".into(), "Exited (1)".into()), Alert::Stopped("db".into(), "Exited (0)".into())];
+    let got = live_events(&alerts, &caught, 1000);
+    assert_eq!(got.len(), 1);
+    assert_eq!((got[0].0, got[0].1, got[0].2.as_str()), (1000, EventKind::ContainerStopped, "db"));
+    // One that came back in the gap and stopped again since is news.
+    let back = vec![(500, EventKind::ContainerStopped, "web".to_string()), (600, EventKind::ContainerBack, "web".to_string())];
+    assert_eq!(live_events(&alerts[..1], &back, 1000).len(), 1);
+}
