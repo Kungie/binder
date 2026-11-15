@@ -108,6 +108,9 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE projects ADD COLUMN open_prs INTEGER;
     ALTER TABLE projects ADD COLUMN ci TEXT;
     ALTER TABLE agent_runs ADD COLUMN night INTEGER NOT NULL DEFAULT 0;",
+    // v9: whether a task's issue is on the owner's assigned list, so sync closes a task once, when its issue leaves.
+    "ALTER TABLE tasks ADD COLUMN issue_listed INTEGER NOT NULL DEFAULT 0;
+    UPDATE tasks SET issue_listed = 1 WHERE issue_repo IS NOT NULL AND status NOT IN ('done', 'canceled');",
 ];
 
 impl Db {

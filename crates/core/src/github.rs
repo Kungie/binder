@@ -278,19 +278,19 @@ fn apply_health(db: &mut Db, health: &[Health]) -> Result<()> {
     Ok(())
 }
 
-/// Issues assigned to the owner become tasks once; a task whose issue is no longer in the list (closed, or no
-/// longer the owner's) moves to Done. Nothing else on an issue task is ever changed.
+/// Issues assigned to the owner become tasks once. A task whose issue leaves the list (closed, or no longer the
+/// owner's) moves to Done once; reopened by the owner, it stays as they left it. A task linked to an issue that was
+/// never on the list (Work on it, on someone else's issue) is never closed by sync. Nothing else is ever changed.
 fn apply_issues(db: &mut Db, issues: &[Issue], now: i64) -> Result<(usize, usize)> {
     let projects = db.list_projects()?;
     let mut added = 0;
     for issue in issues {
         let Some(project) = projects.iter().find(|p| p.github.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(&issue.repo))) else { continue };
-        let known: i64 = db.conn.query_row(
-            "SELECT COUNT(*) FROM tasks WHERE lower(issue_repo) = lower(?1) AND issue_number = ?2",
+        let listed = db.conn.execute(
+            "UPDATE tasks SET issue_listed = 1 WHERE lower(issue_repo) = lower(?1) AND issue_number = ?2",
             params![issue.repo, issue.number],
-            |r| r.get(0),
         )?;
-        if known > 0 || db.issue_hidden(&issue.repo, issue.number)? {
+        if listed > 0 || db.issue_hidden(&issue.repo, issue.number)? {
             continue;
         }
         let task = db.create_task(
@@ -298,17 +298,22 @@ fn apply_issues(db: &mut Db, issues: &[Issue], now: i64) -> Result<(usize, usize
             now,
         )?;
         db.link_issue(task.id, &issue.repo, issue.number, &issue.url)?;
+        db.conn.execute("UPDATE tasks SET issue_listed = 1 WHERE id = ?1", [task.id])?;
         db.log_event(now, EventKind::IssueAdded, &task.key, &task.title)?;
         added += 1;
     }
-    let open: Vec<(i64, String, i64)> = db
+    let gone: Vec<(i64, String, i64, String)> = db
         .conn
-        .prepare("SELECT id, issue_repo, issue_number FROM tasks WHERE issue_repo IS NOT NULL AND status NOT IN ('done', 'canceled')")?
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
-        .collect::<rusqlite::Result<_>>()?;
+        .prepare("SELECT id, issue_repo, issue_number, status FROM tasks WHERE issue_repo IS NOT NULL AND issue_listed = 1")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+        .collect::<rusqlite::Result<Vec<(i64, String, i64, String)>>>()?
+        .into_iter()
+        .filter(|(_, repo, number, _)| !issues.iter().any(|i| i.number == *number && i.repo.eq_ignore_ascii_case(repo)))
+        .collect();
     let mut closed = 0;
-    for (id, repo, number) in open {
-        if !issues.iter().any(|i| i.number == number && i.repo.eq_ignore_ascii_case(&repo)) {
+    for (id, _, _, status) in gone {
+        db.conn.execute("UPDATE tasks SET issue_listed = 0 WHERE id = ?1", [id])?;
+        if status != "done" && status != "canceled" {
             db.update_task(id, TaskPatch { status: Some(Status::Done), ..Default::default() }, now)?;
             closed += 1;
         }

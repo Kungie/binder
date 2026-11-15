@@ -184,3 +184,28 @@ fn paginated_graphql_pages_parse_into_health() {
         Health { name_with_owner: "demo-dev/lab".into(), open_prs: 0, ci: None },
     ]);
 }
+
+#[test]
+fn a_task_reopened_after_its_issue_closed_stays_open() {
+    let mut db = Db::in_memory().unwrap();
+    sync(&mut db, &fake(vec![issue("orbit", 12, "Crash")]), NOW).unwrap();
+    assert_eq!(sync(&mut db, &fake(vec![]), NOW + 60).unwrap().issues_closed, 1);
+    let t = issue_tasks(&db)[0].clone();
+    db.update_task(t.id, TaskPatch { status: Some(Status::InProgress), ..Default::default() }, NOW + 120).unwrap();
+    assert_eq!(sync(&mut db, &fake(vec![]), NOW + 180).unwrap().issues_closed, 0);
+    assert_eq!(db.get_task(t.id).unwrap().status, Status::InProgress);
+    // Reopened and assigned again, it can close again later.
+    sync(&mut db, &fake(vec![issue("orbit", 12, "Crash")]), NOW + 240).unwrap();
+    assert_eq!(sync(&mut db, &fake(vec![]), NOW + 300).unwrap().issues_closed, 1);
+}
+
+#[test]
+fn a_task_for_an_issue_never_assigned_to_the_owner_is_left_alone() {
+    let mut db = Db::in_memory().unwrap();
+    sync(&mut db, &fake(vec![]), NOW).unwrap();
+    let orbit = db.list_projects().unwrap().into_iter().find(|p| p.name == "orbit").unwrap();
+    // Work on it, on a contributor's issue nobody assigned.
+    let t = binder_core::gh_work::issue_task(&mut db, orbit.id, &issue("orbit", 30, "Typo"), NOW).unwrap();
+    assert_eq!(sync(&mut db, &fake(vec![]), NOW + 60).unwrap().issues_closed, 0);
+    assert_eq!(db.get_task(t.id).unwrap().status, Status::Todo);
+}
