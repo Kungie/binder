@@ -61,3 +61,56 @@ fn pin_new_then_match_then_mismatch() {
     assert_eq!(cert_matches(Some(&pin.to_uppercase()), der), PinCheck::Matches);
     assert_eq!(cert_matches(Some(&pin), b"another certificate"), PinCheck::Mismatch);
 }
+
+fn st(state: &str, job: &str, layer: u32) -> PrinterState {
+    PrinterState { gcode_state: Some(state.into()), job: Some(job.into()), layer: Some(layer), ..Default::default() }
+}
+
+#[test]
+fn running_then_finish_is_done_with_the_time() {
+    let mut w = PrintWatch::default();
+    assert_eq!(w.seen(&st("IDLE", "", 0), 900), None);
+    assert_eq!(w.seen(&st("RUNNING", "Benchy", 1), 1000), None);
+    assert_eq!(w.seen(&st("RUNNING", "Benchy", 80), 4000), None);
+    let out = w.seen(&st("FINISH", "Benchy", 200), 1000 + 2 * 3600 + 14 * 60).unwrap();
+    assert_eq!(out, PrintOutcome::Done { job: "Benchy".into(), minutes: Some(134) });
+    assert_eq!((out.title(), out.body()), ("Benchy is done".to_string(), "Took 2 h 14 min".to_string()));
+    assert_eq!(PrintOutcome::Done { job: "Clip".into(), minutes: Some(38) }.body(), "Took 38 min");
+}
+
+#[test]
+fn paused_then_failed_gives_the_layer() {
+    let mut w = PrintWatch::default();
+    w.seen(&st("RUNNING", "Vase", 10), 0);
+    w.seen(&st("PAUSE", "Vase", 112), 100);
+    let out = w.seen(&st("FAILED", "Vase", 112), 200).unwrap();
+    assert_eq!(out, PrintOutcome::Failed { job: "Vase".into(), layer: Some(112) });
+    assert_eq!((out.title(), out.body()), ("Vase failed".to_string(), "Stopped at layer 112".to_string()));
+}
+
+#[test]
+fn finish_seen_first_is_quiet() {
+    let mut w = PrintWatch::default();
+    assert_eq!(w.seen(&st("FINISH", "Benchy", 200), 0), None);
+}
+
+#[test]
+fn one_outcome_per_print() {
+    let mut w = PrintWatch::default();
+    w.seen(&st("RUNNING", "Benchy", 1), 0);
+    assert!(w.seen(&st("FINISH", "Benchy", 200), 60).is_some());
+    assert_eq!(w.seen(&st("FINISH", "Benchy", 200), 120), None);
+}
+
+#[test]
+fn an_unknown_job_and_time_still_read_well() {
+    let out = PrintOutcome::Done { job: String::new(), minutes: None };
+    assert_eq!((out.title(), out.body()), ("Print is done".to_string(), String::new()));
+}
+
+#[test]
+fn a_print_already_running_at_start_has_no_time() {
+    let mut w = PrintWatch::default();
+    w.seen(&st("RUNNING", "Benchy", 150), 5000);
+    assert_eq!(w.seen(&st("FINISH", "Benchy", 200), 6000), Some(PrintOutcome::Done { job: "Benchy".into(), minutes: None }));
+}

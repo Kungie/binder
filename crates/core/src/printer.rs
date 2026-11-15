@@ -61,6 +61,72 @@ impl PrinterState {
     }
 }
 
+/// How a print ended, for a notification and the log.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum PrintOutcome {
+    Done { job: String, minutes: Option<u32> },
+    Failed { job: String, layer: Option<u32> },
+}
+
+fn job_name(job: &str) -> &str {
+    if job.trim().is_empty() { "Print" } else { job.trim() }
+}
+
+impl PrintOutcome {
+    pub fn job(&self) -> &str {
+        match self {
+            PrintOutcome::Done { job, .. } | PrintOutcome::Failed { job, .. } => job_name(job),
+        }
+    }
+
+    pub fn title(&self) -> String {
+        match self {
+            PrintOutcome::Done { .. } => format!("{} is done", self.job()),
+            PrintOutcome::Failed { .. } => format!("{} failed", self.job()),
+        }
+    }
+
+    pub fn body(&self) -> String {
+        match self {
+            PrintOutcome::Done { minutes: Some(m), .. } if *m >= 60 => format!("Took {} h {} min", m / 60, m % 60),
+            PrintOutcome::Done { minutes: Some(m), .. } => format!("Took {m} min"),
+            PrintOutcome::Failed { layer: Some(l), .. } => format!("Stopped at layer {l}"),
+            _ => String::new(),
+        }
+    }
+}
+
+/// Follows one printer's reports and says when a print it saw running ends.
+#[derive(Debug, Default)]
+pub struct PrintWatch {
+    printing_since: Option<i64>,
+    was_printing: bool,
+    /// Whether a report came before this one; a print already running at the first has no known start.
+    started: bool,
+}
+
+impl PrintWatch {
+    pub fn seen(&mut self, s: &PrinterState, now: i64) -> Option<PrintOutcome> {
+        let state = s.gcode_state.as_deref().unwrap_or("");
+        let printing = matches!(state, "RUNNING" | "PAUSE");
+        let job = s.job.clone().unwrap_or_default();
+        let out = match (self.was_printing, state) {
+            (true, "FINISH") => Some(PrintOutcome::Done { job, minutes: self.printing_since.map(|t| ((now - t).max(0) / 60) as u32) }),
+            (true, "FAILED") => Some(PrintOutcome::Failed { job, layer: s.layer }),
+            _ => None,
+        };
+        if printing && !self.was_printing && self.started {
+            self.printing_since = Some(now);
+        }
+        self.started = true;
+        if !printing {
+            self.printing_since = None;
+        }
+        self.was_printing = printing;
+        out
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PrinterCommand {

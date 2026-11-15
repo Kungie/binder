@@ -26,6 +26,10 @@ pub struct Config {
     pub watch: bool,
     /// The interface size in percent: 100, 110, 125 or 150.
     pub zoom: u16,
+    /// Whether a finished or failed print sends a notification.
+    pub print_notify: bool,
+    /// Addresses the owner gave sites Binder couldn't find one for, by folder name.
+    pub site_addresses: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -40,7 +44,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100 }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default() }
     }
 }
 

@@ -31,3 +31,10 @@ fn config_defaults_for_new_fields() {
     let c = Config::load(&dir.path().join("old.toml")).unwrap();
     assert_eq!((c.pick_up, c.watch, c.zoom), (true, true, 100));
 }
+
+#[test]
+fn old_config_turns_print_notify_on() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("old.toml"), "vault = \"/Volumes/vault\"\n").unwrap();
+    assert!(Config::load(&dir.path().join("old.toml")).unwrap().print_notify);
+}

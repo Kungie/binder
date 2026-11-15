@@ -141,6 +141,10 @@ export interface Config {
   watch: boolean;
   /** The interface size in percent: 100, 110, 125 or 150. */
   zoom: number;
+  /** Whether a finished or failed print sends a notification. */
+  print_notify: boolean;
+  /** Addresses the owner gave sites Binder couldn't find one for, by folder name. */
+  site_addresses: Record<string, string>;
 }
 
 export type DeviceKind = "mac" | "server" | "printer" | "other";
