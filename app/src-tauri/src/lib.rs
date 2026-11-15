@@ -120,6 +120,8 @@ pub fn run() {
             commands::read_done,
             commands::done_today,
             commands::last_done,
+            commands::brief,
+            commands::dismiss_brief,
             commands::get_config,
             commands::set_config,
             commands::vault_connected,

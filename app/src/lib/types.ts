@@ -112,6 +112,21 @@ export interface DoneLine {
 }
 
 /** A done line with its project, for Overview's Done today. */
+/** One line of the morning brief; the interface words it. Times are Unix seconds. */
+export type BriefItem =
+  | { kind: "run"; task_id: number; key: string; ok: boolean; night: boolean; at: number }
+  | { kind: "container"; name: string; problem: "stopped" | "restarting" | "unhealthy"; at: number; back_at: number | null }
+  | { kind: "server_restart"; at: number }
+  | { kind: "print"; job: string; ok: boolean; at: number }
+  | { kind: "issue"; task_id: number; key: string; title: string; at: number };
+
+export interface Brief {
+  since: number;
+  /** Between 05:00 and noon and not dismissed this morning. */
+  shown: boolean;
+  items: BriefItem[];
+}
+
 export interface DoneItem {
   project_id: number;
   project: string;

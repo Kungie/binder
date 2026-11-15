@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -131,6 +131,7 @@ export function memoryApi(
   }
   let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {} };
   let lastDone: number | null = seed.lastDone ?? null;
+  let briefDismissed = false;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
   const device = (id: number) => {
     const d = devices.find((x) => x.id === id);
@@ -459,6 +460,23 @@ export function memoryApi(
     },
     async lastDone() {
       return lastDone;
+    },
+    async brief() {
+      if (briefDismissed) return { since: now(), shown: false, items: [] };
+      const night = tasks.find((x) => x.assignee === "agent") ?? tasks[0];
+      const issue = tasks.find((x) => x !== night) ?? tasks[0];
+      const t = now();
+      const items: BriefItem[] = [
+        { kind: "server_restart", at: t - 6 * 3600 },
+        { kind: "container", name: "web", problem: "stopped", at: t - 5 * 3600, back_at: t - 5 * 3600 + 360 },
+        { kind: "run", task_id: night.id, key: night.key, ok: true, night: true, at: t - 4 * 3600 },
+        { kind: "print", job: "case-lid", ok: true, at: t - 3 * 3600 },
+        { kind: "issue", task_id: issue.id, key: issue.key, title: issue.title, at: t - 2 * 3600 },
+      ];
+      return { since: t - 86_400, shown: true, items };
+    },
+    async dismissBrief() {
+      briefDismissed = true;
     },
     async getConfig() {
       return { ...config };

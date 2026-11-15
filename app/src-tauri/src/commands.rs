@@ -368,8 +368,41 @@ pub struct GithubSync {
 
 /// Syncs and tells the interface, which reloads its projects. Used at start.
 pub fn sync_and_tell(app: &tauri::AppHandle, data_dir: &Path) {
-    let error = sync_github(data_dir).err().map(text);
-    let _ = app.emit("projects://changed", GithubSync { at: now(), error });
+    let result = sync_github(data_dir);
+    if result.as_ref().is_ok_and(|r| r.issues_added + r.issues_closed > 0) {
+        let _ = app.emit("tasks://changed", ());
+        let _ = app.emit("brief://changed", ());
+    }
+    let _ = app.emit("projects://changed", GithubSync { at: now(), error: result.err().map(text) });
+}
+
+/// What the brief command sends: where it starts, whether it shows now, and its lines.
+#[derive(serde::Serialize)]
+pub struct BriefView {
+    pub since: i64,
+    pub shown: bool,
+    pub items: Vec<binder_core::brief::BriefItem>,
+}
+
+fn local(t: i64) -> Option<chrono::NaiveDateTime> {
+    use chrono::TimeZone;
+    chrono::Local.timestamp_opt(t, 0).single().map(|d| d.naive_local())
+}
+
+#[tauri::command]
+pub async fn brief(state: State<'_, AppState>) -> Res<BriefView> {
+    use binder_core::brief as b;
+    let db = state.db.lock().unwrap();
+    let now = now();
+    let since = b::since(&db, now).map_err(text)?;
+    let dismissed = b::dismissed_at(&db).map_err(text)?.and_then(local);
+    let shown = local(now).is_some_and(|n| b::shown(n, dismissed));
+    Ok(BriefView { since, shown, items: b::items(&db, since, now + 1).map_err(text)? })
+}
+
+#[tauri::command]
+pub async fn dismiss_brief(state: State<'_, AppState>) -> Res<()> {
+    binder_core::brief::dismiss(&mut state.db.lock().unwrap(), now()).map_err(text)
 }
 
 #[tauri::command]

@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type {
+import type { Brief,
   Access,
   Agent,
   NewPrinter,
@@ -60,6 +60,9 @@ export interface Api {
   doneToday(): Promise<DoneItem[]>;
   /** When a done line was last written, Unix seconds. */
   lastDone(): Promise<number | null>;
+  /** The morning brief: what happened since the last dismiss. */
+  brief(): Promise<Brief>;
+  dismissBrief(): Promise<void>;
   getConfig(): Promise<Config>;
   setConfig(config: Config): Promise<void>;
   vaultConnected(): Promise<boolean>;
@@ -234,6 +237,8 @@ export const tauriApi: Api = {
   readDone: (projectId) => call("read_done", { projectId }),
   doneToday: () => call("done_today"),
   lastDone: () => call("last_done"),
+  brief: () => call("brief"),
+  dismissBrief: () => call("dismiss_brief"),
   getConfig: () => call("get_config"),
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),

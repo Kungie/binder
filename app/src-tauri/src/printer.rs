@@ -259,6 +259,7 @@ async fn run(app: AppHandle, config: PrinterConfig) {
     }
 
     let mut failures = 0u32;
+    let mut prints = printer::PrintWatch::default();
     loop {
         match events.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
@@ -272,10 +273,15 @@ async fn run(app: AppHandle, config: PrinterConfig) {
             }
             Ok(Event::Incoming(Packet::Publish(p))) => {
                 if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&p.payload) {
+                    let mut outcome = None;
                     report(&app, &serial, |v| {
                         v.state.merge(&json);
                         v.online = true;
+                        outcome = prints.seen(&v.state, chrono::Utc::now().timestamp());
                     });
+                    if let Some(o) = outcome {
+                        print_ended(&app, &o);
+                    }
                 }
             }
             Ok(_) => {}
@@ -292,6 +298,19 @@ async fn run(app: AppHandle, config: PrinterConfig) {
                 tokio::time::sleep(Duration::from_secs(if failures == 1 { 5 } else { 30 })).await;
             }
         }
+    }
+}
+
+/// Logs how a print ended for the brief and, with the switch on, tells the owner.
+fn print_ended(app: &AppHandle, o: &printer::PrintOutcome) {
+    use binder_core::events::EventKind;
+    use tauri_plugin_notification::NotificationExt;
+    let state = app.state::<AppState>();
+    let kind = if matches!(o, printer::PrintOutcome::Done { .. }) { EventKind::PrintDone } else { EventKind::PrintFailed };
+    let _ = state.db.lock().unwrap().log_event(chrono::Utc::now().timestamp(), kind, o.job(), &o.body());
+    let _ = app.emit("brief://changed", ());
+    if state.config.lock().unwrap().print_notify {
+        let _ = app.notification().builder().title(o.title()).body(o.body()).show();
     }
 }
 
