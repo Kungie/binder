@@ -78,6 +78,13 @@ describe("New task", () => {
     expect(await find(api, "Never mind")).toBeUndefined();
   });
 
+  it("the_controls_share_a_row_instead_of_stretching", async () => {
+    const { user } = await setup();
+    await user.click(screen.getByRole("button", { name: "New task" }));
+    const d = within(dialog());
+    for (const label of ["Status", "Assignee", "Project", "Due date", "Due time"]) expect(d.getByLabelText(label)).not.toHaveClass("w-full");
+  });
+
   it("a_board_column_still_presets_the_status", async () => {
     const { user } = await setup();
     await user.click(within(screen.getByRole("region", { name: "In progress" })).getByRole("button", { name: "New In progress task" }));

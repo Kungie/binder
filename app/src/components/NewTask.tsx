@@ -6,6 +6,9 @@ import { PRIORITY_SHORT, PriorityChip } from "./PriorityIcon";
 import { PriorityMenu } from "./PriorityMenu";
 import { Button, Switch, fieldClass } from "./ui";
 
+/** The sheet's field look, sized to its content so the controls share a row. */
+const chip = fieldClass.replace("w-full", "w-auto");
+
 /** The new-task dialog: everything the task sheet sets, then Create task. Enter in the title or ⌘Enter creates, Esc cancels. */
 export function NewTask() {
   const { projects, view, createTask, setCreatingTask, screen, selectedProject, newTaskStatus } = useStore();
@@ -84,7 +87,7 @@ export function NewTask() {
           className="mt-2 max-h-[40vh] min-h-10 w-full resize-none bg-transparent text-[13px] text-text-2 placeholder:text-text-3 focus:outline-none"
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select aria-label="Status" className={`${fieldClass} w-auto`} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
+          <select aria-label="Status" className={chip} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABEL[s]}
@@ -115,7 +118,7 @@ export function NewTask() {
           </div>
           <select
             aria-label="Assignee"
-            className={`${fieldClass} w-auto`}
+            className={chip}
             value={assignee}
             onChange={(e) => {
               const a = e.target.value as Assignee;
@@ -126,7 +129,7 @@ export function NewTask() {
             <option value="me">Me</option>
             <option value="agent">Agent</option>
           </select>
-          <select aria-label="Project" className={`${fieldClass} w-auto max-w-40`} value={projectId} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : "")}>
+          <select aria-label="Project" className={`${chip} max-w-40`} value={projectId} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : "")}>
             <option value="">No project</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -137,7 +140,7 @@ export function NewTask() {
           <input
             type="date"
             aria-label="Due date"
-            className={`${fieldClass} w-auto font-mono`}
+            className={`${chip} font-mono`}
             value={due}
             onChange={(e) => {
               setDue(e.target.value);
@@ -148,7 +151,7 @@ export function NewTask() {
             type="time"
             aria-label="Due time"
             disabled={!due}
-            className={`${fieldClass} w-auto font-mono disabled:opacity-40`}
+            className={`${chip} font-mono disabled:opacity-40`}
             value={dueTime}
             onChange={(e) => setDueTime(e.target.value)}
           />
