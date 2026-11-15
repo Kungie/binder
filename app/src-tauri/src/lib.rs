@@ -2,6 +2,7 @@ mod apps;
 mod background;
 mod commands;
 mod printer;
+mod shares;
 mod terminal;
 mod transfers;
 mod updates;
@@ -125,6 +126,7 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::vault_connected,
+            commands::vault_connect,
             commands::server_status,
             commands::container_logs,
             commands::restart_container,

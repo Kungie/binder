@@ -370,3 +370,11 @@ pub fn issue_task(db: &mut crate::Db, project_id: i64, issue: &crate::github::Is
     };
     db.update_task(id, TaskPatch { assignee: Some(Assignee::Agent), ..Default::default() }, now)
 }
+
+/// A run that never started: the task goes back to the owner, and one made only for that run is canceled, so
+/// pick-up doesn't later run its bare title as a prompt.
+pub fn undo_start(db: &mut crate::Db, task_id: i64, made_for_it: bool, now: i64) -> Result<crate::model::Task> {
+    use crate::model::{Assignee, Status, TaskPatch};
+    let status = made_for_it.then_some(Status::Canceled);
+    db.update_task(task_id, TaskPatch { assignee: Some(Assignee::Me), status, ..Default::default() }, now)
+}

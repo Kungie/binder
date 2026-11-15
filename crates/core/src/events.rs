@@ -84,6 +84,15 @@ impl Db {
         Ok(out)
     }
 
+    /// Takes back one event that turned out not to happen.
+    pub fn unlog_event(&mut self, at: i64, kind: EventKind, subject: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM events WHERE id = (SELECT max(id) FROM events WHERE at = ?1 AND kind = ?2 AND subject = ?3)",
+            params![at, kind.as_str(), subject],
+        )?;
+        Ok(())
+    }
+
     /// Drops events from before `before`; returns how many went.
     pub fn prune_events(&mut self, before: i64) -> Result<usize> {
         Ok(self.conn.execute("DELETE FROM events WHERE at < ?1", [before])?)

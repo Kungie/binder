@@ -223,3 +223,12 @@ fn restart_logs_it_as_yours() {
     assert_eq!(events.len(), 1);
     assert_eq!((events[0].kind, events[0].subject.as_str(), events[0].at), (binder_core::events::EventKind::OwnerRestart, "web", 500));
 }
+
+#[test]
+fn a_failed_restart_leaves_no_owner_restart() {
+    let db = std::sync::Mutex::new(binder_core::Db::in_memory().unwrap());
+    let r = FakeRemote::new(vec![Err(Error::Remote("No such container".into()))]);
+    assert!(binder_core::server::restart_and_log(&db, &r, "web", 500).is_err());
+    // Nothing was restarted, so the alerts for web stay on.
+    assert!(db.lock().unwrap().events_between(0, 1000).unwrap().is_empty());
+}

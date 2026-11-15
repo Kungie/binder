@@ -116,3 +116,19 @@ fn issue_task_reuses_the_synced_task() {
     let r = review_task(&mut db, p.id, "demo-dev/orbit", 41, "Sync status", 30).unwrap();
     assert_eq!((r.title.as_str(), r.assignee, r.status), ("Review #41: Sync status", binder_core::model::Assignee::Agent, binder_core::model::Status::InProgress));
 }
+
+#[test]
+fn a_failed_start_gives_the_task_back() {
+    use binder_core::model::{Assignee, Status};
+    let mut db = binder_core::Db::in_memory().unwrap();
+    let p = db.create_project(binder_core::model::NewProject { name: "orbit".into(), ..Default::default() }, 1).unwrap();
+    // A task made only for the run is canceled, so pick-up never runs its bare title.
+    let r = review_task(&mut db, p.id, "demo-dev/orbit", 41, "Sync status", 30).unwrap();
+    let r = undo_start(&mut db, r.id, true, 40).unwrap();
+    assert_eq!((r.assignee, r.status), (Assignee::Me, Status::Canceled));
+    // The issue's own task goes back to the owner and stays open.
+    let issue = binder_core::github::Issue { repo: "demo-dev/orbit".into(), number: 12, title: "Crash".into(), body: "Steps".into(), url: "https://github.com/demo-dev/orbit/issues/12".into() };
+    let t = issue_task(&mut db, p.id, &issue, 50).unwrap();
+    let t = undo_start(&mut db, t.id, false, 60).unwrap();
+    assert_eq!((t.assignee, t.status), (Assignee::Me, Status::Todo));
+}

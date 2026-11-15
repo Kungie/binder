@@ -91,6 +91,8 @@ export interface Api {
   getConfig(): Promise<Config>;
   setConfig(config: Config): Promise<void>;
   vaultConnected(): Promise<boolean>;
+  /** Mounts the vault share with the password saved in the Keychain; whether the vault is there after. */
+  vaultConnect(): Promise<boolean>;
   serverStatus(): Promise<ServerStatus>;
   /** A container's last 200 log lines. */
   containerLogs(name: string): Promise<string>;
@@ -284,6 +286,7 @@ export const tauriApi: Api = {
   getConfig: () => call("get_config"),
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),
+  vaultConnect: () => call("vault_connect"),
   serverStatus: () => call("server_status"),
   containerLogs: (name) => call("container_logs", { name }),
   restartContainer: (name) => call("restart_container", { name }),

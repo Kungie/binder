@@ -39,9 +39,12 @@ export function Brief() {
     const load = () => void api.brief().then((b) => live && setBrief(b), () => {});
     load();
     const off = api.onBriefChanged(load);
+    // Read again now and then, so the card goes at noon and picks up what changed without an event.
+    const t = window.setInterval(load, 5 * 60_000);
     return () => {
       live = false;
       off();
+      window.clearInterval(t);
     };
   }, [api]);
   if (!brief?.shown || brief.items.length === 0) return <>{flow.overlays}</>;

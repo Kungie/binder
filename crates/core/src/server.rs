@@ -225,10 +225,14 @@ pub fn restart(remote: &dyn Remote, name: &str) -> Result<()> {
 }
 
 /// The owner's restart: logged first, so the watch knows the stop and start that follow are theirs. The database is
-/// free again before the SSH call.
+/// free again before the SSH call. A restart that fails takes the line back, so real alerts aren't quieted.
 pub fn restart_and_log(db: &std::sync::Mutex<crate::Db>, remote: &dyn Remote, name: &str, now: i64) -> Result<()> {
-    db.lock().unwrap_or_else(|e| e.into_inner()).log_event(now, crate::events::EventKind::OwnerRestart, name, "")?;
-    restart(remote, name)
+    use crate::events::EventKind::OwnerRestart;
+    let lock = || db.lock().unwrap_or_else(|e| e.into_inner());
+    lock().log_event(now, OwnerRestart, name, "")?;
+    restart(remote, name).inspect_err(|_| {
+        let _ = lock().unlog_event(now, OwnerRestart, name);
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

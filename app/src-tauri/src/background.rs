@@ -1,5 +1,6 @@
 //! What Binder does while it runs, window open or not: the agent picks up its tasks every 10 minutes, and the
-//! server's containers are watched every minute, with a Mac notification when one is in trouble.
+//! server's containers are watched every minute, with a Mac notification when one is in trouble, and the vault
+//! share is mounted again when it dropped.
 
 use crate::AppState;
 use binder_core::remote::SshRemote;
@@ -13,6 +14,8 @@ use tauri_plugin_notification::NotificationExt;
 const PICK_UP_FIRST: Duration = Duration::from_secs(30);
 const PICK_UP_EVERY: Duration = Duration::from_secs(600);
 const WATCH_EVERY: Duration = Duration::from_secs(60);
+/// How often the vault share is checked and mounted again when it dropped (after sleep, say).
+const SHARES_EVERY: Duration = Duration::from_secs(60);
 /// Events are kept five weeks, for the weekly note.
 const KEEP_EVENTS: i64 = 35 * 86_400;
 
@@ -29,6 +32,16 @@ fn settings(app: &AppHandle) -> (Option<String>, bool, bool, String) {
 }
 
 pub fn start(app: &AppHandle) {
+    let a = app.clone();
+    std::thread::spawn(move || loop {
+        let (path, share) = {
+            let state = a.state::<AppState>();
+            let c = state.config.lock().unwrap();
+            (c.vault.clone(), c.vault_share_address())
+        };
+        crate::shares::keep(crate::shares::here(&path), share);
+        std::thread::sleep(SHARES_EVERY);
+    });
     let a = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(PICK_UP_FIRST);
@@ -52,6 +65,10 @@ fn weekly(app: &AppHandle) {
     use chrono::Offset;
     let state = app.state::<AppState>();
     let vault = state.config.lock().unwrap().vault.clone();
+    // Checked before the database lock: a stalled share would otherwise hold every command up.
+    if !crate::commands::vault_here(&vault) {
+        return;
+    }
     let now = chrono::Local::now();
     let _ = binder_core::weekly::write_due(&mut state.db.lock().unwrap(), &vault, now.date_naive(), now.offset().fix());
 }
@@ -82,38 +99,49 @@ fn look(app: &AppHandle, watch: &mut Watch) {
     let remote = SshRemote::new(target);
     let now = now();
     let state = app.state::<AppState>();
-    let (quiet, last, boot) = {
+    let (last, boot) = {
         let db = state.db.lock().unwrap();
         let meta = |k: &str| db.meta(k).ok().flatten().and_then(|v| v.parse::<i64>().ok());
-        let last = meta("watch_last");
-        let owner: Vec<(String, i64)> = db
-            .events_between(watch::owner_since(last, now), now + 1)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|e| e.kind == EventKind::OwnerRestart)
-            .map(|e| (e.subject, e.at))
-            .collect();
-        (owner, last, meta("server_boot"))
+        (meta("watch_last"), meta("server_boot"))
     };
+    let fetched = server::fetch(&remote, now, Some(&sd));
+    // Read after the fetch, so a restart pressed while it ran still counts as the owner's.
+    let quiet: Vec<(String, i64)> = state
+        .db
+        .lock()
+        .unwrap()
+        .events_between(watch::owner_since(last, now), self::now() + 1)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.kind == EventKind::OwnerRestart)
+        .map(|e| (e.subject, e.at))
+        .collect();
     let quiet_names: Vec<String> = quiet.iter().map(|(n, _)| n.clone()).collect();
     let mut logged: Vec<(i64, EventKind, String, String)> = vec![];
     let mut caught: Vec<(i64, EventKind, String)> = vec![];
-    let alerts = match server::fetch(&remote, now, Some(&sd)) {
+    let alerts = match fetched {
         // A failed `docker ps` says nothing about the containers: skip it rather than call them all removed.
         Ok(status) if status.docker_failed => vec![],
         Ok(status) => {
             if let Some(at) = watch::rebooted(boot, status.boot_at) {
                 logged.push((at, EventKind::ServerRestart, String::new(), String::new()));
             }
-            // The Mac slept or Binder was closed: read what the server remembers about the gap.
+            // The Mac slept or Binder was closed: read what the server remembers about the gap. A failed read
+            // keeps the gap open for the next check.
+            let mut read = true;
             if let Some(last) = last.filter(|l| now - l > watch::GAP) {
-                if let Ok(times) = server::container_times(&remote) {
-                    caught = watch::catch_up(last, now, &times, &quiet);
-                    logged.extend(caught.iter().map(|(at, kind, name)| (*at, *kind, name.clone(), String::new())));
+                match server::container_times(&remote) {
+                    Ok(times) => {
+                        caught = watch::catch_up(last, now, &times, &quiet);
+                        logged.extend(caught.iter().map(|(at, kind, name)| (*at, *kind, name.clone(), String::new())));
+                    }
+                    Err(_) => read = false,
                 }
             }
             let mut db = state.db.lock().unwrap();
-            let _ = db.set_meta("watch_last", &now.to_string());
+            if read {
+                let _ = db.set_meta("watch_last", &now.to_string());
+            }
             if let Some(b) = status.boot_at {
                 let _ = db.set_meta("server_boot", &b.to_string());
             }

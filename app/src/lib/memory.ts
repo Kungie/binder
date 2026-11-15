@@ -178,7 +178,8 @@ export function memoryApi(
     return v.trim();
   };
   const now = () => Math.floor(Date.now() / 1000);
-  const connected = () => options.vaultConnected ?? true;
+  let vaultUp = options.vaultConnected ?? true;
+  const connected = () => vaultUp;
 
   const nextNumber = (prefix: string) => {
     const used = tasks.filter((t) => t.key.startsWith(`${prefix}-`)).map((t) => Number(t.key.split("-").pop()));
@@ -613,6 +614,10 @@ export function memoryApi(
     },
     async vaultConnected() {
       return connected();
+    },
+    async vaultConnect() {
+      vaultUp = true;
+      return true;
     },
     async containerLogs(name) {
       if (!reachable) throw new Error(`Can't reach ${config.server}`);

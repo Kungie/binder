@@ -164,6 +164,9 @@ impl Watch {
 /// Seconds after an owner's restart during which a container's stop and start are theirs.
 const OWNER_WINDOW: i64 = 120;
 
+/// How far the server's clock may run behind the Mac's when matching a stop to the owner's restart.
+const CLOCK_SLACK: i64 = 10;
+
 /// A gap longer than this between good checks means the Mac slept or Binder was closed.
 pub const GAP: i64 = 300;
 
@@ -195,7 +198,7 @@ pub fn catch_up(last: i64, now: i64, times: &[ContainerTimes], quiet: &[(String,
     let mut out = vec![];
     for c in times {
         let Some(stop) = in_gap(c.finished_at) else { continue };
-        if quiet.iter().any(|(n, at)| n == &c.name && stop >= *at && stop <= at + OWNER_WINDOW) {
+        if quiet.iter().any(|(n, at)| n == &c.name && stop >= at - CLOCK_SLACK && stop <= at + OWNER_WINDOW) {
             continue;
         }
         out.push((stop, EventKind::ContainerStopped, c.name.clone()));

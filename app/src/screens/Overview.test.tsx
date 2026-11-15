@@ -28,6 +28,13 @@ describe("Done today", () => {
     expect(await within(panel).findByText("Vault not connected. Older lines come back when it is.")).toBeInTheDocument();
   });
 
+  it("connect_mounts_the_vault_from_the_notice", async () => {
+    const { user } = setup({}, false);
+    const panel = await screen.findByRole("region", { name: "Done today" });
+    await user.click(await within(panel).findByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(within(panel).queryByText(/Vault not connected/)).toBeNull());
+  });
+
   it("says_nothing_about_the_vault_when_it_is_there", async () => {
     setup({});
     const panel = await screen.findByRole("region", { name: "Done today" });

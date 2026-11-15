@@ -109,3 +109,69 @@ fn a_meta_refresh_is_dropped_from_a_snapshot() {
     assert!(!doc.contains("refresh"), "{doc}");
     assert!(doc.contains("<meta charset=utf-8>"));
 }
+
+const FOUND: &str = "--binder:sites--
+blog|/home/demo-dev/sites/blog|blog.example.com|100
+shop|/home/demo-dev/sites/shop||200
+--binder:ps--
+blog-site-1|running|/home/demo-dev/sites/blog|blog|nginx
+blog-cloudflared-1|running|/home/demo-dev/sites/blog|blog|cloudflare/cloudflared:latest
+shop-web-1|running|/home/demo-dev/sites/shop|shop|node
+shop-tunnel-1|running|/home/demo-dev/shop-old|shop|cloudflare/cloudflared:2026.10.4
+bot-app-1|running|/home/demo-dev/apps/bot|bot|python
+bot-cloudflared-1|exited|/home/demo-dev/apps/bot|bot|cloudflare/cloudflared:latest
+grafana|running|/home/demo-dev/apps/grafana|grafana|grafana
+--binder:tunnels--
+blog|/home/demo-dev/sites/blog|logs.example.com|100
+shop|/home/demo-dev/sites/shop|shop.example.com|200
+bot|/home/demo-dev/apps/bot|bot.example.com|300
+--binder:stats--
+bot-app-1|1.00%|10MiB / 7.75GiB
+";
+
+fn found() -> Vec<sites::Site> {
+    sites::read(&FakeRemote::new(vec![Ok(FOUND.into())]), &BTreeMap::new()).unwrap()
+}
+
+#[test]
+fn a_site_hosted_outside_the_sites_folder_is_found_by_its_tunnel() {
+    let s = found();
+    assert_eq!(s.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["blog", "shop", "bot"]);
+    let bot = &s[2];
+    assert_eq!(bot.address.as_deref(), Some("https://bot.example.com"));
+    assert_eq!(bot.disk_bytes, 300);
+    assert_eq!(bot.containers.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["bot-app-1", "bot-cloudflared-1"]);
+    assert_eq!(bot.mem_bytes, 10 * 1024 * 1024);
+}
+
+#[test]
+fn a_tunnel_managed_on_cloudflare_gives_its_hostname() {
+    let s = found();
+    // The local tunnel config wins; a tunnel set up on Cloudflare's side gives the address from its log.
+    assert_eq!(s[0].address.as_deref(), Some("https://blog.example.com"));
+    assert_eq!(s[1].address.as_deref(), Some("https://shop.example.com"));
+}
+
+#[test]
+fn a_container_joins_its_site_by_compose_project_too() {
+    let s = found();
+    assert_eq!(s[1].containers.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["shop-web-1", "shop-tunnel-1"]);
+}
+
+#[test]
+fn tunnel_hostnames_come_only_from_log_lines_that_name_them() {
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    sites::read(&r, &BTreeMap::new()).unwrap();
+    let script = r.seen.borrow()[0].0.clone();
+    assert!(script.contains("--binder:tunnels--") && script.contains("docker logs") && script.contains("cloudflared"));
+    // Only the hostname itself leaves the server.
+    assert!(script.contains("grep -oE"));
+}
+
+#[test]
+fn a_snapshot_holds_still() {
+    let doc = sites::snapshot("<html><head><title>x</title></head><body><p>Hi</p></body></html>", "https://a.example.com/");
+    // Nothing moves in a preview, so a page of cards costs nothing once drawn.
+    assert!(doc.contains("animation: none !important") && doc.contains("transition: none !important"));
+    assert!(doc.find("animation: none").unwrap() < doc.find("<title>").unwrap());
+}

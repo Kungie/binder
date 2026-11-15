@@ -29,7 +29,11 @@ describe("Sites", () => {
   it("each_site_shows_preview_dot_and_figures", async () => {
     setup();
     const card = await screen.findByRole("article", { name: "blog" });
-    expect(within(card).getByTitle("blog preview")).toHaveAttribute("src", "https://blog.example.com");
+    const frame = await within(card).findByTitle("blog preview");
+    // Every preview is a still page without scripts, even for a site that allows frames: live pages made the
+    // screen stutter.
+    expect(frame).not.toHaveAttribute("src");
+    expect(frame).toHaveAttribute("sandbox", "");
     expect(within(card).getByRole("link", { name: "blog.example.com" })).toBeInTheDocument();
     await waitFor(() => expect(within(card).getByRole("img", { name: "Up" })).toBeInTheDocument());
     expect(within(card).getByText("CPU 0.4% · RAM 38 MB · Disk 12 MB")).toBeInTheDocument();
@@ -42,6 +46,16 @@ describe("Sites", () => {
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame).not.toHaveAttribute("src");
     expect(frame.getAttribute("srcdoc")).toContain("<base href=");
+  });
+
+  it("refresh_reads_the_previews_again", async () => {
+    const { api, user } = setup();
+    const spy = vi.spyOn(api, "siteSnapshot");
+    const card = await screen.findByRole("article", { name: "blog" });
+    await within(card).findByTitle("blog preview");
+    const before = spy.mock.calls.filter(([u]) => u === "https://blog.example.com").length;
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(spy.mock.calls.filter(([u]) => u === "https://blog.example.com").length).toBe(before + 1));
   });
 
   it("a_site_whose_snapshot_fails_shows_its_name", async () => {

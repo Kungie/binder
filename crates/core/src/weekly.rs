@@ -147,7 +147,13 @@ pub fn write_due(db: &mut Db, vault: &Path, today: NaiveDate, offset: FixedOffse
             let text = render(db, &projects, year, week, offset)?;
             match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(mut f) => {
-                    f.write_all(text.as_bytes())?;
+                    // A write cut short (the share dropped) takes the file back, or the next round would call a
+                    // half note written.
+                    if let Err(e) = f.write_all(text.as_bytes()).and_then(|_| f.sync_all()) {
+                        drop(f);
+                        let _ = std::fs::remove_file(&path);
+                        return Err(e.into());
+                    }
                     made += 1;
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}

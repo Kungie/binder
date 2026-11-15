@@ -18,6 +18,8 @@ pub struct Config {
     pub cloud: PathBuf,
     /// The share's address, for Connect: `smb://host/cloud`.
     pub cloud_share: Option<String>,
+    /// The vault share's address, when it isn't the `vault` share beside Cloud's.
+    pub vault_share: Option<String>,
     /// The shared folder's path on the server, for the SSH fast path.
     pub cloud_remote: String,
     /// Whether Binder starts the agent's tasks by itself.
@@ -64,11 +66,26 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default() }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default() }
     }
 }
 
+/// An `smb://` address that can go inside a quoted AppleScript string as it is.
+pub fn mountable(share: &str) -> bool {
+    share.strip_prefix("smb://").is_some_and(|rest| rest.len() > 1 && rest.contains('/') && !rest.contains(['"', '\\', '\n', '\r']))
+}
+
 impl Config {
+    /// Where the vault share is: the owner's own address, else the `vault` share on Cloud's server.
+    pub fn vault_share_address(&self) -> Option<String> {
+        if let Some(s) = self.vault_share.as_ref().filter(|s| !s.trim().is_empty()) {
+            return Some(s.trim().to_string());
+        }
+        let cloud = self.cloud_share.as_deref()?.trim().trim_end_matches('/');
+        let (host, _) = cloud.rsplit_once('/').filter(|(h, _)| h.len() > "smb://".len())?;
+        Some(format!("{host}/vault"))
+    }
+
     /// The saved settings, or the defaults when there's no file yet.
     pub fn load(path: &Path) -> Result<Config> {
         if !path.exists() {

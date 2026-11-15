@@ -84,4 +84,20 @@ describe("GitHub on tasks and projects", () => {
     await user.click(sw);
     await waitFor(async () => expect((await api.getConfig()).print_notify).toBe(false));
   });
+
+  it("the_brief_hides_at_noon_without_a_reload", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { api } = setup("overview");
+      const real = api.brief.bind(api);
+      let noon = false;
+      vi.spyOn(api, "brief").mockImplementation(async () => ({ ...(await real()), shown: !noon }));
+      await screen.findByRole("region", { name: "Morning brief" });
+      noon = true;
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await waitFor(() => expect(screen.queryByRole("region", { name: "Morning brief" })).toBeNull());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -183,3 +183,10 @@ fn a_stop_the_catch_up_logged_is_not_logged_again_live() {
     let back = vec![(500, EventKind::ContainerStopped, "web".to_string()), (600, EventKind::ContainerBack, "web".to_string())];
     assert_eq!(live_events(&alerts[..1], &back, 1000).len(), 1);
 }
+
+#[test]
+fn an_owner_restart_allows_a_server_clock_a_little_behind() {
+    // The server's clock reads the stop three seconds before the Mac logged the restart.
+    let t = [times("web", "running", Some(498), Some(497))];
+    assert!(catch_up(0, 1000, &t, &[("web".into(), 500)]).is_empty());
+}

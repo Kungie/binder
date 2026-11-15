@@ -18,7 +18,21 @@ export function useVault() {
       live = false;
     };
   }, [api, tick]);
-  return { connected, path, recheck: () => setTick((t) => t + 1) };
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Mounts the vault share now, with the password saved in the Keychain. */
+  const connect = async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      setConnected(await api.vaultConnect());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConnecting(false);
+    }
+  };
+  return { connected, path, recheck: () => setTick((t) => t + 1), connect, connecting, error };
 }
 
 export const vaultNotice = (path: string) => `Vault not connected. Connect to the vault share in Finder so ${path} exists.`;

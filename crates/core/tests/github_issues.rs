@@ -209,3 +209,31 @@ fn a_task_for_an_issue_never_assigned_to_the_owner_is_left_alone() {
     assert_eq!(sync(&mut db, &fake(vec![]), NOW + 60).unwrap().issues_closed, 0);
     assert_eq!(db.get_task(t.id).unwrap().status, Status::Todo);
 }
+
+#[test]
+fn a_full_search_page_closes_nothing() {
+    let mut db = Db::in_memory().unwrap();
+    sync(&mut db, &fake(vec![issue("orbit", 1, "Old one")]), NOW).unwrap();
+    // 200 results is the search limit: the list may be cut, so a missing issue isn't proof it closed.
+    let many: Vec<Issue> = (1000..1200).map(|n| issue("lab", n, "Many")).collect();
+    let report = sync(&mut db, &fake(many), NOW + 10).unwrap();
+    assert_eq!(report.issues_closed, 0);
+    let old = issue_tasks(&db).into_iter().find(|t| t.issue_number == Some(1)).unwrap();
+    assert_eq!(old.status, Status::Todo);
+}
+
+#[test]
+fn a_renamed_repo_keeps_its_issue_tasks() {
+    let mut db = Db::in_memory().unwrap();
+    sync(&mut db, &fake(vec![issue("orbit", 5, "Crash")]), NOW).unwrap();
+    let mut renamed = repo("orbit");
+    renamed.name = "orbit2".into();
+    renamed.name_with_owner = "demo-dev/orbit2".into();
+    let gh = Fake { repos: vec![renamed, repo("lab")], issues: RefCell::new(Ok(vec![issue("orbit2", 5, "Crash")])), health: RefCell::new(Ok(vec![])) };
+    let report = sync(&mut db, &gh, NOW + 10).unwrap();
+    assert_eq!((report.issues_added, report.issues_closed), (0, 0));
+    let tasks = issue_tasks(&db);
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].status, Status::Todo);
+    assert_eq!(tasks[0].issue_url.as_deref(), Some("https://github.com/demo-dev/orbit/issues/5"));
+}

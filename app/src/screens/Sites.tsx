@@ -27,6 +27,8 @@ export function Sites() {
   const [sites, setSites] = useState<Site[] | null>(null);
   const [checks, setChecks] = useState<Record<string, SiteCheck>>({});
   const [error, setError] = useState<string | null>(null);
+  // Bumps on Refresh, so the previews are read again.
+  const [round, setRound] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -57,7 +59,14 @@ export function Sites() {
       <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
         <h1 className="text-[13px] font-medium">Sites</h1>
         {sites && <span className="font-mono text-[11px] text-text-3">{sites.length}</span>}
-        <Button variant="ghost" className="ml-auto" onClick={() => void load()}>
+        <Button
+          variant="ghost"
+          className="ml-auto"
+          onClick={() => {
+            setRound((r) => r + 1);
+            void load();
+          }}
+        >
           Refresh
         </Button>
       </header>
@@ -66,7 +75,7 @@ export function Sites() {
         {sites && sites.length === 0 && <Notice>No sites in ~/sites on the server.</Notice>}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {sites?.map((s) => (
-            <SiteCard key={s.name} site={s} check={s.address ? checks[s.address] : undefined} onSaved={load} />
+            <SiteCard key={s.name} site={s} check={s.address ? checks[s.address] : undefined} round={round} onSaved={load} />
           ))}
         </div>
       </div>
@@ -74,13 +83,13 @@ export function Sites() {
   );
 }
 
-function SiteCard({ site, check, onSaved }: { site: Site; check: SiteCheck | undefined; onSaved(): void }) {
+function SiteCard({ site, check, round, onSaved }: { site: Site; check: SiteCheck | undefined; round: number; onSaved(): void }) {
   const { api } = useStore();
   const reason = downReason(site, check);
   const known = !site.address || check !== undefined;
   return (
     <article aria-label={site.name} className="overflow-hidden rounded-panel border border-line bg-panel">
-      <Preview site={site} check={check} />
+      <Preview site={site} check={check} round={round} />
       <div className="flex flex-col gap-1 border-t border-line px-3 py-2.5">
         <div className="flex items-center gap-2">
           {known && (
@@ -112,8 +121,11 @@ function SiteCard({ site, check, onSaved }: { site: Site; check: SiteCheck | und
   );
 }
 
-/** The site loaded at 1280 × 800 and scaled to the card, never clickable, and only while the card is on screen. */
-function Preview({ site, check }: { site: Site; check: SiteCheck | undefined }) {
+/**
+ * The site drawn at 1280 × 800 and scaled to the card, as a still page: fetched by the Mac, without scripts, nothing
+ * moving, never clickable, and only once the card is near the screen. Live pages in every card made the screen stutter.
+ */
+function Preview({ site, check, round }: { site: Site; check: SiteCheck | undefined; round: number }) {
   const { api } = useStore();
   const box = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
@@ -134,36 +146,33 @@ function Preview({ site, check }: { site: Site; check: SiteCheck | undefined }) 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const framed = site.address && check?.frameable && !check.error;
-  // A site that refuses frames is fetched once and shown as a still snapshot, with no scripts.
-  const wantSnap = !!site.address && !!check && !check.frameable && !check.error && visible;
-  const [snap, setSnap] = useState<string | null | false>(null);
+  const want = !!site.address && !!check && !check.error && visible;
+  // The page read once, kept while the card stays; Refresh reads it again.
+  const [snap, setSnap] = useState<{ round: number; html: string | false } | null>(null);
+  const fresh = snap !== null && snap.round === round;
   useEffect(() => {
-    if (!wantSnap || snap !== null) return;
+    if (!want || fresh) return;
     let live = true;
     api.siteSnapshot(site.address!).then(
-      (html) => live && setSnap(html),
-      () => live && setSnap(false),
+      (html) => live && setSnap({ round, html }),
+      () => live && setSnap({ round, html: false }),
     );
     return () => {
       live = false;
     };
-  }, [api, wantSnap, snap, site.address]);
-  const frame = { width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: "0 0" };
+  }, [api, want, fresh, round, site.address]);
+  const html = snap && typeof snap.html === "string" ? snap.html : null;
   return (
     <div ref={box} className="relative aspect-[1280/800] overflow-hidden bg-card">
-      {framed && visible ? (
+      {want && html !== null ? (
         <iframe
           title={`${site.name} preview`}
-          src={site.address!}
-          sandbox="allow-scripts allow-same-origin"
+          srcDoc={html}
+          sandbox=""
           tabIndex={-1}
-          loading="lazy"
-          style={frame}
+          style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: "0 0" }}
           className="pointer-events-none absolute left-0 top-0 border-0 bg-white"
         />
-      ) : wantSnap && typeof snap === "string" ? (
-        <iframe title={`${site.name} preview`} srcDoc={snap} sandbox="" tabIndex={-1} style={frame} className="pointer-events-none absolute left-0 top-0 border-0 bg-white" />
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-1">
           <span className="text-[28px] font-medium text-text-2">{site.name.slice(0, 1).toUpperCase()}</span>

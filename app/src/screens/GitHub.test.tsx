@@ -112,6 +112,20 @@ describe("GitHub screen", () => {
     expect(within(d).queryByLabelText("Agent's review")).toBeNull();
   });
 
+  it("a_failed_review_says_so_and_stops_waiting", async () => {
+    const { api, user } = setup(true);
+    const spy = vi.spyOn(api, "ghReviewDraft").mockRejectedValue(new Error("The agent's review didn't finish. Its run on the task says why."));
+    await user.click(within(await list()).getByRole("button", { name: /#41/ }));
+    await user.click(within(await detail()).getByRole("button", { name: "Review with the agent" }));
+    const d = await detail();
+    await within(d).findByText(/The agent's review didn't finish/);
+    expect(within(d).queryByText(/The agent is reviewing/)).toBeNull();
+    expect(within(d).getByRole("button", { name: "Review with the agent" })).toBeEnabled();
+    const calls = spy.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spy.mock.calls.length).toBe(calls);
+  });
+
   it("a_review_in_progress_survives_leaving_the_pull_request", async () => {
     const { api, user } = setup(true);
     let answer: string | null = null;

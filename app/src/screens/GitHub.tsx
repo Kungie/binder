@@ -153,6 +153,9 @@ export function GitHub() {
 }
 
 /** The agent's review runs by pull request, for each Api, so leaving a pull request while it runs keeps its draft coming. */
+/** How the app says a review run ended without a draft. */
+const REVIEW_FAILED = "The agent's review didn't finish";
+
 const reviewRuns = new WeakMap<object, Map<string, string>>();
 function runsFor(api: object) {
   let m = reviewRuns.get(api);
@@ -206,7 +209,12 @@ function DetailView({ picked, project, onChanged }: { picked: Picked; project: P
     const ask = () =>
       void api.ghReviewDraft(reviewRun).then(
         (d) => live && d !== null && setDraft(d),
-        () => {},
+        // A run that ended badly ends the wait and says so; a server out of reach is asked again.
+        (e: unknown) => {
+          if (!live || !message(e).startsWith(REVIEW_FAILED)) return;
+          endReview();
+          setError(message(e));
+        },
       );
     ask();
     const t = window.setInterval(ask, 10_000);

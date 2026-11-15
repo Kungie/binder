@@ -196,7 +196,7 @@ impl GitHub for GhCli {
     }
 
     fn issues(&self) -> Result<Vec<Issue>> {
-        parse_issues(&self.run(&["search", "issues", "--assignee", "@me", "--state", "open", "--limit", "200", "--json", "number,title,body,url,repository"])?)
+        parse_issues(&self.run(&["search", "issues", "--assignee", "@me", "--state", "open", "--limit", &ISSUE_LIMIT.to_string(), "--json", "number,title,body,url,repository"])?)
     }
 
     fn health(&self) -> Result<Vec<Health>> {
@@ -281,6 +281,9 @@ fn apply_health(db: &mut Db, health: &[Health]) -> Result<()> {
 /// Issues assigned to the owner become tasks once. A task whose issue leaves the list (closed, or no longer the
 /// owner's) moves to Done once; reopened by the owner, it stays as they left it. A task linked to an issue that was
 /// never on the list (Work on it, on someone else's issue) is never closed by sync. Nothing else is ever changed.
+/// The most issues one search returns. A full page may be cut short, so nothing closes from it.
+pub const ISSUE_LIMIT: usize = 200;
+
 fn apply_issues(db: &mut Db, issues: &[Issue], now: i64) -> Result<(usize, usize)> {
     let projects = db.list_projects()?;
     let mut added = 0;
@@ -311,6 +314,7 @@ fn apply_issues(db: &mut Db, issues: &[Issue], now: i64) -> Result<(usize, usize
         .filter(|(_, repo, number, _)| !issues.iter().any(|i| i.number == *number && i.repo.eq_ignore_ascii_case(repo)))
         .collect();
     let mut closed = 0;
+    let gone = if issues.len() >= ISSUE_LIMIT { vec![] } else { gone };
     for (id, _, _, status) in gone {
         db.conn.execute("UPDATE tasks SET issue_listed = 0 WHERE id = ?1", [id])?;
         if status != "done" && status != "canceled" {
@@ -349,6 +353,10 @@ fn apply(db: &mut Db, repos: &[Repo], now: i64) -> Result<SyncReport> {
             .or_else(|| projects.iter().find(|p| p.github.as_deref() == Some(repo.name_with_owner.as_str())));
         let id = match known {
             Some(p) => {
+                // A rename moves the project's issue tasks with it, so they aren't closed and added again.
+                if let Some(old) = p.github.as_deref().filter(|o| !o.eq_ignore_ascii_case(&repo.name_with_owner)) {
+                    db.conn.execute("UPDATE tasks SET issue_repo = ?2 WHERE lower(issue_repo) = lower(?1)", params![old, repo.name_with_owner])?;
+                }
                 let same = (p.github.as_deref(), p.url.as_ref(), p.description.as_ref(), p.pushed_at.as_ref(), p.private, p.archived, p.language.as_ref())
                     == (Some(repo.name_with_owner.as_str()), Some(facts.0), facts.1.as_ref(), Some(facts.2), facts.3, facts.4, facts.5.as_ref());
                 if !same {

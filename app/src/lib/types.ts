@@ -238,6 +238,8 @@ export interface Config {
   claude_hooks: boolean;
   cloud: string;
   cloud_share: string | null;
+  /** The vault share's address when it isn't the vault share beside Cloud's. */
+  vault_share?: string | null;
   /** The shared folder's path on the server, for the SSH fast path. */
   cloud_remote: string;
   /** Whether Binder starts the agent's tasks by itself. */

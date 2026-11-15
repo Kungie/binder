@@ -51,6 +51,8 @@ export function Overview() {
   const [doneToday, setDoneToday] = useState<DoneItem[]>([]);
   // Bumps when a hook writes a line in the background, so Done today refetches.
   const [lastDone, setLastDone] = useState<number | null>(null);
+  // Bumps when the vault is connected from the notice, so the older lines come in.
+  const [vaultTick, setVaultTick] = useState(0);
   const now = Math.floor(Date.now() / 1000);
   const open = viewTasks(tasks, { kind: "all" }, false);
   const doing = open.filter((t) => t.status === "in_progress").length;
@@ -63,7 +65,7 @@ export function Overview() {
     return () => {
       live = false;
     };
-  }, [api, doneVersion, tasks, lastDone]);
+  }, [api, doneVersion, tasks, lastDone, vaultTick]);
 
   useEffect(() => {
     const check = () => void api.lastDone().then(setLastDone, () => {});
@@ -83,7 +85,7 @@ export function Overview() {
           </div>
         );
       case "done_today":
-        return <DoneToday items={doneToday} />;
+        return <DoneToday items={doneToday} onConnected={() => setVaultTick((t) => t + 1)} />;
       case "server":
         return <ServerPanel />;
       case "cloud":
@@ -140,12 +142,20 @@ export function Overview() {
 }
 
 /** Today's done lines across projects, newest first, scrolling inside the panel. */
-function DoneToday({ items }: { items: DoneItem[] }) {
-  const { connected } = useVault();
+function DoneToday({ items, onConnected }: { items: DoneItem[]; onConnected(): void }) {
+  const { connected, connect, connecting, error } = useVault();
   return (
     <Panel label="Done today" className="flex min-h-0 flex-col" title="Done today" action={<span className="font-mono text-[11px] text-text-3">{items.length}</span>}>
       {connected === false && (
-        <p className="border-t border-line px-3 py-2 text-[12px] text-text-3">Vault not connected. Older lines come back when it is.</p>
+        <div className="flex flex-col gap-1 border-t border-line px-3 py-2 text-[12px] text-text-3">
+          <span className="flex items-center gap-2">
+            <span className="min-w-0 flex-1">Vault not connected. Older lines come back when it is.</span>
+            <Button variant="ghost" className="shrink-0" disabled={connecting} onClick={() => void connect().then(onConnected)}>
+              {connecting ? "Connecting…" : "Connect"}
+            </Button>
+          </span>
+          {error && <span className="text-text-2">{error}</span>}
+        </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <ul aria-label="Done today" className="border-t border-line">

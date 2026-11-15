@@ -62,3 +62,24 @@ fn overview_sizes_default_and_round_trip() {
     let back = Config::load(&path).unwrap();
     assert_eq!((back.overview.split, back.overview.heights.get("server").copied()), (60, Some(240)));
 }
+
+#[test]
+fn the_vault_share_sits_beside_the_cloud_share() {
+    let mut c = binder_core::config::Config::default();
+    assert_eq!(c.vault_share_address(), None);
+    c.cloud_share = Some("smb://10.0.7.2/cloud".into());
+    assert_eq!(c.vault_share_address().as_deref(), Some("smb://10.0.7.2/vault"));
+    c.vault_share = Some("smb://10.0.7.3/notes".into());
+    assert_eq!(c.vault_share_address().as_deref(), Some("smb://10.0.7.3/notes"));
+}
+
+#[test]
+fn only_plain_smb_addresses_are_mounted() {
+    use binder_core::config::mountable;
+    assert!(mountable("smb://10.0.7.2/vault"));
+    assert!(mountable("smb://demo-dev@lab.local/vault"));
+    assert!(!mountable("afp://10.0.7.2/vault"));
+    assert!(!mountable("smb://10.0.7.2/va\"ult"));
+    assert!(!mountable("smb://10.0.7.2/vault\\"));
+    assert!(!mountable("smb://"));
+}

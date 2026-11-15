@@ -171,7 +171,15 @@ pub async fn set_config(state: State<'_, AppState>, config: Config) -> Res<()> {
 
 #[tauri::command]
 pub async fn vault_connected(state: State<'_, AppState>) -> Res<bool> {
-    Ok(vault(&state).is_dir())
+    Ok(vault_here(&vault(&state)))
+}
+
+/// Mounts the vault share now, with the password saved in the Keychain.
+#[tauri::command]
+pub async fn vault_connect(state: State<'_, AppState>) -> Res<bool> {
+    let share = state.config.lock().unwrap().vault_share_address().ok_or_else(|| "Set the Cloud share address in Settings first.".to_string())?;
+    crate::shares::connect(&share).map_err(|e| e.text().to_string())?;
+    Ok(vault_here(&vault(&state)))
 }
 
 fn server_target(state: &State<AppState>) -> Res<String> {
@@ -362,7 +370,7 @@ pub async fn gh_review(state: State<'_, AppState>, project_id: i64, repo: String
     let diff = gh.diff(&repo, number).map_err(text)?;
     let task = gh_work::review_task(&mut state.db.lock().unwrap(), p.id, &repo, number, &detail.title, now()).map_err(text)?;
     let prompt = gh_work::review_prompt(&detail.title, &detail.body, &diff);
-    agent::start_run_with(&state.db, &SshRemote::new(target), task.id, &dir, Access::ReadOnly, &prompt, now()).map_err(text)
+    start_or_undo(&state, &SshRemote::new(target), task.id, true, &dir, Access::ReadOnly, &prompt)
 }
 
 /// The review a run wrote once it ended well; `None` while it runs.
@@ -389,7 +397,7 @@ pub async fn gh_work(state: State<'_, AppState>, project_id: i64, repo: String, 
     let issue = github::Issue { repo: repo.clone(), number, title: title.clone(), body: detail.body.clone(), url: detail.url.clone() };
     let task = gh_work::issue_task(&mut state.db.lock().unwrap(), p.id, &issue, now()).map_err(text)?;
     let prompt = gh_work::work_prompt(&task.key, &repo, number, &title, &detail.body);
-    agent::start_run_with(&state.db, &remote, task.id, &dir, Access::Full, &prompt, now()).map_err(text)
+    start_or_undo(&state, &remote, task.id, false, &dir, Access::Full, &prompt)
 }
 
 #[tauri::command]
@@ -409,7 +417,15 @@ pub async fn gh_fix(state: State<'_, AppState>, project_id: i64, repo: String, n
         .create_task(NewTask { title: format!("Fix #{number}: {}", detail.title), project_id: Some(p.id), assignee: Some(Assignee::Agent), ..Default::default() }, now())
         .map_err(text)?;
     let prompt = gh_work::fix_prompt(&repo, number, &branch);
-    agent::start_run_with(&state.db, &remote, task.id, &dir, Access::Full, &prompt, now()).map_err(text)
+    start_or_undo(&state, &remote, task.id, true, &dir, Access::Full, &prompt)
+}
+
+/// Starts the agent on a task; a start that fails gives the task back (see `gh_work::undo_start`).
+fn start_or_undo(state: &State<AppState>, remote: &SshRemote, task_id: i64, made_for_it: bool, dir: &str, access: Access, prompt: &str) -> Res<AgentRun> {
+    agent::start_run_with(&state.db, remote, task_id, dir, access, prompt, now()).map_err(|e| {
+        let _ = gh_work::undo_start(&mut state.db.lock().unwrap(), task_id, made_for_it, now());
+        text(e)
+    })
 }
 
 #[tauri::command]
@@ -572,8 +588,12 @@ pub async fn set_claude_hooks(state: State<'_, AppState>, on: bool) -> Res<bool>
     Ok(hooks::installed(&settings))
 }
 
+/// One sync at a time: the start-up sync and a manual one would both add the same new issue.
+static SYNCING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Brings GitHub repos in on its own database connection, so the app's lock isn't held while `gh` runs.
 pub fn sync_github(data_dir: &Path) -> Result<SyncReport, Error> {
+    let _one = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
     let gh = GhCli::find().ok_or_else(|| Error::Invalid("Install gh and sign in with gh auth login to bring in your GitHub repos.".into()))?;
     let mut db = Db::open(&data_dir.join("binder.db"))?;
     github::sync(&mut db, &gh, now())
@@ -634,9 +654,13 @@ pub async fn dismiss_brief(state: State<'_, AppState>) -> Res<()> {
 }
 
 #[tauri::command]
-pub async fn github_sync(state: State<'_, AppState>) -> Res<SyncReport> {
+pub async fn github_sync(app: tauri::AppHandle, state: State<'_, AppState>) -> Res<SyncReport> {
     let dir = state.config_path.parent().expect("config sits in the data folder").to_path_buf();
-    sync_github(&dir).map_err(text)
+    let report = sync_github(&dir).map_err(text)?;
+    if report.issues_added + report.issues_closed > 0 {
+        let _ = app.emit("brief://changed", ());
+    }
+    Ok(report)
 }
 
 #[derive(serde::Serialize)]
@@ -652,6 +676,11 @@ fn mounted(path: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
     let (Ok(me), Some(Ok(up))) = (std::fs::metadata(path), path.parent().map(std::fs::metadata)) else { return false };
     me.is_dir() && me.dev() != up.dev()
+}
+
+/// The vault is there: a folder under /Volumes only when a share is mounted on it, any other folder when it exists.
+pub fn vault_here(path: &Path) -> bool {
+    if path.starts_with("/Volumes") { mounted(path) } else { path.is_dir() }
 }
 
 fn cloud_root(state: &State<AppState>) -> Res<std::path::PathBuf> {
