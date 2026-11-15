@@ -46,10 +46,20 @@ const Glyph = ({ d }: { d: string }) => (
   </svg>
 );
 
+/** The GitHub mark (Primer Octicons, MIT), drawn filled on a 16 px grid. */
+const GITHUB_MARK = "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z";
+
+const Mark = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d={GITHUB_MARK} />
+  </svg>
+);
+
 const NAV: { screen: Screen; label: string; d: string }[] = [
   { screen: "overview", label: "Overview", d: "M2 2h4v4H2zM8 2h4v4H8zM2 8h4v4H2zM8 8h4v4H8z" },
   { screen: "tasks", label: "Tasks", d: "M7 1.8a5.2 5.2 0 1 1 0 10.4A5.2 5.2 0 0 1 7 1.8zM4.8 7.1l1.5 1.5 3-3.2" },
   { screen: "projects", label: "Projects", d: "M1.8 3.5h4l1.2 1.4h5.2v6.6H1.8z" },
+  { screen: "github", label: "GitHub", d: "" },
   { screen: "devices", label: "Devices", d: "M2 3h10v6.5H2zM5 12h4M7 9.5V12" },
   { screen: "server", label: "Server", d: "M2 2.5h10v3.5H2zM2 8h10v3.5H2zM4.2 4.25h.01M4.2 9.75h.01" },
   { screen: "sites", label: "Sites", d: "M7 1.8a5.2 5.2 0 1 1 0 10.4A5.2 5.2 0 0 1 7 1.8zM1.8 7h10.4M7 1.8c1.5 1.4 2.2 3.1 2.2 5.2S8.5 10.8 7 12.2C5.5 10.8 4.8 9.1 4.8 7S5.5 3.2 7 1.8z" },
@@ -71,7 +81,7 @@ export function Sidebar() {
       </div>
       <div className="flex flex-col gap-px">
         {NAV.map((n) => (
-          <Item key={n.screen} active={screen === n.screen} onClick={() => setScreen(n.screen)} icon={<Glyph d={n.d} />} count={n.screen === "tasks" ? open : undefined} dot={n.screen === "tasks" && attention}>
+          <Item key={n.screen} active={screen === n.screen} onClick={() => setScreen(n.screen)} icon={n.screen === "github" ? <Mark /> : <Glyph d={n.d} />} count={n.screen === "tasks" ? open : undefined} dot={n.screen === "tasks" && attention}>
             {n.label}
           </Item>
         ))}

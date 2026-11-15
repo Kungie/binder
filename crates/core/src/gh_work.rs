@@ -69,6 +69,7 @@ pub struct Comment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Detail {
+    pub title: String,
     pub body: String,
     pub head: Option<String>,
     pub base: Option<String>,
@@ -214,6 +215,7 @@ pub fn parse_detail(out: &str) -> Result<Detail> {
     let n = |k: &str| v.get(k).and_then(Value::as_i64).unwrap_or(0);
     let text = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
     Ok(Detail {
+        title: s(&v, "/title"),
         body: s(&v, "/body"),
         head: text("headRefName"),
         base: text("baseRefName"),
@@ -275,9 +277,9 @@ impl GhWork for GhCli {
     fn detail(&self, repo: &str, number: i64, pull: bool) -> Result<Detail> {
         let n = number.to_string();
         let out = if pull {
-            self.run(&["pr", "view", &n, "-R", repo, "--json", "body,headRefName,baseRefName,additions,deletions,changedFiles,statusCheckRollup,comments,reviews,url"])?
+            self.run(&["pr", "view", &n, "-R", repo, "--json", "title,body,headRefName,baseRefName,additions,deletions,changedFiles,statusCheckRollup,comments,reviews,url"])?
         } else {
-            self.run(&["issue", "view", &n, "-R", repo, "--json", "body,comments,url"])?
+            self.run(&["issue", "view", &n, "-R", repo, "--json", "title,body,comments,url"])?
         };
         parse_detail(&out)
     }

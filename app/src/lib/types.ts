@@ -112,6 +112,74 @@ export interface DoneLine {
 }
 
 /** A done line with its project, for Overview's Done today. */
+export type GhFilter = "needs_you" | "mine" | "all_open";
+export type Review = "approved" | "changes_requested" | "review_required" | "draft";
+
+export interface PullRow {
+  repo: string;
+  number: number;
+  title: string;
+  author: string;
+  ci: Ci | null;
+  review: Review | null;
+  review_requested: boolean;
+  mine: boolean;
+  /** RFC 3339. */
+  updated: string;
+}
+
+export interface IssueRow {
+  repo: string;
+  number: number;
+  title: string;
+  author: string;
+  assignees: string[];
+  updated: string;
+}
+
+export interface GhLists {
+  login: string;
+  pulls: PullRow[];
+  issues: IssueRow[];
+}
+
+export interface GhComment {
+  author: string;
+  body: string;
+  at: string;
+  /** A review's verdict; null for a plain comment. */
+  state: string | null;
+}
+
+export interface GhDetail {
+  title: string;
+  body: string;
+  head: string | null;
+  base: string | null;
+  additions: number;
+  deletions: number;
+  files: number;
+  /** [name, result] */
+  checks: [string, Ci | null][];
+  comments: GhComment[];
+  url: string;
+}
+
+export type GhAction =
+  | { kind: "comment"; body: string }
+  | { kind: "approve"; body: string }
+  | { kind: "request_changes"; body: string }
+  | { kind: "merge" }
+  | { kind: "close" }
+  | { kind: "reopen" }
+  | { kind: "assign_me" };
+
+/** Whether the agent can work on a project's GitHub: gh signed in on the server, and an agent folder. */
+export interface AgentReady {
+  gh: boolean;
+  folder: boolean;
+}
+
 export interface SiteContainer {
   name: string;
   state: string;

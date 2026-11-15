@@ -45,12 +45,13 @@ fn needs_you_picks_requests_failing_and_assigned() {
 fn detail_keeps_the_last_20_comments() {
     let comments: Vec<String> = (0..25).map(|i| format!(r#"{{"author":{{"login":"a{i}"}},"body":"c{i}","createdAt":"2026-11-15T0{}:00:00Z"}}"#, i % 10)).collect();
     let json = format!(
-        r#"{{"body":"About it","headRefName":"feature","baseRefName":"main","additions":120,"deletions":34,"changedFiles":6,"url":"https://github.com/demo-dev/orbit/pull/41",
+        r#"{{"title":"Sync status","body":"About it","headRefName":"feature","baseRefName":"main","additions":120,"deletions":34,"changedFiles":6,"url":"https://github.com/demo-dev/orbit/pull/41",
         "statusCheckRollup":[{{"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"SUCCESS"}},{{"__typename":"StatusContext","context":"lint","state":"PENDING"}}],
         "comments":[{}],"reviews":[{{"author":{{"login":"friend"}},"body":"Looks fine","state":"APPROVED","submittedAt":"2026-11-15T09:30:00Z"}}]}}"#,
         comments.join(",")
     );
     let d = parse_detail(&json).unwrap();
+    assert_eq!(d.title, "Sync status");
     assert_eq!((d.head.as_deref(), d.base.as_deref(), d.additions, d.deletions, d.files), (Some("feature"), Some("main"), 120, 34, 6));
     assert_eq!(d.checks, vec![("test".to_string(), Some(Ci::Passing)), ("lint".to_string(), Some(Ci::Running))]);
     assert_eq!(d.comments.len(), 20);

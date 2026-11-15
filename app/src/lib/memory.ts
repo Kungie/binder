@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import type { Site, BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { GhAction, PullRow, IssueRow, Site, BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -71,6 +71,10 @@ export function memoryApi(
   restarted: string[];
   /** Links opened in the browser. */
   openedLinks: string[];
+  /** GitHub actions taken: repo, number, pull, action. */
+  ghActions: [string, number, boolean, GhAction][];
+  /** Issues opened: repo, title, body. */
+  ghNewIssues: [string, string, string][];
   cloudOpened: string[];
   /** Items Quick Look was asked to show. */
   quickLooked: string[];
@@ -100,6 +104,25 @@ export function memoryApi(
   const printerCommands: [string, PrinterCommand][] = [];
   const restarted: string[] = [];
   const openedLinks: string[] = [];
+  const ghActions: [string, number, boolean, GhAction][] = [];
+  const ghNewIssues: [string, string, string][] = [];
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+  const ghPulls: PullRow[] = [
+    { repo: "demo-dev/orbit", number: 41, title: "Show sync status as a dot", author: "friend", ci: "passing", review: "review_required", review_requested: true, mine: false, updated: hoursAgo(1) },
+    { repo: "demo-dev/orbit", number: 40, title: "Start faster with a lazy store", author: "demo-dev", ci: "failing", review: null, review_requested: false, mine: true, updated: hoursAgo(3) },
+    { repo: "demo-dev/tidepool", number: 39, title: "Bump the chart library", author: "dependabot", ci: "passing", review: null, review_requested: false, mine: false, updated: hoursAgo(20) },
+  ];
+  const ghIssues: IssueRow[] = [
+    { repo: "demo-dev/orbit", number: 12, title: "Crash on start with an empty vault", author: "friend", assignees: ["demo-dev"], updated: hoursAgo(2) },
+    { repo: "demo-dev/tidepool", number: 7, title: "Typo in the readme", author: "friend", assignees: [], updated: hoursAgo(30) },
+  ];
+  const ghRepos = () => new Set(projects.map((p) => p.github).filter(Boolean) as string[]);
+  const ghProject = (id: number) => {
+    const p = project(id);
+    if (!p.github) throw new Error("This project isn't on GitHub.");
+    return p;
+  };
+  const DRAFT = "It adds a sync dot to the toolbar.\n\nRisks: the dot never turns grey when the sync stops, so a dead sync looks healthy.\n\nFix: in `toolbar.ts:42`, clear the state on disconnect.";
   const MB = 1024 * 1024;
   const sites: Site[] = [
     { name: "blog", address: "https://blog.example.com", containers: [{ name: "blog-site-1", state: "running" }, { name: "blog-cloudflared-1", state: "running" }], cpu: 0.4, mem_bytes: 38 * MB, disk_bytes: 12 * MB },
@@ -315,6 +338,72 @@ export function memoryApi(
     printerCommands,
     restarted,
     openedLinks,
+    ghActions,
+    ghNewIssues,
+    async ghList(filter, projectId) {
+      const repos = ghRepos();
+      const only = projectId === null ? null : project(projectId).github;
+      const keep = (r: { repo: string }) => repos.has(r.repo) && (only === null || r.repo === only);
+      let pulls = ghPulls.filter(keep);
+      let issues = ghIssues.filter(keep);
+      if (filter === "needs_you") {
+        pulls = pulls.filter((p) => p.review_requested || (p.mine && (p.ci === "failing" || p.review === "changes_requested")));
+        issues = issues.filter((i) => i.assignees.includes("demo-dev"));
+      } else if (filter === "mine") {
+        pulls = pulls.filter((p) => p.mine);
+        issues = issues.filter((i) => i.author === "demo-dev" || i.assignees.includes("demo-dev"));
+      }
+      return { login: "demo-dev", pulls: pulls.map((p) => ({ ...p })), issues: issues.map((i) => ({ ...i, assignees: [...i.assignees] })) };
+    },
+    async ghDetail(repo, number, pull) {
+      const url = `https://github.com/${repo}/${pull ? "pull" : "issues"}/${number}`;
+      if (!pull) return { title: "Crash on start with an empty vault", body: "Open Orbit with an empty vault folder and it quits at once.", head: null, base: null, additions: 0, deletions: 0, files: 0, checks: [], comments: [], url };
+      return {
+        title: "Show sync status as a dot",
+        body: "Shows whether sync is running as a small dot in the toolbar.",
+        head: "feature/sync-dot",
+        base: "main",
+        additions: 120,
+        deletions: 34,
+        files: 6,
+        checks: [["test", "passing"], ["lint", "passing"]],
+        comments: [{ author: "friend", body: "Looks fine to me.", at: hoursAgo(1), state: null }],
+        url,
+      };
+    },
+    async ghAct(repo, number, pull, action) {
+      ghActions.push([repo, number, pull, action]);
+    },
+    async ghNewIssue(projectId, title, body) {
+      const p = ghProject(projectId);
+      if (!title.trim()) throw new Error("An issue needs a title.");
+      ghNewIssues.push([p.github!, title, body]);
+      return 57;
+    },
+    async ghAgentReady(projectId) {
+      return { gh: true, folder: !!project(projectId).agent_dir };
+    },
+    async ghReview(projectId, _repo, number) {
+      const p = ghProject(projectId);
+      if (!p.agent_dir) throw new Error("Set the project's agent folder first.");
+      const t = await this.createTask({ title: `Review #${number}: pull request`, project_id: p.id, assignee: "agent", status: "in_progress" });
+      return this.startRun(t.id, p.agent_dir, "edits_only");
+    },
+    async ghReviewDraft() {
+      return DRAFT;
+    },
+    async ghWork(projectId, _repo, _number, title) {
+      const p = ghProject(projectId);
+      if (!p.agent_dir) throw new Error("Set the project's agent folder first.");
+      const t = await this.createTask({ title, project_id: p.id, assignee: "agent" });
+      return this.startRun(t.id, p.agent_dir, "full");
+    },
+    async ghFix(projectId, _repo, number) {
+      const p = ghProject(projectId);
+      if (!p.agent_dir) throw new Error("Set the project's agent folder first.");
+      const t = await this.createTask({ title: `Fix #${number}`, project_id: p.id, assignee: "agent" });
+      return this.startRun(t.id, p.agent_dir, "full");
+    },
     async sites() {
       if (!config.server) throw new Error("No server set.");
       return sites.map((s) => ({ ...s, address: config.site_addresses[s.name] ?? s.address, containers: s.containers.map((c) => ({ ...c })) }));

@@ -19,6 +19,7 @@ use crate::apps::{self, AppChoice};
 use crate::transfers::Unit;
 use std::sync::atomic::AtomicBool;
 use binder_core::github::{self, GhCli, HiddenRepo, SyncReport};
+use binder_core::gh_work;
 use binder_core::{Db, Error, devices, hooks, repo, server};
 use tauri::{Emitter, Manager};
 use std::path::Path;
@@ -241,6 +242,154 @@ pub async fn open_link(app: tauri::AppHandle, url: String) -> Res<()> {
         return Err("Only https links open.".into());
     }
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+fn gh() -> Res<GhCli> {
+    GhCli::find().ok_or_else(|| "Install gh and sign in with gh auth login.".to_string())
+}
+
+/// The project a repo belongs to; the GitHub screen only acts on Binder's own projects.
+fn project_for_repo(state: &State<AppState>, repo: &str) -> Res<Project> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .list_projects()
+        .map_err(text)?
+        .into_iter()
+        .find(|p| p.github.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(repo)))
+        .ok_or_else(|| "That repo isn't one of your projects.".to_string())
+}
+
+/// The project with its repo and agent folder, for the agent's GitHub work.
+fn agent_project(state: &State<AppState>, project_id: i64, repo: &str) -> Res<(Project, String)> {
+    let p = project_for_repo(state, repo)?;
+    if p.id != project_id {
+        return Err("That repo belongs to another project.".into());
+    }
+    let dir = p.agent_dir.clone().filter(|d| !d.trim().is_empty()).ok_or_else(|| "Set the project's agent folder first.".to_string())?;
+    Ok((p, dir))
+}
+
+#[tauri::command]
+pub async fn gh_list(state: State<'_, AppState>, filter: gh_work::Filter, project_id: Option<i64>) -> Res<gh_work::Lists> {
+    use gh_work::GhWork;
+    let repos: Vec<String> = state
+        .db
+        .lock()
+        .unwrap()
+        .list_projects()
+        .map_err(text)?
+        .into_iter()
+        .filter(|p| !p.archived && project_id.is_none_or(|id| p.id == id))
+        .filter_map(|p| p.github.map(|g| g.to_lowercase()))
+        .collect();
+    let mut l = gh()?.lists().map_err(text)?;
+    l.pulls.retain(|p| repos.contains(&p.repo.to_lowercase()));
+    l.issues.retain(|i| repos.contains(&i.repo.to_lowercase()));
+    let (pulls, issues) = match filter {
+        gh_work::Filter::NeedsYou => gh_work::needs_you(&l.pulls, &l.issues, &l.login),
+        gh_work::Filter::Mine => gh_work::mine(&l.pulls, &l.issues, &l.login),
+        gh_work::Filter::AllOpen => (l.pulls, l.issues),
+    };
+    Ok(gh_work::Lists { login: l.login, pulls, issues })
+}
+
+#[tauri::command]
+pub async fn gh_detail(state: State<'_, AppState>, repo: String, number: i64, pull: bool) -> Res<gh_work::Detail> {
+    use gh_work::GhWork;
+    project_for_repo(&state, &repo)?;
+    gh()?.detail(&repo, number, pull).map_err(text)
+}
+
+#[tauri::command]
+pub async fn gh_act(state: State<'_, AppState>, repo: String, number: i64, pull: bool, action: gh_work::Action) -> Res<()> {
+    use gh_work::GhWork;
+    project_for_repo(&state, &repo)?;
+    gh()?.act(&repo, number, pull, &action).map_err(text)
+}
+
+#[tauri::command]
+pub async fn gh_new_issue(state: State<'_, AppState>, project_id: i64, title: String, body: String) -> Res<i64> {
+    use gh_work::GhWork;
+    let repo = state.db.lock().unwrap().get_project(project_id).map_err(text)?.github.ok_or_else(|| "This project isn't on GitHub.".to_string())?;
+    if title.trim().is_empty() {
+        return Err("An issue needs a title.".into());
+    }
+    gh()?.new_issue(&repo, title.trim(), &body).map_err(text)
+}
+
+#[derive(serde::Serialize)]
+pub struct AgentReady {
+    pub gh: bool,
+    pub folder: bool,
+}
+
+#[tauri::command]
+pub async fn gh_agent_ready(state: State<'_, AppState>, project_id: i64) -> Res<AgentReady> {
+    let folder = state.db.lock().unwrap().get_project(project_id).map_err(text)?.agent_dir.is_some_and(|d| !d.trim().is_empty());
+    let gh = server_target(&state).ok().is_some_and(|t| agent::server_gh(&SshRemote::new(t)).unwrap_or(false));
+    Ok(AgentReady { gh, folder })
+}
+
+#[tauri::command]
+pub async fn gh_review(state: State<'_, AppState>, project_id: i64, repo: String, number: i64) -> Res<AgentRun> {
+    use gh_work::GhWork;
+    let (p, dir) = agent_project(&state, project_id, &repo)?;
+    let target = server_target(&state)?;
+    let gh = gh()?;
+    let detail = gh.detail(&repo, number, true).map_err(text)?;
+    let diff = gh.diff(&repo, number).map_err(text)?;
+    let task = gh_work::review_task(&mut state.db.lock().unwrap(), p.id, &repo, number, &detail.title, now()).map_err(text)?;
+    let prompt = gh_work::review_prompt(&detail.title, &detail.body, &diff);
+    agent::start_run_with(&state.db, &SshRemote::new(target), task.id, &dir, Access::EditsOnly, &prompt, now()).map_err(text)
+}
+
+/// The review a run wrote once it ended well; `None` while it runs.
+#[tauri::command]
+pub async fn gh_review_draft(state: State<'_, AppState>, run: String) -> Res<Option<String>> {
+    let remote = SshRemote::new(server_target(&state)?);
+    let r = agent::poll_run(&state.db, &remote, &run, now()).map_err(text)?;
+    match (r.ended, r.exit_code) {
+        (None, _) => Ok(None),
+        (Some(_), Some(0)) => agent::output(&remote, &run).map(Some).map_err(text),
+        _ => Err("The agent's review didn't finish. Its run on the task says why.".into()),
+    }
+}
+
+#[tauri::command]
+pub async fn gh_work(state: State<'_, AppState>, project_id: i64, repo: String, number: i64, title: String) -> Res<AgentRun> {
+    use gh_work::GhWork;
+    let (p, dir) = agent_project(&state, project_id, &repo)?;
+    let remote = SshRemote::new(server_target(&state)?);
+    if !agent::server_gh(&remote).unwrap_or(false) {
+        return Err("Sign in to gh on the server to let the agent push.".into());
+    }
+    let detail = gh()?.detail(&repo, number, false).map_err(text)?;
+    let issue = github::Issue { repo: repo.clone(), number, title: title.clone(), body: detail.body.clone(), url: detail.url.clone() };
+    let task = gh_work::issue_task(&mut state.db.lock().unwrap(), p.id, &issue, now()).map_err(text)?;
+    let prompt = gh_work::work_prompt(&task.key, &repo, number, &title, &detail.body);
+    agent::start_run_with(&state.db, &remote, task.id, &dir, Access::Full, &prompt, now()).map_err(text)
+}
+
+#[tauri::command]
+pub async fn gh_fix(state: State<'_, AppState>, project_id: i64, repo: String, number: i64) -> Res<AgentRun> {
+    use gh_work::GhWork;
+    let (p, dir) = agent_project(&state, project_id, &repo)?;
+    let remote = SshRemote::new(server_target(&state)?);
+    if !agent::server_gh(&remote).unwrap_or(false) {
+        return Err("Sign in to gh on the server to let the agent push.".into());
+    }
+    let detail = gh()?.detail(&repo, number, true).map_err(text)?;
+    let branch = detail.head.clone().ok_or_else(|| "That pull request has no branch.".to_string())?;
+    let task = state
+        .db
+        .lock()
+        .unwrap()
+        .create_task(NewTask { title: format!("Fix #{number}: {}", detail.title), project_id: Some(p.id), assignee: Some(Assignee::Agent), ..Default::default() }, now())
+        .map_err(text)?;
+    let prompt = gh_work::fix_prompt(&repo, number, &branch);
+    agent::start_run_with(&state.db, &remote, task.id, &dir, Access::Full, &prompt, now()).map_err(text)
 }
 
 #[tauri::command]

@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { SiteCheck, Site, Brief,
+import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief,
   Access,
   Agent,
   NewPrinter,
@@ -71,6 +71,19 @@ export interface Api {
   siteCheck(url: string): Promise<SiteCheck>;
   /** Saves the address of a site Binder found none for; returns it as kept (https added). */
   setSiteAddress(name: string, url: string): Promise<string>;
+  /** Open pull requests and issues in the owner's projects, narrowed by a filter and maybe one project. */
+  ghList(filter: GhFilter, projectId: number | null): Promise<GhLists>;
+  ghDetail(repo: string, number: number, pull: boolean): Promise<GhDetail>;
+  ghAct(repo: string, number: number, pull: boolean, action: GhAction): Promise<void>;
+  /** Opens an issue in a project's repo; returns its number. */
+  ghNewIssue(projectId: number, title: string, body: string): Promise<number>;
+  ghAgentReady(projectId: number): Promise<AgentReady>;
+  /** Starts the agent's review of a pull request; the draft comes from ghReviewDraft. */
+  ghReview(projectId: number, repo: string, number: number): Promise<AgentRun>;
+  /** The review a finished run wrote, or null while it runs. */
+  ghReviewDraft(run: string): Promise<string | null>;
+  ghWork(projectId: number, repo: string, number: number, title: string): Promise<AgentRun>;
+  ghFix(projectId: number, repo: string, number: number): Promise<AgentRun>;
   /** Opens an https link in the browser. */
   openLink(url: string): Promise<void>;
   getConfig(): Promise<Config>;
@@ -256,6 +269,15 @@ export const tauriApi: Api = {
   siteCheck: (url) => call("site_check", { url }),
   setSiteAddress: (name, url) => call("set_site_address", { name, url }),
   openLink: (url) => call("open_link", { url }),
+  ghList: (filter, projectId) => call("gh_list", { filter, projectId }),
+  ghDetail: (repo, number, pull) => call("gh_detail", { repo, number, pull }),
+  ghAct: (repo, number, pull, action) => call("gh_act", { repo, number, pull, action }),
+  ghNewIssue: (projectId, title, body) => call("gh_new_issue", { projectId, title, body }),
+  ghAgentReady: (projectId) => call("gh_agent_ready", { projectId }),
+  ghReview: (projectId, repo, number) => call("gh_review", { projectId, repo, number }),
+  ghReviewDraft: (run) => call("gh_review_draft", { run }),
+  ghWork: (projectId, repo, number, title) => call("gh_work", { projectId, repo, number, title }),
+  ghFix: (projectId, repo, number) => call("gh_fix", { projectId, repo, number }),
   getConfig: () => call("get_config"),
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),
