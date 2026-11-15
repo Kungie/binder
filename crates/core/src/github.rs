@@ -1,6 +1,7 @@
 //! The owner's GitHub repos as projects, through the `gh` CLI and its own login. Binder never sees a token.
 
-use crate::model::{NewProject, ProjectState};
+use crate::events::EventKind;
+use crate::model::{Ci, NewProject, NewTask, ProjectState, Status, TaskPatch};
 use crate::{Db, Error, Result};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -68,9 +69,80 @@ impl From<RawRepo> for Repo {
     }
 }
 
+/// An open issue assigned to the owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Issue {
+    /// `owner/name`.
+    pub repo: String,
+    pub number: i64,
+    pub title: String,
+    pub body: String,
+    pub url: String,
+}
+
+/// A repo's open pull requests and the checks on its default branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Health {
+    pub name_with_owner: String,
+    pub open_prs: i64,
+    pub ci: Option<Ci>,
+}
+
+/// GitHub's status rollup state as Binder's CI result.
+pub fn ci_of(state: Option<&str>) -> Option<Ci> {
+    match state? {
+        "SUCCESS" => Some(Ci::Passing),
+        "FAILURE" | "ERROR" => Some(Ci::Failing),
+        "PENDING" | "EXPECTED" => Some(Ci::Running),
+        _ => None,
+    }
+}
+
 pub trait GitHub {
     fn login(&self) -> Result<String>;
     fn repos(&self, login: &str) -> Result<Vec<Repo>>;
+    /// Open issues assigned to the owner. An error leaves every issue task as it is.
+    fn issues(&self) -> Result<Vec<Issue>> {
+        Err(Error::Invalid("This GitHub source has no issues.".into()))
+    }
+    fn health(&self) -> Result<Vec<Health>> {
+        Err(Error::Invalid("This GitHub source has no pull requests or checks.".into()))
+    }
+}
+
+const HEALTH_QUERY: &str = "query($endCursor: String) { viewer { repositories(first: 100, after: $endCursor, ownerAffiliations: OWNER) {
+  nodes { nameWithOwner pullRequests(states: OPEN) { totalCount } defaultBranchRef { target { ... on Commit { statusCheckRollup { state } } } } }
+  pageInfo { hasNextPage endCursor } } } }";
+
+/// `gh search issues --json …` as it comes.
+pub fn parse_issues(out: &str) -> Result<Vec<Issue>> {
+    let raw: Vec<serde_json::Value> = serde_json::from_str(out).map_err(|e| Error::Invalid(format!("gh sent something unexpected: {e}")))?;
+    Ok(raw
+        .iter()
+        .filter_map(|v| {
+            let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+            let repo = v.get("repository")?.get("nameWithOwner")?.as_str()?.to_string();
+            Some(Issue { repo, number: v.get("number")?.as_i64()?, title: s("title"), body: s("body"), url: s("url") })
+        })
+        .collect())
+}
+
+/// The pages `gh api graphql --paginate` prints, one JSON object after another.
+pub fn parse_health(out: &str) -> Result<Vec<Health>> {
+    let mut all = vec![];
+    for page in serde_json::Deserializer::from_str(out).into_iter::<serde_json::Value>() {
+        let page = page.map_err(|e| Error::Invalid(format!("gh sent something unexpected: {e}")))?;
+        let nodes = page.pointer("/data/viewer/repositories/nodes").and_then(|n| n.as_array()).cloned().unwrap_or_default();
+        for n in nodes {
+            let Some(name) = n.get("nameWithOwner").and_then(|x| x.as_str()) else { continue };
+            all.push(Health {
+                name_with_owner: name.to_string(),
+                open_prs: n.pointer("/pullRequests/totalCount").and_then(|x| x.as_i64()).unwrap_or(0),
+                ci: ci_of(n.pointer("/defaultBranchRef/target/statusCheckRollup/state").and_then(|x| x.as_str())),
+            });
+        }
+    }
+    Ok(all)
 }
 
 pub struct GhCli {
@@ -122,6 +194,14 @@ impl GitHub for GhCli {
         let raw: Vec<RawRepo> = serde_json::from_str(&out).map_err(|e| Error::Invalid(format!("gh sent something unexpected: {e}")))?;
         Ok(raw.into_iter().map(Repo::from).collect())
     }
+
+    fn issues(&self) -> Result<Vec<Issue>> {
+        parse_issues(&self.run(&["search", "issues", "--assignee", "@me", "--state", "open", "--limit", "200", "--json", "number,title,body,url,repository"])?)
+    }
+
+    fn health(&self) -> Result<Vec<Health>> {
+        parse_health(&self.run(&["api", "graphql", "--paginate", "-f", &format!("query={HEALTH_QUERY}")])?)
+    }
 }
 
 /// A repo the owner deleted as a project. Sync leaves it out until it's brought back.
@@ -152,6 +232,8 @@ pub struct SyncReport {
     pub linked: usize,
     pub updated: usize,
     pub archived: usize,
+    pub issues_added: usize,
+    pub issues_closed: usize,
 }
 
 fn pushed_days_ago(pushed_at: &str, now: i64) -> Option<i64> {
@@ -164,18 +246,74 @@ fn pushed_days_ago(pushed_at: &str, now: i64) -> Option<i64> {
 pub fn sync(db: &mut Db, gh: &dyn GitHub, now: i64) -> Result<SyncReport> {
     let login = gh.login()?;
     let repos = gh.repos(&login)?;
+    // Each read may fail on its own; a failed one leaves its part as it was.
+    let issues = gh.issues().ok();
+    let health = gh.health().ok();
     db.conn.execute_batch("BEGIN IMMEDIATE")?;
-    let result = apply(db, &repos, now);
-    match result {
+    let mut report = match apply(db, &repos, now).and_then(|r| health.as_deref().map_or(Ok(()), |h| apply_health(db, h)).map(|_| r)) {
         Ok(report) => {
             db.conn.execute_batch("COMMIT")?;
-            Ok(report)
+            report
         }
         Err(e) => {
             let _ = db.conn.execute_batch("ROLLBACK");
-            Err(e)
+            return Err(e);
+        }
+    };
+    if let Some(issues) = &issues {
+        let (added, closed) = apply_issues(db, issues, now)?;
+        report.issues_added = added;
+        report.issues_closed = closed;
+    }
+    Ok(report)
+}
+
+fn apply_health(db: &mut Db, health: &[Health]) -> Result<()> {
+    for h in health {
+        db.conn.execute(
+            "UPDATE projects SET open_prs = ?2, ci = ?3 WHERE lower(github) = lower(?1)",
+            params![h.name_with_owner, h.open_prs, h.ci.map(Ci::as_str)],
+        )?;
+    }
+    Ok(())
+}
+
+/// Issues assigned to the owner become tasks once; a task whose issue is no longer in the list (closed, or no
+/// longer the owner's) moves to Done. Nothing else on an issue task is ever changed.
+fn apply_issues(db: &mut Db, issues: &[Issue], now: i64) -> Result<(usize, usize)> {
+    let projects = db.list_projects()?;
+    let mut added = 0;
+    for issue in issues {
+        let Some(project) = projects.iter().find(|p| p.github.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(&issue.repo))) else { continue };
+        let known: i64 = db.conn.query_row(
+            "SELECT COUNT(*) FROM tasks WHERE lower(issue_repo) = lower(?1) AND issue_number = ?2",
+            params![issue.repo, issue.number],
+            |r| r.get(0),
+        )?;
+        if known > 0 || db.issue_hidden(&issue.repo, issue.number)? {
+            continue;
+        }
+        let task = db.create_task(
+            NewTask { title: issue.title.clone(), notes: Some(issue.body.clone()), project_id: Some(project.id), ..Default::default() },
+            now,
+        )?;
+        db.link_issue(task.id, &issue.repo, issue.number, &issue.url)?;
+        db.log_event(now, EventKind::IssueAdded, &task.key, &task.title)?;
+        added += 1;
+    }
+    let open: Vec<(i64, String, i64)> = db
+        .conn
+        .prepare("SELECT id, issue_repo, issue_number FROM tasks WHERE issue_repo IS NOT NULL AND status NOT IN ('done', 'canceled')")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut closed = 0;
+    for (id, repo, number) in open {
+        if !issues.iter().any(|i| i.number == number && i.repo.eq_ignore_ascii_case(&repo)) {
+            db.update_task(id, TaskPatch { status: Some(Status::Done), ..Default::default() }, now)?;
+            closed += 1;
         }
     }
+    Ok((added, closed))
 }
 
 fn apply(db: &mut Db, repos: &[Repo], now: i64) -> Result<SyncReport> {

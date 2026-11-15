@@ -43,7 +43,7 @@ fn new_repos_become_projects_with_unique_prefixes() {
     let names = ["gut", "gut-site", "dawn", "binder", "nashi-app", "nashi-mini", "inert", "zeagen-site", "3-2-1", "doorbell.ai", "chernobyl", "better-termin", "haiku-decides", "bib-sensor-firmware"];
     let gh = FakeGitHub(RefCell::new(names.iter().map(|n| repo(n, 1)).collect()));
     let report = sync(&mut db, &gh, NOW).unwrap();
-    assert_eq!(report, SyncReport { added: 14, linked: 0, updated: 0, archived: 0 });
+    assert_eq!(report, SyncReport { added: 14, ..Default::default() });
     let projects = db.list_projects().unwrap();
     let prefixes: std::collections::HashSet<_> = projects.iter().map(|p| p.prefix.clone()).collect();
     assert_eq!(prefixes.len(), 14);
@@ -87,7 +87,7 @@ fn hand_project_with_same_name_is_linked() {
     let mut db = Db::in_memory().unwrap();
     let mine = db.create_project(NewProject { name: "Inert".into(), ..Default::default() }, 1).unwrap();
     let gh = FakeGitHub(RefCell::new(vec![repo("inert", 1)]));
-    assert_eq!(sync(&mut db, &gh, NOW).unwrap(), SyncReport { added: 0, linked: 1, updated: 0, archived: 0 });
+    assert_eq!(sync(&mut db, &gh, NOW).unwrap(), SyncReport { linked: 1, ..Default::default() });
     assert_eq!(db.list_projects().unwrap().len(), 1);
     let p = db.get_project(mine.id).unwrap();
     assert_eq!((p.name.as_str(), p.github.as_deref()), ("Inert", Some("demo-dev/inert")));

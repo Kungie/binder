@@ -319,6 +319,8 @@ export interface SyncReport {
   linked: number;
   updated: number;
   archived: number;
+  issues_added?: number;
+  issues_closed?: number;
 }
 
 // Cloud, mirrors crates/core/src/cloud.rs and app/src-tauri/src/transfers.rs.
