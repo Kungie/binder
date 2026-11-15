@@ -51,8 +51,18 @@ pub fn start(app: &AppHandle) {
     });
 }
 
+/// Writes the weekly notes that are due, when the vault is there.
+fn weekly(app: &AppHandle) {
+    use chrono::Offset;
+    let state = app.state::<AppState>();
+    let vault = state.config.lock().unwrap().vault.clone();
+    let now = chrono::Local::now();
+    let _ = binder_core::weekly::write_due(&mut state.db.lock().unwrap(), &vault, now.date_naive(), now.offset().fix());
+}
+
 /// One pick-up round; the interface reloads tasks when anything was read or started.
 fn pick_up(app: &AppHandle) {
+    weekly(app);
     let (Some(target), on, _, _) = settings(app) else { return };
     let remote = SshRemote::new(target);
     let night = night::cron_state(&remote).unwrap_or(false);

@@ -52,5 +52,6 @@ pub mod shell;
 pub mod sites;
 pub mod tasks;
 pub mod watch;
+pub mod weekly;
 
 pub use db::Db;
