@@ -5,7 +5,7 @@ use crate::notes::note_stem;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
-const COLUMNS: &str = "id, name, prefix, repo, note, state, created, agent_dir, github, url, description, pushed_at, private, archived, color, language";
+const COLUMNS: &str = "id, name, prefix, repo, note, state, created, agent_dir, github, url, description, pushed_at, private, archived, color, language, open_prs, ci";
 
 /// Muted project colours, used small: a dot beside the name.
 pub const PALETTE: [&str; 8] = ["#5E6AD2", "#26B5CE", "#4CB782", "#F2C94C", "#F2994A", "#EB5757", "#B76EDB", "#8D8D8D"];
@@ -38,6 +38,8 @@ fn row_to_project(r: &Row) -> rusqlite::Result<Project> {
         archived: r.get(13)?,
         // Projects from before colours get theirs from the name.
         language: r.get(15)?,
+        open_prs: r.get(16)?,
+        ci: r.get::<_, Option<String>>(17)?.as_deref().and_then(Ci::parse),
         color: Some(r.get::<_, String>(14)?).filter(|c| !c.is_empty()).unwrap_or_else(|| color_for(&r.get::<_, String>(1).unwrap_or_default()).to_string()),
     })
 }

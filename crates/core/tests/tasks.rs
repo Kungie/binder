@@ -133,3 +133,44 @@ fn night_view_lists_only_night_tasks() {
     db.update_task(a.id, TaskPatch { night: Some(true), ..Default::default() }, 3).unwrap();
     assert_eq!(keys(&db.list_tasks(TaskView::Night, false).unwrap()), vec![a.key]);
 }
+
+#[test]
+fn closing_a_task_keeps_when() {
+    let mut db = Db::in_memory().unwrap();
+    let t = db.create_task(new("a"), 1).unwrap();
+    assert_eq!(t.closed, None);
+    let t = db.update_task(t.id, TaskPatch { status: Some(Status::Done), ..Default::default() }, 50).unwrap();
+    assert_eq!(t.closed, Some(50));
+    // Moving between closed states keeps the first close.
+    let t = db.update_task(t.id, TaskPatch { status: Some(Status::Canceled), ..Default::default() }, 60).unwrap();
+    assert_eq!(t.closed, Some(50));
+}
+
+#[test]
+fn reopening_clears_closed() {
+    let mut db = Db::in_memory().unwrap();
+    let t = db.create_task(new("a"), 1).unwrap();
+    db.update_task(t.id, TaskPatch { status: Some(Status::Done), ..Default::default() }, 50).unwrap();
+    let t = db.update_task(t.id, TaskPatch { status: Some(Status::Todo), ..Default::default() }, 70).unwrap();
+    assert_eq!(t.closed, None);
+}
+
+#[test]
+fn a_new_night_task_goes_to_the_agent() {
+    let mut db = Db::in_memory().unwrap();
+    let t = db.create_task(NewTask { title: "n".into(), night: Some(true), ..Default::default() }, 1).unwrap();
+    assert!(t.night);
+    assert_eq!(t.assignee, Assignee::Agent);
+}
+
+#[test]
+fn deleting_an_issue_task_hides_the_issue() {
+    let mut db = Db::in_memory().unwrap();
+    let t = db.create_task(new("Fix the crash"), 1).unwrap();
+    db.link_issue(t.id, "demo-dev/orbit", 12, "https://github.com/demo-dev/orbit/issues/12").unwrap();
+    let t = db.get_task(t.id).unwrap();
+    assert_eq!((t.issue_number, t.issue_url.as_deref()), (Some(12), Some("https://github.com/demo-dev/orbit/issues/12")));
+    assert!(!db.issue_hidden("demo-dev/orbit", 12).unwrap());
+    db.delete_task(t.id).unwrap();
+    assert!(db.issue_hidden("demo-dev/orbit", 12).unwrap());
+}

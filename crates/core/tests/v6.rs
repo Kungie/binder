@@ -12,6 +12,10 @@ fn v5_database_migrates_to_v6() {
         conn.execute_batch(
             "ALTER TABLE tasks DROP COLUMN night;
              ALTER TABLE agent_runs DROP COLUMN queued;
+             DROP TABLE events; DROP TABLE hidden_issues; DROP INDEX tasks_issue;
+             ALTER TABLE tasks DROP COLUMN closed; ALTER TABLE tasks DROP COLUMN issue_repo;
+             ALTER TABLE tasks DROP COLUMN issue_number; ALTER TABLE tasks DROP COLUMN issue_url;
+             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci;
              DROP TABLE done_log;
              INSERT INTO tasks (key, title, notes, status, priority, assignee, created, updated) VALUES ('TSK-1', 'old', '', 'todo', 0, 'agent', 1, 1);
              PRAGMA user_version = 5;",
@@ -21,7 +25,7 @@ fn v5_database_migrates_to_v6() {
     let db = Db::open(&path).unwrap();
     let conn = rusqlite::Connection::open(&path).unwrap();
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 7);
+    assert_eq!(version, 8);
     let tasks = db.list_tasks(TaskView::All, true).unwrap();
     assert_eq!((tasks[0].title.as_str(), tasks[0].night), ("old", false));
     assert!(db.list_tasks(TaskView::Night, true).unwrap().is_empty());

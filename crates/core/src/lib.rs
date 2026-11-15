@@ -33,6 +33,7 @@ pub mod cloud_fast;
 pub mod config;
 pub mod db;
 pub mod devices;
+pub mod events;
 pub mod github;
 pub mod hooks;
 pub mod model;

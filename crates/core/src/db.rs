@@ -96,6 +96,17 @@ const MIGRATIONS: &[&str] = &[
     "CREATE TABLE done_log (id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         date TEXT NOT NULL, time TEXT, text TEXT NOT NULL);
     CREATE INDEX done_log_date ON done_log(date);",
+    // v8: the event log, when tasks closed, GitHub issues on tasks, and each project's pull requests and CI
+    "CREATE TABLE events (id INTEGER PRIMARY KEY, at INTEGER NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '');
+    CREATE INDEX events_at ON events(at);
+    ALTER TABLE tasks ADD COLUMN closed INTEGER;
+    ALTER TABLE tasks ADD COLUMN issue_repo TEXT;
+    ALTER TABLE tasks ADD COLUMN issue_number INTEGER;
+    ALTER TABLE tasks ADD COLUMN issue_url TEXT;
+    CREATE UNIQUE INDEX tasks_issue ON tasks(issue_repo, issue_number);
+    CREATE TABLE hidden_issues (issue_repo TEXT NOT NULL, issue_number INTEGER NOT NULL, PRIMARY KEY (issue_repo, issue_number));
+    ALTER TABLE projects ADD COLUMN open_prs INTEGER;
+    ALTER TABLE projects ADD COLUMN ci TEXT;",
 ];
 
 impl Db {

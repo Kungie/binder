@@ -127,6 +127,11 @@ pub struct Task {
     pub sort: i64,
     /// Runs on the server from 03:00 instead of being picked up during the day.
     pub night: bool,
+    /// When it moved to Done or Canceled, Unix seconds; `None` while open and for tasks closed before 2.7.
+    pub closed: Option<i64>,
+    /// The GitHub issue it came from.
+    pub issue_number: Option<i64>,
+    pub issue_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -140,6 +145,8 @@ pub struct NewTask {
     pub assignee: Option<Assignee>,
     pub due: Option<String>,
     pub due_time: Option<String>,
+    /// A night task, which also goes to the agent.
+    pub night: Option<bool>,
 }
 
 /// What to change on a task. `None` leaves a field alone; the `clear_*` flags empty the optional ones.
@@ -198,6 +205,32 @@ pub struct Project {
     pub color: String,
     /// The repo's main language on GitHub.
     pub language: Option<String>,
+    /// Open pull requests on GitHub, `None` before the first read.
+    pub open_prs: Option<i64>,
+    /// The latest checks on the default branch; `None` when it has none.
+    pub ci: Option<Ci>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ci {
+    Passing,
+    Failing,
+    Running,
+}
+
+impl Ci {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Ci::Passing => "passing",
+            Ci::Failing => "failing",
+            Ci::Running => "running",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Ci> {
+        [Ci::Passing, Ci::Failing, Ci::Running].into_iter().find(|c| c.as_str() == s)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

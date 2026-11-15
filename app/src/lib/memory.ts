@@ -317,14 +317,17 @@ export function memoryApi(
         status,
         priority: t.priority ?? "none",
         project_id: t.project_id ?? null,
-        assignee: t.assignee ?? "me",
+        assignee: t.night ? "agent" : (t.assignee ?? "me"),
         due: t.due ?? null,
         due_time: t.due ? (t.due_time ?? null) : null,
         created: now(),
         updated: now(),
         attention: false,
         sort,
-        night: false,
+        night: t.night ?? false,
+        closed: status === "done" || status === "canceled" ? now() : null,
+        issue_number: null,
+        issue_url: null,
       };
       tasks.push(created);
       return { ...created };
@@ -336,7 +339,12 @@ export function memoryApi(
         t.title = p.title.trim();
       }
       if (p.notes !== undefined) t.notes = p.notes;
-      if (p.status) t.status = p.status;
+      if (p.status) {
+        const closed = (s: string) => s === "done" || s === "canceled";
+        if (closed(p.status) && !closed(t.status)) t.closed = now();
+        else if (!closed(p.status)) t.closed = null;
+        t.status = p.status;
+      }
       if (p.priority) t.priority = p.priority;
       if (p.clear_project) t.project_id = null;
       else if (p.project_id !== undefined) t.project_id = project(p.project_id).id;
@@ -393,6 +401,8 @@ export function memoryApi(
         archived: false,
         color: colorFor(name),
         language: null,
+        open_prs: null,
+        ci: null,
       };
       projects.push(p);
       return { ...p };
@@ -573,6 +583,8 @@ function hand(name: string): Omit<Project, "id" | "prefix" | "created"> {
     archived: false,
     color: colorFor(name),
     language: null,
+    open_prs: null,
+    ci: null,
   };
 }
 
@@ -662,6 +674,9 @@ export function demoSeed(): Seed {
     attention: false,
     sort: id,
     night: false,
+    closed: null,
+    issue_number: null,
+    issue_url: null,
     id: id + 10,
     key,
     title,

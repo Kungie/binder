@@ -23,6 +23,11 @@ export interface Task {
   sort: number;
   /** Runs on the server from 03:00 instead of being picked up during the day. */
   night: boolean;
+  /** When it moved to Done or Canceled, Unix seconds; null while open and for tasks closed before 2.7. */
+  closed: number | null;
+  /** The GitHub issue it came from. */
+  issue_number: number | null;
+  issue_url: string | null;
 }
 
 export interface NewTask {
@@ -34,6 +39,8 @@ export interface NewTask {
   assignee?: Assignee;
   due?: string;
   due_time?: string;
+  /** A night task, which also goes to the agent. */
+  night?: boolean;
 }
 
 export interface TaskPatch {
@@ -73,7 +80,13 @@ export interface Project {
   archived: boolean;
   color: string;
   language: string | null;
+  /** Open pull requests on GitHub, null before the first read. */
+  open_prs: number | null;
+  /** The latest checks on the default branch; null when it has none. */
+  ci: Ci | null;
 }
+
+export type Ci = "passing" | "failing" | "running";
 
 export interface NewProject {
   name: string;

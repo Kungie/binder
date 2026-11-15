@@ -15,6 +15,8 @@ fn project(name: &str, repo: Option<&str>, note: Option<&Path>) -> Project {
         archived: false,
         color: "#5E6AD2".into(),
         language: None,
+        open_prs: None,
+        ci: None,
         id: 1,
         name: name.into(),
         prefix: "P".into(),

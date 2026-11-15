@@ -4,7 +4,7 @@ use crate::model::*;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
-const COLUMNS: &str = "id, key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, attention, sort, night";
+const COLUMNS: &str = "id, key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, attention, sort, night, closed, issue_number, issue_url";
 
 /// Open work first, most urgent first, most recently touched first.
 const ORDER: &str = "ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'done' THEN 3 ELSE 4 END,
@@ -27,6 +27,9 @@ fn row_to_task(r: &Row) -> rusqlite::Result<Task> {
         attention: r.get(12)?,
         sort: r.get(13)?,
         night: r.get(14)?,
+        closed: r.get(15)?,
+        issue_number: r.get(16)?,
+        issue_url: r.get(17)?,
     })
 }
 
@@ -53,6 +56,9 @@ impl Db {
             _ => None,
         };
         let status = t.status.unwrap_or_default();
+        let night = t.night.unwrap_or(false);
+        let assignee = if night { Assignee::Agent } else { t.assignee.unwrap_or_default() };
+        let closed = matches!(status, Status::Done | Status::Canceled).then_some(now);
         let tx = self.conn.transaction()?;
         let sort: i64 = tx.query_row("SELECT COALESCE(MAX(sort), 0) + 1 FROM tasks WHERE status = ?1", [status.as_str()], |r| r.get(0))?;
         let key = match t.project_id {
@@ -71,8 +77,8 @@ impl Db {
             }
         };
         tx.execute(
-            "INSERT INTO tasks (key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, sort)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10, ?11)",
+            "INSERT INTO tasks (key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, sort, night, closed)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10, ?11, ?12, ?13)",
             params![
                 key,
                 title,
@@ -80,11 +86,13 @@ impl Db {
                 status.as_str(),
                 t.priority.unwrap_or_default().as_i64(),
                 t.project_id,
-                t.assignee.unwrap_or_default().as_str(),
+                assignee.as_str(),
                 t.due,
                 now,
                 due_time,
-                sort
+                sort,
+                night,
+                closed
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -133,6 +141,13 @@ impl Db {
             t.notes = notes;
         }
         if let Some(s) = p.status {
+            let was_closed = matches!(t.status, Status::Done | Status::Canceled);
+            let is_closed = matches!(s, Status::Done | Status::Canceled);
+            if is_closed && !was_closed {
+                t.closed = Some(now);
+            } else if !is_closed {
+                t.closed = None;
+            }
             t.status = s;
         }
         if let Some(pr) = p.priority {
@@ -172,16 +187,34 @@ impl Db {
         }
         self.conn.execute(
             "UPDATE tasks SET title = ?2, notes = ?3, status = ?4, priority = ?5, project_id = ?6, assignee = ?7, due = ?8, updated = ?9,
-             due_time = ?10, attention = ?11, sort = ?12, night = ?13 WHERE id = ?1",
-            params![id, t.title, t.notes, t.status.as_str(), t.priority.as_i64(), t.project_id, t.assignee.as_str(), t.due, now, t.due_time, t.attention, t.sort, t.night],
+             due_time = ?10, attention = ?11, sort = ?12, night = ?13, closed = ?14 WHERE id = ?1",
+            params![id, t.title, t.notes, t.status.as_str(), t.priority.as_i64(), t.project_id, t.assignee.as_str(), t.due, now, t.due_time, t.attention, t.sort, t.night, t.closed],
         )?;
         self.get_task(id)
     }
 
     pub fn delete_task(&mut self, id: i64) -> Result<()> {
+        // A task that came from a GitHub issue keeps the issue out of later syncs.
+        self.conn.execute(
+            "INSERT OR IGNORE INTO hidden_issues (issue_repo, issue_number)
+             SELECT issue_repo, issue_number FROM tasks WHERE id = ?1 AND issue_repo IS NOT NULL AND issue_number IS NOT NULL",
+            [id],
+        )?;
         if self.conn.execute("DELETE FROM tasks WHERE id = ?1", [id])? == 0 {
             return Err(Error::NotFound("task", id));
         }
         Ok(())
+    }
+
+    /// Ties a task to the GitHub issue it came from.
+    pub fn link_issue(&mut self, id: i64, repo: &str, number: i64, url: &str) -> Result<()> {
+        self.conn.execute("UPDATE tasks SET issue_repo = ?2, issue_number = ?3, issue_url = ?4 WHERE id = ?1", params![id, repo, number, url])?;
+        Ok(())
+    }
+
+    /// Whether the owner deleted the task an issue made, so sync leaves the issue out.
+    pub fn issue_hidden(&self, repo: &str, number: i64) -> Result<bool> {
+        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM hidden_issues WHERE issue_repo = ?1 AND issue_number = ?2", params![repo, number], |r| r.get(0))?;
+        Ok(n > 0)
     }
 }
