@@ -38,6 +38,9 @@ pub struct ServerStatus {
     /// `docker ps` failed (the daemon restarting, say): the empty list says nothing about the containers.
     #[serde(default)]
     pub docker_failed: bool,
+    /// When the server booted, from its uptime; `None` when it couldn't be read.
+    #[serde(default)]
+    pub boot_at: Option<i64>,
     pub at: i64,
 }
 
@@ -50,6 +53,7 @@ echo --binder:disk--; df -B1 / 2>/dev/null
 echo --binder:temp--; cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null
 echo --binder:cores--; nproc 2>/dev/null
 echo --binder:power--; vcgencmd pmic_read_adc 2>/dev/null
+echo --binder:uptime--; cat /proc/uptime 2>/dev/null
 exit 0
 "#;
 
@@ -77,6 +81,7 @@ pub fn fetch(remote: &dyn Remote, now: i64, sd: Option<&str>) -> Result<ServerSt
         sd_size: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(s, _)| s),
         sd_used: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(_, u)| u),
         docker_failed: out.contains("--binder:docker-failed--"),
+        boot_at: part("uptime").split_whitespace().next().and_then(|u| u.parse::<f64>().ok()).map(|u| now - u.round() as i64),
         at: now,
     })
 }
@@ -171,6 +176,41 @@ pub fn parse_mount(s: &str, path: &str) -> Option<(u64, u64)> {
     let (size, used) = (size.parse().ok()?, used.parse().ok()?);
     let target = w[..w.len() - 2].join(" ");
     (target == path.trim_end_matches('/')).then_some((size, used))
+}
+
+/// What Docker remembers about a container's last start and stop, for the time the Mac wasn't watching.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContainerTimes {
+    pub name: String,
+    pub state: String,
+    pub started_at: Option<i64>,
+    pub finished_at: Option<i64>,
+    pub restarts: u32,
+}
+
+/// Every container's start and stop times in one call. Names come from `docker ps` on the server, never from Binder.
+pub fn container_times(remote: &dyn Remote) -> Result<Vec<ContainerTimes>> {
+    let script = "echo --binder:inspect--\nids=$(docker ps -aq 2>/dev/null)\n[ -n \"$ids\" ] && docker inspect --format '{{.Name}}|{{.State.Status}}|{{.State.StartedAt}}|{{.State.FinishedAt}}|{{.RestartCount}}' $(docker ps -aq) 2>/dev/null\nexit 0\n";
+    let out = remote.run(script, None)?;
+    Ok(section(&out, "inspect").lines().filter_map(parse_times).collect())
+}
+
+/// Docker writes `0001-01-01T00:00:00Z` for a time that never happened.
+fn docker_time(s: &str) -> Option<i64> {
+    let t = chrono::DateTime::parse_from_rfc3339(s.trim()).ok()?.timestamp();
+    (t > 0).then_some(t)
+}
+
+fn parse_times(line: &str) -> Option<ContainerTimes> {
+    let w: Vec<&str> = line.trim().split('|').collect();
+    let [name, state, started, finished, restarts] = w.as_slice() else { return None };
+    Some(ContainerTimes {
+        name: name.trim_start_matches('/').to_string(),
+        state: state.to_string(),
+        started_at: docker_time(started),
+        finished_at: docker_time(finished),
+        restarts: restarts.trim().parse().unwrap_or(0),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -96,3 +96,66 @@ fn a_removed_container_that_returns_says_so() {
     assert!(w.seen(&up).is_empty());
     assert_eq!(w.seen(&up), vec![Alert::Running("web".into())]);
 }
+
+use binder_core::events::EventKind;
+use binder_core::server::ContainerTimes;
+use binder_core::watch::{catch_up, rebooted};
+
+fn times(name: &str, state: &str, started: Option<i64>, finished: Option<i64>) -> ContainerTimes {
+    ContainerTimes { name: name.into(), state: state.into(), started_at: started, finished_at: finished, restarts: 0 }
+}
+
+#[test]
+fn a_gap_reads_what_the_server_remembers() {
+    // Last check 23:00, now 07:30; web stopped 02:14 and came back 02:20.
+    let (last, now) = (23 * 3600, 31 * 3600 + 1800);
+    let (stop, start) = (26 * 3600 + 14 * 60, 26 * 3600 + 20 * 60);
+    let got = catch_up(last, now, &[times("web", "running", Some(start), Some(stop)), times("db", "running", Some(100), None)], &[]);
+    assert_eq!(got, vec![(stop, EventKind::ContainerStopped, "web".to_string()), (start, EventKind::ContainerBack, "web".to_string())]);
+}
+
+#[test]
+fn still_stopped_logs_only_the_stop() {
+    let got = catch_up(0, 1000, &[times("web", "exited", Some(10), Some(500))], &[]);
+    assert_eq!(got, vec![(500, EventKind::ContainerStopped, "web".to_string())]);
+}
+
+#[test]
+fn a_fresh_start_without_a_stop_is_not_news() {
+    // A container created during the gap (a deploy) started but never stopped there.
+    assert!(catch_up(0, 1000, &[times("new", "running", Some(400), None)], &[]).is_empty());
+}
+
+#[test]
+fn the_same_gap_is_not_logged_twice() {
+    let t = [times("web", "running", Some(600), Some(500))];
+    assert_eq!(catch_up(0, 1000, &t, &[]).len(), 2);
+    assert!(catch_up(1000, 2000, &t, &[]).is_empty());
+}
+
+#[test]
+fn an_owner_restart_is_quiet() {
+    let t = [times("web", "running", Some(510), Some(505))];
+    assert!(catch_up(0, 1000, &t, &[("web".into(), 500)]).is_empty());
+    let mut w = Watch::default();
+    w.seen(&[c("web", "running", "Up 2 hours")]);
+    let quiet = vec!["web".to_string()];
+    assert!(w.seen_with(&[c("web", "exited", "Exited (0) now")], &quiet).is_empty());
+    assert!(w.seen_with(&[c("web", "running", "Up 1 second")], &quiet).is_empty());
+    assert!(w.seen(&[c("web", "running", "Up 1 minute")]).is_empty());
+}
+
+#[test]
+fn rebooted_needs_a_later_boot() {
+    assert_eq!(rebooted(None, Some(1000)), None);
+    assert_eq!(rebooted(Some(1000), Some(1030)), None);
+    assert_eq!(rebooted(Some(1000), Some(5000)), Some(5000));
+    assert_eq!(rebooted(Some(1000), None), None);
+}
+
+#[test]
+fn alerts_name_their_event_kind() {
+    assert_eq!(Alert::Stopped("a".into(), "".into()).kind(), Some(EventKind::ContainerStopped));
+    assert_eq!(Alert::Running("a".into()).kind(), Some(EventKind::ContainerBack));
+    assert_eq!(Alert::Unreachable.kind(), None);
+}

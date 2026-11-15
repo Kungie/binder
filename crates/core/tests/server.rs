@@ -171,3 +171,32 @@ fn the_docker_read_says_when_it_fails() {
     fetch(&r, 0, None).unwrap();
     assert!(r.seen.borrow()[0].0.contains("|| echo --binder:docker-failed--"));
 }
+
+#[test]
+fn uptime_gives_the_boot_time() {
+    let out = "--binder:docker--\n--binder:uptime--\n3600.42 7000.00\n";
+    let s = fetch(&FakeRemote::new(vec![Ok(out.into())]), 10_000, None).unwrap();
+    assert_eq!(s.boot_at, Some(6400));
+    let s = fetch(&FakeRemote::new(vec![Ok("--binder:docker--\n".into())]), 10_000, None).unwrap();
+    assert_eq!(s.boot_at, None);
+}
+
+#[test]
+fn container_times_parse_and_zero_times_are_none() {
+    let out = "--binder:inspect--\n/web|running|2026-11-15T02:20:00.123Z|2026-11-15T02:14:00Z|2\n/db|created|0001-01-01T00:00:00Z|0001-01-01T00:00:00Z|0\n";
+    let r = FakeRemote::new(vec![Ok(out.into())]);
+    let t = binder_core::server::container_times(&r).unwrap();
+    assert_eq!(t.len(), 2);
+    assert_eq!((t[0].name.as_str(), t[0].state.as_str(), t[0].restarts), ("web", "running", 2));
+    assert_eq!(t[0].started_at, Some(1_794_709_200));
+    assert_eq!(t[0].finished_at, Some(1_794_708_840));
+    assert_eq!((t[1].started_at, t[1].finished_at), (None, None));
+}
+
+#[test]
+fn names_reach_inspect_through_docker_ps_only() {
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    binder_core::server::container_times(&r).unwrap();
+    let script = r.seen.borrow()[0].0.clone();
+    assert!(script.contains("docker inspect") && script.contains("$(docker ps -aq)"));
+}
