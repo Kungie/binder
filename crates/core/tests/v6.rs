@@ -15,7 +15,7 @@ fn v5_database_migrates_to_v6() {
              DROP TABLE events; DROP TABLE hidden_issues; DROP INDEX tasks_issue;
              ALTER TABLE tasks DROP COLUMN closed; ALTER TABLE tasks DROP COLUMN issue_repo;
              ALTER TABLE tasks DROP COLUMN issue_number; ALTER TABLE tasks DROP COLUMN issue_url;
-             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci;
+             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci; ALTER TABLE agent_runs DROP COLUMN night;
              DROP TABLE done_log;
              INSERT INTO tasks (key, title, notes, status, priority, assignee, created, updated) VALUES ('TSK-1', 'old', '', 'todo', 0, 'agent', 1, 1);
              PRAGMA user_version = 5;",

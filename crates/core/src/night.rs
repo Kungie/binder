@@ -187,7 +187,7 @@ fn queue(db: &Mutex<Db>, remote: &dyn Remote, task_id: i64, dir: &str, now: i64)
     remote.run(&script, Some(&prompt))?;
     let db = lock(db);
     db.conn.execute(
-        "INSERT INTO agent_runs (task_id, run, dir, access, started, queued) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+        "INSERT INTO agent_runs (task_id, run, dir, access, started, queued, night) VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
         params![task_id, run, dir, access.as_str(), now],
     )?;
     agent::get_run(&db, &run)

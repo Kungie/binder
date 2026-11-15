@@ -106,7 +106,8 @@ const MIGRATIONS: &[&str] = &[
     CREATE UNIQUE INDEX tasks_issue ON tasks(issue_repo, issue_number);
     CREATE TABLE hidden_issues (issue_repo TEXT NOT NULL, issue_number INTEGER NOT NULL, PRIMARY KEY (issue_repo, issue_number));
     ALTER TABLE projects ADD COLUMN open_prs INTEGER;
-    ALTER TABLE projects ADD COLUMN ci TEXT;",
+    ALTER TABLE projects ADD COLUMN ci TEXT;
+    ALTER TABLE agent_runs ADD COLUMN night INTEGER NOT NULL DEFAULT 0;",
 ];
 
 impl Db {

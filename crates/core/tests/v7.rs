@@ -12,7 +12,7 @@ fn v7_database_migrates_to_v8() {
             "DROP TABLE events; DROP TABLE hidden_issues; DROP INDEX tasks_issue;
              ALTER TABLE tasks DROP COLUMN closed; ALTER TABLE tasks DROP COLUMN issue_repo;
              ALTER TABLE tasks DROP COLUMN issue_number; ALTER TABLE tasks DROP COLUMN issue_url;
-             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci;
+             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci; ALTER TABLE agent_runs DROP COLUMN night;
              INSERT INTO tasks (key, title, notes, status, priority, assignee, created, updated) VALUES ('TSK-1', 'old', '', 'done', 0, 'me', 1, 5);
              PRAGMA user_version = 7;",
         )

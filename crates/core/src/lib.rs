@@ -28,6 +28,7 @@ pub enum Error {
 
 pub mod agents;
 pub mod agent;
+pub mod brief;
 pub mod cloud;
 pub mod cloud_fast;
 pub mod config;

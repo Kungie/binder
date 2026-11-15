@@ -18,7 +18,7 @@ fn v4_database_migrates_to_v5() {
              DROP TABLE events; DROP TABLE hidden_issues; DROP INDEX tasks_issue;
              ALTER TABLE tasks DROP COLUMN closed; ALTER TABLE tasks DROP COLUMN issue_repo;
              ALTER TABLE tasks DROP COLUMN issue_number; ALTER TABLE tasks DROP COLUMN issue_url;
-             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci;
+             ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci; ALTER TABLE agent_runs DROP COLUMN night;
              DROP TABLE done_log;
              INSERT INTO projects (name, prefix, created) VALUES ('orbit', 'ORB', 1);
              INSERT INTO pending_done (project_id, date, text) VALUES (1, '2026-11-12', 'old line');
