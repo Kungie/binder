@@ -250,6 +250,13 @@ export interface Config {
   print_notify: boolean;
   /** Addresses the owner gave sites Binder couldn't find one for, by folder name. */
   site_addresses: Record<string, string>;
+  /** Overview's two columns, widget ids from top to bottom. */
+  overview: OverviewLayout;
+}
+
+export interface OverviewLayout {
+  left: string[];
+  right: string[];
 }
 
 export type DeviceKind = "mac" | "server" | "printer" | "other";

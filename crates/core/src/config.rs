@@ -30,6 +30,23 @@ pub struct Config {
     pub print_notify: bool,
     /// Addresses the owner gave sites Binder couldn't find one for, by folder name.
     pub site_addresses: std::collections::BTreeMap<String, String>,
+    /// Which widgets Overview shows, and where.
+    pub overview: OverviewLayout,
+}
+
+/// Overview's two columns, each a list of widget ids from top to bottom.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OverviewLayout {
+    pub left: Vec<String>,
+    pub right: Vec<String>,
+}
+
+impl Default for OverviewLayout {
+    fn default() -> Self {
+        let ids = |v: &[&str]| v.iter().map(|s| s.to_string()).collect();
+        OverviewLayout { left: ids(&["numbers", "done_today"]), right: ids(&["server", "cloud", "printer", "open_tasks"]) }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -44,7 +61,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default() }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default() }
     }
 }
 

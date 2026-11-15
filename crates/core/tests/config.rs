@@ -38,3 +38,12 @@ fn old_config_turns_print_notify_on() {
     std::fs::write(dir.path().join("old.toml"), "vault = \"/Volumes/vault\"\n").unwrap();
     assert!(Config::load(&dir.path().join("old.toml")).unwrap().print_notify);
 }
+
+#[test]
+fn old_config_gets_the_default_overview() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("old.toml"), "vault = \"/Volumes/vault\"\n").unwrap();
+    let c = Config::load(&dir.path().join("old.toml")).unwrap();
+    assert_eq!(c.overview.left, vec!["numbers", "done_today"]);
+    assert_eq!(c.overview.right, vec!["server", "cloud", "printer", "open_tasks"]);
+}

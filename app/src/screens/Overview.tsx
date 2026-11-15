@@ -1,12 +1,13 @@
 import { DiskBars, useSdSpace } from "../components/DiskBars";
-import { useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_LAYOUT, GithubWidget, SitesWidget, WIDGETS, FILLS, clean, move } from "../components/OverviewWidgets";
 import { Dot, Metric } from "../components/Metric";
 import { Panel } from "../components/Panel";
 import { TaskBoard } from "../components/TaskBoard";
 import { Button } from "../components/ui";
 import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
-import type { DoneItem } from "../lib/types";
+import type { DoneItem, OverviewLayout } from "../lib/types";
 import { clock, useServer } from "../lib/useServer";
 import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
@@ -22,6 +23,23 @@ const WEEK = 7 * 24 * 3600;
 
 export function Overview() {
   const { api, tasks, setScreen, setCreatingTask, doneVersion } = useStore();
+  const [layout, setLayout] = useState<OverviewLayout>(DEFAULT_LAYOUT);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void api.getConfig().then((c) => live && c.overview && setLayout(clean(c.overview)), () => {});
+    return () => {
+      live = false;
+    };
+  }, [api]);
+  const save = useCallback(
+    (next: OverviewLayout) => {
+      const l = clean(next);
+      setLayout(l);
+      void api.getConfig().then((c) => api.setConfig({ ...c, overview: l }));
+    },
+    [api],
+  );
   const [doneToday, setDoneToday] = useState<DoneItem[]>([]);
   // Bumps when a hook writes a line in the background, so Done today refetches.
   const [lastDone, setLastDone] = useState<number | null>(null);
@@ -46,45 +64,196 @@ export function Overview() {
     return () => window.clearInterval(timer);
   }, [api]);
 
+  const widget = (id: string) => {
+    switch (id) {
+      case "numbers":
+        return (
+          <div className="grid grid-cols-3 gap-3">
+            <Metric title="Open" value={open.length} />
+            <Metric title="In progress" value={doing} />
+            <Metric title="Done this week" value={doneWeek} />
+          </div>
+        );
+      case "done_today":
+        return <DoneToday items={doneToday} />;
+      case "server":
+        return <ServerPanel />;
+      case "cloud":
+        return <CloudPanel />;
+      case "printer":
+        return <PrinterPanel />;
+      case "sites":
+        return <SitesWidget />;
+      case "github":
+        return <GithubWidget />;
+      case "open_tasks":
+        return (
+          <Panel
+            className="flex min-h-[180px] flex-1 flex-col"
+            title="Open tasks"
+            action={
+              <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("tasks")}>
+                View all
+              </button>
+            }
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <TaskBoard tasks={open} compact label="Open tasks" empty="Nothing open. Press c to add a task." />
+            </div>
+          </Panel>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
         <h1 className="text-[13px] font-medium">Overview</h1>
         <span className="text-[12px] text-text-3">{today}</span>
-        <Button variant="primary" className="ml-auto" onClick={() => setCreatingTask(true)}>
-          New task
-        </Button>
+        <span className="ml-auto flex items-center gap-2">
+          {editing && <EditBar layout={layout} save={save} />}
+          <Button variant="ghost" onClick={() => setEditing((e) => !e)}>
+            {editing ? "Done" : "Edit"}
+          </Button>
+          <Button variant="primary" onClick={() => setCreatingTask(true)}>
+            New task
+          </Button>
+        </span>
       </header>
-      {/* The two lists fill the window and scroll inside; below a usable height the page scrolls instead. */}
+      {/* The two columns fill the window and their long lists scroll inside; below a usable height the page scrolls. */}
       <div className="flex min-h-[620px] flex-1 flex-col gap-3 px-5 pb-5">
         <Brief />
-        <div className="grid shrink-0 grid-cols-3 gap-3">
-          <Metric title="Open" value={open.length} />
-          <Metric title="In progress" value={doing} />
-          <Metric title="Done this week" value={doneWeek} />
-        </div>
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
-          <DoneToday items={doneToday} />
-          <div className="flex min-h-0 min-w-0 flex-col gap-3">
-            <ServerPanel />
-            <CloudPanel />
-            <PrinterPanel />
-            <Panel
-              className="flex min-h-[180px] flex-1 flex-col"
-              title="Open tasks"
-              action={
-                <button type="button" className="text-[12px] text-text-3 hover:text-text" onClick={() => setScreen("tasks")}>
-                  View all
-                </button>
-              }
-            >
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <TaskBoard tasks={open} compact label="Open tasks" empty="Nothing open. Press c to add a task." />
-              </div>
-            </Panel>
-          </div>
-        </div>
+        <Columns layout={layout} editing={editing} onMove={(id, side, before) => save(move(layout, id, side, before))} onHide={(id) => save({ left: layout.left.filter((x) => x !== id), right: layout.right.filter((x) => x !== id) })} render={widget} />
       </div>
+    </div>
+  );
+}
+
+/** Add widget and Reset, shown while editing. */
+function EditBar({ layout, save }: { layout: OverviewLayout; save(l: OverviewLayout): void }) {
+  const [menu, setMenu] = useState(false);
+  const shown = new Set([...layout.left, ...layout.right]);
+  const hidden = Object.keys(WIDGETS).filter((id) => !shown.has(id));
+  return (
+    <>
+      <div className="relative">
+        <Button variant="ghost" disabled={hidden.length === 0} onClick={() => setMenu((m) => !m)}>
+          Add widget
+        </Button>
+        {menu && (
+          <div role="menu" aria-label="Add widget" className="pop-in absolute right-0 top-8 z-20 flex min-w-40 flex-col rounded-control bg-raised p-1 shadow-menu">
+            {hidden.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="menuitem"
+                className="h-7 rounded-[6px] px-2 text-left text-[12px] text-text-2 hover:bg-card hover:text-text"
+                onClick={() => {
+                  setMenu(false);
+                  const side = DEFAULT_LAYOUT.left.includes(id) ? "left" : DEFAULT_LAYOUT.right.includes(id) ? "right" : layout.left.length <= layout.right.length ? "left" : "right";
+                  save({ ...layout, [side]: [...layout[side], id] });
+                }}
+              >
+                {WIDGETS[id]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <Button variant="ghost" onClick={() => save(DEFAULT_LAYOUT)}>
+        Reset
+      </Button>
+    </>
+  );
+}
+
+type Over = { side: "left" | "right"; before: string | null };
+
+/** The two columns. While editing, a widget's handle drags it; pointer events, since Tauri swallows HTML5 drags. */
+function Columns({
+  layout,
+  editing,
+  onMove,
+  onHide,
+  render,
+}: {
+  layout: OverviewLayout;
+  editing: boolean;
+  onMove(id: string, side: "left" | "right", before: string | null): void;
+  onHide(id: string): void;
+  render(id: string): ReactNode;
+}) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<Over | null>(null);
+  const latest = useRef<{ dragging: string | null; over: Over | null }>({ dragging: null, over: null });
+  latest.current = { dragging, over };
+
+  useEffect(() => {
+    if (!dragging) return;
+    const target = (x: number, y: number): Over | null => {
+      const el = document.elementFromPoint(x, y);
+      const w = el?.closest("[data-widget]");
+      const col = el?.closest("[data-column]");
+      if (!col) return null;
+      const side = col.getAttribute("data-column") as "left" | "right";
+      const id = w?.getAttribute("data-widget") ?? null;
+      return { side, before: id === dragging ? null : id };
+    };
+    const onMoveEv = (e: PointerEvent | MouseEvent) => setOver(target(e.clientX, e.clientY));
+    const onUp = () => {
+      const { dragging: d, over: o } = latest.current;
+      if (d && o) onMove(d, o.side, o.before);
+      setDragging(null);
+      setOver(null);
+    };
+    document.addEventListener("pointermove", onMoveEv);
+    document.addEventListener("pointerup", onUp);
+    return () => {
+      document.removeEventListener("pointermove", onMoveEv);
+      document.removeEventListener("pointerup", onUp);
+    };
+  }, [dragging, onMove]);
+
+  const column = (side: "left" | "right") => (
+    <div data-column={side} className="flex min-h-0 min-w-0 flex-col gap-3">
+      {layout[side].map((id) => (
+        <div key={id} data-widget={id} className={`relative ${FILLS.has(id) ? "flex min-h-[180px] flex-1 flex-col [&>*:last-child]:min-h-0 [&>*:last-child]:flex-1" : "shrink-0"} ${dragging === id ? "opacity-40" : ""}`}>
+          {over?.side === side && over.before === id && dragging !== id && <div aria-hidden="true" className="absolute -top-2 left-0 right-0 h-0.5 rounded-full bg-text" />}
+          {editing && (
+            <div className="flex h-7 shrink-0 items-center gap-1 text-[11px] text-text-3">
+              <button
+                type="button"
+                aria-label={`Move ${WIDGETS[id]}`}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  setDragging(id);
+                }}
+                className="flex h-6 cursor-grab items-center gap-1.5 rounded-[6px] pl-1 pr-2 hover:bg-card hover:text-text"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                  {[3, 6, 9].flatMap((y) => [4, 8].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1" />))}
+                </svg>
+                {WIDGETS[id]}
+              </button>
+              <button type="button" aria-label={`Hide ${WIDGETS[id]}`} onClick={() => onHide(id)} className="ml-auto h-6 rounded-[6px] px-2 hover:bg-card hover:text-text">
+                Hide
+              </button>
+            </div>
+          )}
+          {render(id)}
+        </div>
+      ))}
+      {over?.side === side && over.before === null && <div aria-hidden="true" className="h-0.5 shrink-0 rounded-full bg-text" />}
+      {editing && <div className="h-12 shrink-0 rounded-panel border border-dashed border-line" aria-hidden="true" />}
+    </div>
+  );
+
+  return (
+    <div className={`grid min-h-0 flex-1 grid-cols-2 gap-3 ${dragging ? "select-none" : ""}`}>
+      {column("left")}
+      {column("right")}
     </div>
   );
 }
