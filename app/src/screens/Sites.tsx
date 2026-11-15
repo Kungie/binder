@@ -114,6 +114,7 @@ function SiteCard({ site, check, onSaved }: { site: Site; check: SiteCheck | und
 
 /** The site loaded at 1280 × 800 and scaled to the card, never clickable, and only while the card is on screen. */
 function Preview({ site, check }: { site: Site; check: SiteCheck | undefined }) {
+  const { api } = useStore();
   const box = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
   const [scale, setScale] = useState(0.25);
@@ -134,6 +135,21 @@ function Preview({ site, check }: { site: Site; check: SiteCheck | undefined }) 
     return () => ro.disconnect();
   }, []);
   const framed = site.address && check?.frameable && !check.error;
+  // A site that refuses frames is fetched once and shown as a still snapshot, with no scripts.
+  const wantSnap = !!site.address && !!check && !check.frameable && !check.error && visible;
+  const [snap, setSnap] = useState<string | null | false>(null);
+  useEffect(() => {
+    if (!wantSnap || snap !== null) return;
+    let live = true;
+    api.siteSnapshot(site.address!).then(
+      (html) => live && setSnap(html),
+      () => live && setSnap(false),
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, wantSnap, snap, site.address]);
+  const frame = { width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: "0 0" };
   return (
     <div ref={box} className="relative aspect-[1280/800] overflow-hidden bg-card">
       {framed && visible ? (
@@ -143,9 +159,11 @@ function Preview({ site, check }: { site: Site; check: SiteCheck | undefined }) 
           sandbox="allow-scripts allow-same-origin"
           tabIndex={-1}
           loading="lazy"
-          style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: "0 0" }}
+          style={frame}
           className="pointer-events-none absolute left-0 top-0 border-0 bg-white"
         />
+      ) : wantSnap && typeof snap === "string" ? (
+        <iframe title={`${site.name} preview`} srcDoc={snap} sandbox="" tabIndex={-1} style={frame} className="pointer-events-none absolute left-0 top-0 border-0 bg-white" />
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-1">
           <span className="text-[28px] font-medium text-text-2">{site.name.slice(0, 1).toUpperCase()}</span>

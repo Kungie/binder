@@ -87,3 +87,25 @@ fn memory_sizes_parse() {
     assert_eq!(sites::bytes("12MB"), 12_000_000);
     assert_eq!(sites::bytes("900B"), 900);
 }
+
+#[test]
+fn a_snapshot_resolves_against_the_site_and_has_no_scripts() {
+    let html = "<!doctype html><html><HEAD lang=en><title>Shop</title><script src=\"/app.js\"></script></head><body><img src=\"/logo.png\"><SCRIPT>alert(1)</SCRIPT>Hi</body></html>";
+    let doc = sites::snapshot(html, "https://shop.example.com/");
+    assert!(doc.contains("<HEAD lang=en><base href=\"https://shop.example.com/\">"), "{doc}");
+    assert!(!doc.to_lowercase().contains("<script"), "{doc}");
+    assert!(doc.contains("<img src=\"/logo.png\">Hi"));
+}
+
+#[test]
+fn a_snapshot_without_a_head_still_gets_its_base() {
+    let doc = sites::snapshot("<p>Hi</p>", "https://a.example.com/x\"y");
+    assert!(doc.starts_with("<base href=\"https://a.example.com/x&quot;y\">"), "{doc}");
+}
+
+#[test]
+fn a_meta_refresh_is_dropped_from_a_snapshot() {
+    let doc = sites::snapshot("<head><meta http-equiv=\"refresh\" content=\"0;url=/x\"><meta charset=utf-8></head>", "https://a.example.com/");
+    assert!(!doc.contains("refresh"), "{doc}");
+    assert!(doc.contains("<meta charset=utf-8>"));
+}

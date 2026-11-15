@@ -141,3 +141,39 @@ pub fn parse_check(headers: &str) -> SiteCheck {
     }
     SiteCheck { status, frameable, error: None }
 }
+
+/// A page fetched for a site that refuses to be framed, made safe to show as a still picture: every relative
+/// address resolves against the site, and scripts and refreshes are taken out (the frame runs none anyway).
+pub fn snapshot(html: &str, url: &str) -> String {
+    let mut doc = html.to_string();
+    // Scripts, whole: `<script …>` to the end of its `</script>`.
+    loop {
+        let low = doc.to_ascii_lowercase();
+        let Some(start) = low.find("<script") else { break };
+        let end = low[start..].find("</script").map(|e| start + e).and_then(|e| low[e..].find('>').map(|g| e + g + 1)).unwrap_or(doc.len());
+        doc.replace_range(start..end, "");
+    }
+    // Refreshes would carry the frame elsewhere.
+    let mut from = 0;
+    loop {
+        let low = doc.to_ascii_lowercase();
+        let Some(start) = low[from..].find("<meta").map(|s| from + s) else { break };
+        let end = low[start..].find('>').map(|g| start + g + 1).unwrap_or(doc.len());
+        let tag = &low[start..end];
+        if tag.contains("http-equiv") && tag.contains("refresh") {
+            doc.replace_range(start..end, "");
+            from = start;
+        } else {
+            from = end;
+        }
+    }
+    let href = url.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;");
+    let base = format!("<base href=\"{href}\">");
+    let low = doc.to_ascii_lowercase();
+    let head = low.match_indices("<head").map(|(i, _)| i).find(|i| matches!(low.as_bytes().get(i + 5), Some(b'>' | b' ' | b'\t' | b'\n' | b'\r')));
+    match head.and_then(|h| low[h..].find('>').map(|g| h + g + 1)) {
+        Some(at) => doc.insert_str(at, &base),
+        None => doc.insert_str(0, &base),
+    }
+    doc
+}

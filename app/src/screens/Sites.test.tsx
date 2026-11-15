@@ -35,8 +35,18 @@ describe("Sites", () => {
     expect(within(card).getByText("CPU 0.4% · RAM 38 MB · Disk 12 MB")).toBeInTheDocument();
   });
 
-  it("a_site_that_cant_be_framed_shows_its_name", async () => {
+  it("a_site_that_cant_be_framed_shows_a_snapshot_without_scripts", async () => {
     setup();
+    const card = await screen.findByRole("article", { name: "shop" });
+    const frame = await within(card).findByTitle("shop preview");
+    expect(frame).toHaveAttribute("sandbox", "");
+    expect(frame).not.toHaveAttribute("src");
+    expect(frame.getAttribute("srcdoc")).toContain("<base href=");
+  });
+
+  it("a_site_whose_snapshot_fails_shows_its_name", async () => {
+    const { api } = setup();
+    vi.spyOn(api, "siteSnapshot").mockRejectedValue(new Error("No answer"));
     const card = await screen.findByRole("article", { name: "shop" });
     await waitFor(() => expect(within(card).queryByTitle("shop preview")).toBeNull());
     expect(within(card).getByText("S")).toBeInTheDocument();

@@ -69,6 +69,8 @@ export interface Api {
   sites(): Promise<Site[]>;
   /** Whether an https address answers within 5 s, and whether it may be framed. Asked from the Mac. */
   siteCheck(url: string): Promise<SiteCheck>;
+  /** A site's page as a still snapshot, for sites that refuse to be framed. */
+  siteSnapshot(url: string): Promise<string>;
   /** Saves the address of a site Binder found none for; returns it as kept (https added). */
   setSiteAddress(name: string, url: string): Promise<string>;
   /** Open pull requests and issues in the owner's projects, narrowed by a filter and maybe one project. */
@@ -267,6 +269,7 @@ export const tauriApi: Api = {
   dismissBrief: () => call("dismiss_brief"),
   sites: () => call("sites"),
   siteCheck: (url) => call("site_check", { url }),
+  siteSnapshot: (url) => call("site_snapshot", { url }),
   setSiteAddress: (name, url) => call("set_site_address", { name, url }),
   openLink: (url) => call("open_link", { url }),
   ghList: (filter, projectId) => call("gh_list", { filter, projectId }),

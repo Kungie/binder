@@ -412,6 +412,10 @@ export function memoryApi(
       if (!url.startsWith("https://")) throw new Error("Only https addresses are checked.");
       return { status: 200, frameable: !url.includes("shop."), error: null };
     },
+    async siteSnapshot(url) {
+      if (!url.startsWith("https://")) throw new Error("Only https addresses are read.");
+      return `<base href="${url}/"><body style="margin:0;font:48px sans-serif;background:#f4f1ea;color:#222;display:grid;place-items:center;height:100vh">Shop</body>`;
+    },
     async setSiteAddress(name, url) {
       const kept = url.trim().startsWith("https://") ? url.trim() : `https://${url.trim().replace(/^http:\/\//, "")}`;
       config = { ...config, site_addresses: { ...config.site_addresses, [name]: kept } };

@@ -221,6 +221,26 @@ pub async fn site_check(url: String) -> Res<binder_core::sites::SiteCheck> {
     Ok(binder_core::sites::parse_check(&String::from_utf8_lossy(&out.stdout)))
 }
 
+/// The page of a site that refuses to be framed, fetched from the Mac (https only, at most 3 MB) and made into a
+/// still snapshot: it is shown in a frame that runs no scripts.
+#[tauri::command]
+pub async fn site_snapshot(url: String) -> Res<String> {
+    if !url.starts_with("https://") {
+        return Err("Only https addresses are read.".into());
+    }
+    let out = std::process::Command::new("/usr/bin/curl")
+        .args(["-sS", "--max-time", "8", "--max-filesize", "3000000", "--proto", "=https", "--proto-redir", "=https", "-L", "-w", "\n--binder:url--%{url_effective}", "--", &url])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err("No answer".into());
+    }
+    let body = String::from_utf8_lossy(&out.stdout);
+    let (html, last) = body.rsplit_once("\n--binder:url--").unwrap_or((&body, &url));
+    let last = if last.starts_with("https://") { last } else { &url };
+    Ok(binder_core::sites::snapshot(html, last))
+}
+
 #[tauri::command]
 pub async fn set_site_address(state: State<'_, AppState>, name: String, url: String) -> Res<String> {
     let url = url.trim();

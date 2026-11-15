@@ -130,6 +130,7 @@ pub fn run() {
             commands::restart_container,
             commands::sites,
             commands::site_check,
+            commands::site_snapshot,
             commands::set_site_address,
             commands::open_link,
             commands::gh_list,
