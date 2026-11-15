@@ -15,7 +15,7 @@ export function Printer() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
-        <h1 className="text-[13px] font-medium">Printer</h1>
+        <h1 className="text-[13px] font-medium">3D Printer</h1>
         <Button variant="primary" className="ml-auto" onClick={() => setAdding(true)}>
           Add printer
         </Button>

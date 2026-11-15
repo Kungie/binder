@@ -17,6 +17,23 @@ function setup(initialScreen: Screen = "printer", seed = demoSeed()) {
 }
 
 describe("Printer", () => {
+  it("the_sidebar_says_3d_printer", async () => {
+    setup("overview");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("button", { name: /^3D Printer/ })).toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: /^Printer/ })).toBeNull();
+  });
+
+  it("the_screen_heading_says_3d_printer", async () => {
+    setup();
+    expect(await screen.findByRole("heading", { level: 1, name: "3D Printer" })).toBeInTheDocument();
+  });
+
+  it("overview_panel_keeps_printer", async () => {
+    setup("overview");
+    expect(await screen.findByRole("region", { name: "Printer" })).toBeInTheDocument();
+  });
+
   it("printer_shows_progress_and_temps", async () => {
     setup();
     const panel = await screen.findByRole("region", { name: "workshop" });
