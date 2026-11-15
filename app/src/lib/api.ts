@@ -63,6 +63,8 @@ export interface Api {
   /** The morning brief: what happened since the last dismiss. */
   brief(): Promise<Brief>;
   dismissBrief(): Promise<void>;
+  /** Something new for the brief was logged. */
+  onBriefChanged(cb: () => void): () => void;
   /** The websites on the server, with their containers and figures. */
   sites(): Promise<Site[]>;
   /** Whether an https address answers within 5 s, and whether it may be framed. Asked from the Mac. */
@@ -327,6 +329,7 @@ export const tauriApi: Api = {
   serverFolders: () => call("server_folders"),
   setZoom: (percent) => call("set_zoom", { percent }),
   onTasksChanged: (cb) => subscribe<null>("tasks://changed", () => cb()),
+  onBriefChanged: (cb) => subscribe<null>("brief://changed", () => cb()),
   onWatchAlert: (cb) => subscribe<string>("watch://alert", cb),
   checkUpdate: () => call("update_check"),
   installUpdate: (onProgress) => {

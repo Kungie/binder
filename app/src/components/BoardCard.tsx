@@ -78,6 +78,7 @@ export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFo
           )}
           {project && <Chip icon={<ProjectDot color={project.color} />}>{project.name}</Chip>}
           {task.assignee === "agent" && <Chip icon={<ClaudeMark />}>Claude</Chip>}
+          {task.issue_number !== null && <span className="px-1 font-mono text-[11px] text-text-3">{`#${task.issue_number}`}</span>}
           {task.night && <Chip icon={<Moon />}>{task.status === "todo" ? "Tonight" : "Night"}</Chip>}
         </div>
       </div>

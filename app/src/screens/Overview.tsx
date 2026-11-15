@@ -10,6 +10,7 @@ import type { DoneItem } from "../lib/types";
 import { clock, useServer } from "../lib/useServer";
 import { Progress } from "../components/Progress";
 import { isPrinting } from "../lib/types";
+import { Brief } from "../components/Brief";
 import { minutes, STATE_LABEL, temp, usePrinters } from "../lib/usePrinters";
 import { ago } from "../lib/time";
 import { useVault } from "../lib/useVault";
@@ -56,6 +57,7 @@ export function Overview() {
       </header>
       {/* The two lists fill the window and scroll inside; below a usable height the page scrolls instead. */}
       <div className="flex min-h-[620px] flex-1 flex-col gap-3 px-5 pb-5">
+        <Brief />
         <div className="grid shrink-0 grid-cols-3 gap-3">
           <Metric title="Open" value={open.length} />
           <Metric title="In progress" value={doing} />

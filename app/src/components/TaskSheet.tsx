@@ -10,7 +10,7 @@ import { Button, Field, Switch, fieldClass } from "./ui";
 
 /** The side sheet for one task. Text saves on blur, menus save on change. */
 export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): void; onStatus(status: Task["status"]): void }) {
-  const { projects, updateTask, deleteTask } = useStore();
+  const { projects, updateTask, deleteTask, api } = useStore();
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
   const [confirm, setConfirm] = useState(false);
@@ -156,6 +156,17 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
             />
           </div>
         </Field>
+        {task.issue_url?.startsWith("https://github.com/") && (
+          <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-2 text-[12px]">
+            <span className="text-text-3">GitHub</span>
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-text-3">{`#${task.issue_number}`}</span>
+              <Button variant="ghost" onClick={() => void api.openLink(task.issue_url!)}>
+                Open issue
+              </Button>
+            </span>
+          </div>
+        )}
         {task.assignee === "agent" && <AgentRun key={task.id} task={task} />}
         <textarea
           aria-label="Notes"

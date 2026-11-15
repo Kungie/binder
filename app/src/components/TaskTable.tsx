@@ -176,6 +176,7 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
               <span role="gridcell" className={`flex min-w-0 items-center gap-1.5 ${closed ? "text-text-3 line-through" : "text-text"}`} onClick={() => onOpen(t.id)}>
                 <span className="truncate">{t.title}</span>
                 {t.night && <Moon />}
+                {t.issue_number !== null && <span className="shrink-0 font-mono text-[11px] text-text-3">{`#${t.issue_number}`}</span>}
               </span>
               <span role="gridcell" className="truncate text-text-3">
                 {t.project_id ? names.get(t.project_id) : ""}

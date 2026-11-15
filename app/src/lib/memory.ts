@@ -294,6 +294,9 @@ export function memoryApi(
       if (![100, 110, 125, 150].includes(percent)) throw new Error("The interface size is 100, 110, 125 or 150%.");
       config = { ...config, zoom: percent };
     },
+    onBriefChanged() {
+      return () => {};
+    },
     onTasksChanged(cb) {
       tasksChanged.add(cb);
       return () => void tasksChanged.delete(cb);
@@ -717,6 +720,8 @@ export function demoSeed(): Seed {
   const projects: Project[] = [
     {
       ...fromRepo(orbit),
+      open_prs: 2,
+      ci: "failing",
       id: 1,
       prefix: "ORB",
       repo: "~/code/orbit",
@@ -768,7 +773,7 @@ export function demoSeed(): Seed {
     mk(3, "ORB-3", "Write release notes for 0.4", { project_id: 1, due: day }),
     mk(4, "TSK-1", "Print a new case lid for the Pi", { priority: "low" }),
     mk(5, "LAB-1", "Back up the Home Assistant config", { project_id: 2, assignee: "agent", status: "done", attention: true, notes: "Copied to the backup share. 840 MB." }),
-    mk(6, "ORB-2", "Try a lighter font for the sidebar", { project_id: 1, status: "backlog" }),
+    mk(6, "ORB-2", "Try a lighter font for the sidebar", { project_id: 1, status: "backlog", issue_number: 12, issue_url: "https://github.com/demo-dev/orbit/issues/12" }),
     mk(7, "TSK-2", "Order PETG, black and white", { priority: "urgent" }),
     mk(8, "ORB-1", "Set up the project", { project_id: 1, status: "done", updated: t - 20 * 86400 }),
   ];

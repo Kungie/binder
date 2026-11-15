@@ -81,6 +81,27 @@ function Display() {
   );
 }
 
+/** A Mac notification when a print finishes or fails. */
+function PrintSwitch() {
+  const { api } = useStore();
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    void api.getConfig().then((c) => setOn(c.print_notify));
+  }, [api]);
+  if (on === null) return null;
+  const save = async (next: boolean) => {
+    setOn(next);
+    await api.setConfig({ ...(await api.getConfig()), print_notify: next });
+  };
+  return (
+    <div className="flex items-center gap-2 text-[12px]">
+      <span className="text-text-2">Notify me about prints</span>
+      <span className="text-text-3">when one is done or fails</span>
+      <Switch label="Notify me about prints" checked={on} onChange={(next) => void save(next)} />
+    </div>
+  );
+}
+
 /** Mac notifications when a container on the server stops, keeps restarting or turns unhealthy. */
 function WatchSwitch() {
   const { api } = useStore();
@@ -254,6 +275,11 @@ export function Settings() {
             {serverSaved && <span className="text-[12px] text-text-3">Saved</span>}
             <WatchSwitch />
             <Notice>Binder uses your ssh keys and ~/.ssh/config. It never stores a password.</Notice>
+          </div>
+        </Panel>
+        <Panel title="3D Printer">
+          <div className="flex flex-col gap-3 border-t border-line p-3">
+            <PrintSwitch />
           </div>
         </Panel>
       </div>

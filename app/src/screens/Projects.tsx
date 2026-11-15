@@ -134,6 +134,26 @@ function ColorPicker({ project }: { project: Project }) {
   );
 }
 
+const CI_LABEL = { passing: "CI passing", failing: "CI failing", running: "CI running" } as const;
+const CI_COLOR = { passing: "text-ok", failing: "text-bad", running: "text-st-progress" } as const;
+
+/** The latest checks on the default branch as a small icon, and the open pull requests when there are any. */
+export function Health({ project }: { project: Project }) {
+  if (!project.ci && !project.open_prs) return null;
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] text-text-3">
+      {project.ci && (
+        <svg role="img" aria-label={CI_LABEL[project.ci]} viewBox="0 0 12 12" className={`size-3 shrink-0 ${CI_COLOR[project.ci]}`} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          {project.ci === "passing" && <path d="M2.5 6.2l2.3 2.3 4.7-5" />}
+          {project.ci === "failing" && <path d="M3 3l6 6M9 3l-6 6" />}
+          {project.ci === "running" && <circle cx="6" cy="6" r="2.2" fill="currentColor" stroke="none" />}
+        </svg>
+      )}
+      {!!project.open_prs && <span>{project.open_prs === 1 ? "1 open PR" : `${project.open_prs} open PRs`}</span>}
+    </span>
+  );
+}
+
 /** Where the project lives on GitHub: the link, privacy, language and last push. */
 function GithubLine({ project }: { project: Project }) {
   const { api } = useStore();
@@ -159,6 +179,7 @@ function GithubLine({ project }: { project: Project }) {
         {project.language && <span>{project.language}</span>}
         {!Number.isNaN(pushed) && <span className="text-text-3">{`pushed ${ago(pushed)}`}</span>}
         {project.archived && <span className="text-text-3">Archived</span>}
+        <Health project={project} />
       </div>
       {project.description && <p className="text-[12px] text-text-3">{project.description}</p>}
     </div>
@@ -258,7 +279,10 @@ function Row({ project, current, open }: { project: Project; current: boolean; o
         <ProjectDot color={project.color} />
         <span className="truncate">{project.name}</span>
         {project.private && <Lock />}
-        <span className="ml-auto font-mono text-[11px] text-text-3">{project.prefix}</span>
+        <span className="ml-auto flex items-center gap-2">
+          <Health project={project} />
+        </span>
+        <span className="font-mono text-[11px] text-text-3">{project.prefix}</span>
         <span className="w-5 text-right font-mono text-[11px] text-text-3">{open}</span>
       </button>
     </li>
