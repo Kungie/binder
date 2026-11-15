@@ -94,6 +94,38 @@ describe("GitHub screen", () => {
     await waitFor(() => expect(api.ghActions).toEqual([["demo-dev/orbit", 41, true, { kind: "comment", body: expect.stringContaining("the dot never turns grey") }]]));
   });
 
+  it("a_posted_or_discarded_review_does_not_come_back", async () => {
+    const { api, user } = setup(true);
+    await user.click(within(await list()).getByRole("button", { name: /#41/ }));
+    const d = await detail();
+    await user.click(within(d).getByRole("button", { name: "Review with the agent" }));
+    await user.click(within(d).getByRole("button", { name: "Discard" }, await within(d).findByLabelText("Agent's review")));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(within(d).queryByLabelText("Agent's review")).toBeNull();
+    expect(within(d).queryByText(/The agent is reviewing/)).toBeNull();
+    await user.click(within(d).getByRole("button", { name: "Review with the agent" }));
+    await user.click(within(d).getByRole("button", { name: "Post as comment" }, await within(d).findByLabelText("Agent's review")));
+    await waitFor(() => expect(api.ghActions).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(within(d).queryByLabelText("Agent's review")).toBeNull();
+  });
+
+  it("a_review_in_progress_survives_leaving_the_pull_request", async () => {
+    const { api, user } = setup(true);
+    let answer: string | null = null;
+    vi.spyOn(api, "ghReviewDraft").mockImplementation(async () => answer);
+    await user.click(within(await list()).getByRole("button", { name: /#41/ }));
+    await user.click(within(await detail()).getByRole("button", { name: "Review with the agent" }));
+    await within(await detail()).findByText(/The agent is reviewing/);
+    await user.click(within(await list()).getByRole("button", { name: /#40/ }));
+    await user.click(within(await list()).getByRole("button", { name: /#41/ }));
+    const d = await screen.findByRole("region", { name: /^#41/ });
+    expect(within(d).getByText(/The agent is reviewing/)).toBeInTheDocument();
+    expect(within(d).getByRole("button", { name: "Review with the agent" })).toBeDisabled();
+    answer = "Looks fine.";
+    expect(((await within(d).findByLabelText("Agent's review", {}, { timeout: 12_000 })) as HTMLTextAreaElement).value).toBe("Looks fine.");
+  }, 15_000);
+
   it("agent_buttons_explain_why_they_are_off", async () => {
     const { user } = setup(false);
     await user.click(within(await list()).getByRole("button", { name: /#41/ }));

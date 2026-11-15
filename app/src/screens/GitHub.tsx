@@ -152,6 +152,14 @@ export function GitHub() {
   );
 }
 
+/** The agent's review runs by pull request, for each Api, so leaving a pull request while it runs keeps its draft coming. */
+const reviewRuns = new WeakMap<object, Map<string, string>>();
+function runsFor(api: object) {
+  let m = reviewRuns.get(api);
+  if (!m) reviewRuns.set(api, (m = new Map()));
+  return m;
+}
+
 function DetailView({ picked, project, onChanged }: { picked: Picked; project: Project | undefined; onChanged(): void }) {
   const { api } = useStore();
   const pull = picked.kind === "pull";
@@ -163,8 +171,19 @@ function DetailView({ picked, project, onChanged }: { picked: Picked; project: P
   const [working, setWorking] = useState(false);
   const [closed, setClosed] = useState(false);
   const [ready, setReady] = useState<AgentReady | null>(null);
-  const [reviewRun, setReviewRun] = useState<string | null>(null);
+  const reviewKey = `${repo}#${number}`;
+  const [reviewRun, setRun] = useState<string | null>(() => runsFor(api).get(reviewKey) ?? null);
+  const setReviewRun = (run: string | null) => {
+    if (run) runsFor(api).set(reviewKey, run);
+    else runsFor(api).delete(reviewKey);
+    setRun(run);
+  };
   const [draft, setDraft] = useState<string | null>(null);
+  /** Posting or discarding the draft ends the review. */
+  const endReview = () => {
+    setReviewRun(null);
+    setDraft(null);
+  };
   const [started, setStarted] = useState<string | null>(null);
 
   const read = useCallback(async () => {
@@ -280,16 +299,16 @@ function DetailView({ picked, project, onChanged }: { picked: Picked; project: P
           <div className="flex flex-col gap-2">
             <textarea aria-label="Agent's review" value={draft} onChange={(e) => setDraft(e.target.value)} rows={6} className={`${fieldClass} h-auto py-1.5 font-mono text-[11px]`} />
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="primary" disabled={working} onClick={() => void act({ kind: "comment", body: draft }, () => setDraft(null))}>
+              <Button variant="primary" disabled={working} onClick={() => void act({ kind: "comment", body: draft }, () => endReview())}>
                 Post as comment
               </Button>
-              <Button disabled={working} onClick={() => void act({ kind: "approve", body: draft }, () => setDraft(null))}>
+              <Button disabled={working} onClick={() => void act({ kind: "approve", body: draft }, () => endReview())}>
                 Approve
               </Button>
-              <Button disabled={working} onClick={() => void act({ kind: "request_changes", body: draft }, () => setDraft(null))}>
+              <Button disabled={working} onClick={() => void act({ kind: "request_changes", body: draft }, () => endReview())}>
                 Request changes
               </Button>
-              <Button variant="ghost" onClick={() => setDraft(null)}>
+              <Button variant="ghost" onClick={() => endReview()}>
                 Discard
               </Button>
             </div>
