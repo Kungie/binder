@@ -34,18 +34,21 @@ pub struct Config {
     pub overview: OverviewLayout,
 }
 
-/// Overview's two columns, each a list of widget ids from top to bottom.
+/// Overview's two columns, each a list of widget ids from top to bottom, how wide the left one is in percent,
+/// and the heights in pixels of the widgets the owner sized (the others fit their content).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OverviewLayout {
     pub left: Vec<String>,
     pub right: Vec<String>,
+    pub split: u8,
+    pub heights: std::collections::BTreeMap<String, u32>,
 }
 
 impl Default for OverviewLayout {
     fn default() -> Self {
         let ids = |v: &[&str]| v.iter().map(|s| s.to_string()).collect();
-        OverviewLayout { left: ids(&["numbers", "done_today"]), right: ids(&["server", "cloud", "printer", "open_tasks"]) }
+        OverviewLayout { left: ids(&["numbers", "done_today"]), right: ids(&["server", "cloud", "printer", "open_tasks"]), split: 50, heights: Default::default() }
     }
 }
 

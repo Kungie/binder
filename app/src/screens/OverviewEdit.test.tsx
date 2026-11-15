@@ -104,4 +104,64 @@ describe("Overview you arrange", () => {
     const w = await screen.findByRole("region", { name: "GitHub" });
     expect(await within(w).findByText("2 pull requests, 1 issue need you")).toBeInTheDocument();
   });
+
+  it("arrow_keys_move_a_widget_within_and_across_columns", async () => {
+    const { api, user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    screen.getByRole("button", { name: "Move Cloud" }).focus();
+    await user.keyboard("{ArrowUp}");
+    expect(ids("right")).toEqual(["cloud", "server", "printer", "open_tasks"]);
+    await user.keyboard("{ArrowLeft}");
+    expect(ids("left")).toEqual(["cloud", "numbers", "done_today"]);
+    expect(screen.getByRole("button", { name: "Move Cloud" })).toHaveFocus();
+    await waitFor(async () => expect((await api.getConfig()).overview.left).toEqual(["cloud", "numbers", "done_today"]));
+  });
+
+  it("a_widget_is_resized_from_its_edge_and_fits_again_on_double_click", async () => {
+    const { api, user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    const edge = screen.getByRole("separator", { name: "Resize Server" });
+    edge.focus();
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    const box = document.querySelector('[data-widget="server"] > [data-box]') as HTMLElement;
+    expect(box.style.height).toBe("120px");
+    await waitFor(async () => expect((await api.getConfig()).overview.heights).toEqual({ server: 120 }));
+    await user.dblClick(edge);
+    expect(box.style.height).toBe("");
+    await waitFor(async () => expect((await api.getConfig()).overview.heights).toEqual({}));
+  });
+
+  it("the_gutter_sets_how_wide_the_columns_are", async () => {
+    const { api, user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    const gutter = screen.getByRole("separator", { name: "Column width" });
+    expect(gutter).toHaveAttribute("aria-valuenow", "50");
+    gutter.focus();
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(gutter).toHaveAttribute("aria-valuenow", "60");
+    await waitFor(async () => expect((await api.getConfig()).overview.split).toBe(60));
+    for (let i = 0; i < 10; i++) await user.keyboard("{ArrowRight}");
+    expect(gutter).toHaveAttribute("aria-valuenow", "70");
+  });
+
+  it("sizes_hold_outside_edit_mode_and_reset_clears_them", async () => {
+    const api = memoryApi(demoSeed());
+    await api.setConfig({ ...(await api.getConfig()), overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 40, heights: { cloud: 300 } } });
+    const { user } = setup(api);
+    await waitFor(() => expect((document.querySelector('[data-widget="cloud"] > [data-box]') as HTMLElement).style.height).toBe("300px"));
+    const grid = column("left").parentElement as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toMatch(/40fr\).*60fr\)$/);
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    expect((document.querySelector('[data-widget="cloud"] > [data-box]') as HTMLElement).style.height).toBe("");
+    await waitFor(async () => expect((await api.getConfig()).overview).toMatchObject({ split: 50, heights: {} }));
+  });
+
+  it("escape_ends_editing", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "Move Server" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
 });

@@ -18,23 +18,54 @@ export const WIDGETS: Record<string, string> = {
 /** Widgets that fill what is left of their column's height. */
 export const FILLS = new Set(["done_today", "open_tasks"]);
 
-export const DEFAULT_LAYOUT: OverviewLayout = { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"] };
+export const DEFAULT_LAYOUT: OverviewLayout = { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} };
 
-/** Known ids only, each once, left first. */
+/** How far the column split and a widget's height may go. */
+export const SPLIT_MIN = 30;
+export const SPLIT_MAX = 70;
+export const HEIGHT_MIN = 80;
+export const HEIGHT_MAX = 1200;
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(n)));
+export const clampSplit = (n: number) => clamp(n, SPLIT_MIN, SPLIT_MAX);
+export const clampHeight = (n: number) => clamp(n, HEIGHT_MIN, HEIGHT_MAX);
+
+/** Known ids only, each once, left first; the split kept in range and heights only for widgets shown. */
 export function clean(l: OverviewLayout): OverviewLayout {
   const seen = new Set<string>();
   const keep = (ids: string[]) => ids.filter((id) => id in WIDGETS && !seen.has(id) && (seen.add(id), true));
-  return { left: keep(l.left ?? []), right: keep(l.right ?? []) };
+  const left = keep(l.left ?? []);
+  const right = keep(l.right ?? []);
+  const heights: Record<string, number> = {};
+  for (const [id, h] of Object.entries(l.heights ?? {})) if (seen.has(id) && Number.isFinite(h)) heights[id] = clampHeight(h);
+  return { left, right, split: clampSplit(l.split ?? 50), heights };
 }
 
 /** Moves a widget before another one, or to the end of a column when `before` is null. */
 export function move(l: OverviewLayout, id: string, side: "left" | "right", before: string | null): OverviewLayout {
-  const out = { left: l.left.filter((x) => x !== id), right: l.right.filter((x) => x !== id) };
+  const out = { ...l, left: l.left.filter((x) => x !== id), right: l.right.filter((x) => x !== id) };
   const col = out[side];
   const at = before === null ? -1 : col.indexOf(before);
   if (at === -1) col.push(id);
   else col.splice(at, 0, id);
   return out;
+}
+
+/** One keyboard step: up and down within the column, left and right to the other column at the same place. */
+export function step(l: OverviewLayout, id: string, dir: "up" | "down" | "left" | "right"): OverviewLayout {
+  const side = l.left.includes(id) ? "left" : "right";
+  const col = l[side];
+  const at = col.indexOf(id);
+  if (dir === "up" || dir === "down") {
+    const to = dir === "up" ? at - 1 : at + 1;
+    if (to < 0 || to >= col.length) return l;
+    const next = [...col];
+    [next[at], next[to]] = [next[to], next[at]];
+    return { ...l, [side]: next };
+  }
+  const other = dir === "left" ? "left" : "right";
+  if (other === side) return l;
+  const target = l[other];
+  return move(l, id, other, target[Math.min(at, target.length)] ?? null);
 }
 
 const OpenButton = ({ onClick }: { onClick(): void }) => (

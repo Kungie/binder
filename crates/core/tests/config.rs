@@ -47,3 +47,18 @@ fn old_config_gets_the_default_overview() {
     assert_eq!(c.overview.left, vec!["numbers", "done_today"]);
     assert_eq!(c.overview.right, vec!["server", "cloud", "printer", "open_tasks"]);
 }
+
+#[test]
+fn overview_sizes_default_and_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("old.toml"), "[overview]\nleft = [\"numbers\"]\nright = [\"server\"]\n").unwrap();
+    let c = Config::load(&dir.path().join("old.toml")).unwrap();
+    assert_eq!((c.overview.split, c.overview.heights.len()), (50, 0));
+    let mut c = c;
+    c.overview.split = 60;
+    c.overview.heights.insert("server".into(), 240);
+    let path = dir.path().join("new.toml");
+    c.save(&path).unwrap();
+    let back = Config::load(&path).unwrap();
+    assert_eq!((back.overview.split, back.overview.heights.get("server").copied()), (60, Some(240)));
+}

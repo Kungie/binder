@@ -164,7 +164,7 @@ export function memoryApi(
     terms.set(agent, onData);
     onData(encoder.encode("Connected to demo-dev@10.0.7.2 (demo)\r\n"));
   }
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"] } };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} } };
   let lastDone: number | null = seed.lastDone ?? null;
   let briefDismissed = false;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;

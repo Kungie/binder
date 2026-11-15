@@ -1,6 +1,7 @@
 import { DiskBars, useSdSpace } from "../components/DiskBars";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_LAYOUT, GithubWidget, SitesWidget, WIDGETS, FILLS, clean, move } from "../components/OverviewWidgets";
+import { useCallback, useEffect, useState } from "react";
+import { DEFAULT_LAYOUT, GithubWidget, SitesWidget, clean } from "../components/OverviewWidgets";
+import { EditBar, OverviewGrid } from "../components/OverviewGrid";
 import { Dot, Metric } from "../components/Metric";
 import { Panel } from "../components/Panel";
 import { TaskBoard } from "../components/TaskBoard";
@@ -25,6 +26,13 @@ export function Overview() {
   const { api, tasks, setScreen, setCreatingTask, doneVersion } = useStore();
   const [layout, setLayout] = useState<OverviewLayout>(DEFAULT_LAYOUT);
   const [editing, setEditing] = useState(false);
+  // Escape ends editing, unless something open inside took it first.
+  useEffect(() => {
+    if (!editing) return;
+    const key = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && setEditing(false);
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [editing]);
   useEffect(() => {
     let live = true;
     void api.getConfig().then((c) => live && c.overview && setLayout(clean(c.overview)), () => {});
@@ -125,135 +133,8 @@ export function Overview() {
       {/* The two columns fill the window and their long lists scroll inside; below a usable height the page scrolls. */}
       <div className="flex min-h-[620px] flex-1 flex-col gap-3 px-5 pb-5">
         <Brief />
-        <Columns layout={layout} editing={editing} onMove={(id, side, before) => save(move(layout, id, side, before))} onHide={(id) => save({ left: layout.left.filter((x) => x !== id), right: layout.right.filter((x) => x !== id) })} render={widget} />
+        <OverviewGrid layout={layout} editing={editing} save={save} render={widget} />
       </div>
-    </div>
-  );
-}
-
-/** Add widget and Reset, shown while editing. */
-function EditBar({ layout, save }: { layout: OverviewLayout; save(l: OverviewLayout): void }) {
-  const [menu, setMenu] = useState(false);
-  const shown = new Set([...layout.left, ...layout.right]);
-  const hidden = Object.keys(WIDGETS).filter((id) => !shown.has(id));
-  return (
-    <>
-      <div className="relative">
-        <Button variant="ghost" disabled={hidden.length === 0} onClick={() => setMenu((m) => !m)}>
-          Add widget
-        </Button>
-        {menu && (
-          <div role="menu" aria-label="Add widget" className="pop-in absolute right-0 top-8 z-20 flex min-w-40 flex-col rounded-control bg-raised p-1 shadow-menu">
-            {hidden.map((id) => (
-              <button
-                key={id}
-                type="button"
-                role="menuitem"
-                className="h-7 rounded-[6px] px-2 text-left text-[12px] text-text-2 hover:bg-card hover:text-text"
-                onClick={() => {
-                  setMenu(false);
-                  const side = DEFAULT_LAYOUT.left.includes(id) ? "left" : DEFAULT_LAYOUT.right.includes(id) ? "right" : layout.left.length <= layout.right.length ? "left" : "right";
-                  save({ ...layout, [side]: [...layout[side], id] });
-                }}
-              >
-                {WIDGETS[id]}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <Button variant="ghost" onClick={() => save(DEFAULT_LAYOUT)}>
-        Reset
-      </Button>
-    </>
-  );
-}
-
-type Over = { side: "left" | "right"; before: string | null };
-
-/** The two columns. While editing, a widget's handle drags it; pointer events, since Tauri swallows HTML5 drags. */
-function Columns({
-  layout,
-  editing,
-  onMove,
-  onHide,
-  render,
-}: {
-  layout: OverviewLayout;
-  editing: boolean;
-  onMove(id: string, side: "left" | "right", before: string | null): void;
-  onHide(id: string): void;
-  render(id: string): ReactNode;
-}) {
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [over, setOver] = useState<Over | null>(null);
-  const latest = useRef<{ dragging: string | null; over: Over | null }>({ dragging: null, over: null });
-  latest.current = { dragging, over };
-
-  useEffect(() => {
-    if (!dragging) return;
-    const target = (x: number, y: number): Over | null => {
-      const el = document.elementFromPoint(x, y);
-      const w = el?.closest("[data-widget]");
-      const col = el?.closest("[data-column]");
-      if (!col) return null;
-      const side = col.getAttribute("data-column") as "left" | "right";
-      const id = w?.getAttribute("data-widget") ?? null;
-      return { side, before: id === dragging ? null : id };
-    };
-    const onMoveEv = (e: PointerEvent | MouseEvent) => setOver(target(e.clientX, e.clientY));
-    const onUp = () => {
-      const { dragging: d, over: o } = latest.current;
-      if (d && o) onMove(d, o.side, o.before);
-      setDragging(null);
-      setOver(null);
-    };
-    document.addEventListener("pointermove", onMoveEv);
-    document.addEventListener("pointerup", onUp);
-    return () => {
-      document.removeEventListener("pointermove", onMoveEv);
-      document.removeEventListener("pointerup", onUp);
-    };
-  }, [dragging, onMove]);
-
-  const column = (side: "left" | "right") => (
-    <div data-column={side} className="flex min-h-0 min-w-0 flex-col gap-3">
-      {layout[side].map((id) => (
-        <div key={id} data-widget={id} className={`relative ${FILLS.has(id) ? "flex min-h-[180px] flex-1 flex-col [&>*:last-child]:min-h-0 [&>*:last-child]:flex-1" : "shrink-0"} ${dragging === id ? "opacity-40" : ""}`}>
-          {over?.side === side && over.before === id && dragging !== id && <div aria-hidden="true" className="absolute -top-2 left-0 right-0 h-0.5 rounded-full bg-text" />}
-          {editing && (
-            <div className="flex h-7 shrink-0 items-center gap-1 text-[11px] text-text-3">
-              <button
-                type="button"
-                aria-label={`Move ${WIDGETS[id]}`}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  setDragging(id);
-                }}
-                className="flex h-6 cursor-grab items-center gap-1.5 rounded-[6px] pl-1 pr-2 hover:bg-card hover:text-text"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-                  {[3, 6, 9].flatMap((y) => [4, 8].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1" />))}
-                </svg>
-                {WIDGETS[id]}
-              </button>
-              <button type="button" aria-label={`Hide ${WIDGETS[id]}`} onClick={() => onHide(id)} className="ml-auto h-6 rounded-[6px] px-2 hover:bg-card hover:text-text">
-                Hide
-              </button>
-            </div>
-          )}
-          {render(id)}
-        </div>
-      ))}
-      {over?.side === side && over.before === null && <div aria-hidden="true" className="h-0.5 shrink-0 rounded-full bg-text" />}
-      {editing && <div className="h-12 shrink-0 rounded-panel border border-dashed border-line" aria-hidden="true" />}
-    </div>
-  );
-
-  return (
-    <div className={`grid min-h-0 flex-1 grid-cols-2 gap-3 ${dragging ? "select-none" : ""}`}>
-      {column("left")}
-      {column("right")}
     </div>
   );
 }

@@ -250,13 +250,17 @@ export interface Config {
   print_notify: boolean;
   /** Addresses the owner gave sites Binder couldn't find one for, by folder name. */
   site_addresses: Record<string, string>;
-  /** Overview's two columns, widget ids from top to bottom. */
+  /** Overview's two columns, widget ids from top to bottom, with their sizes. */
   overview: OverviewLayout;
 }
 
 export interface OverviewLayout {
   left: string[];
   right: string[];
+  /** How wide the left column is, in percent (30 to 70). */
+  split?: number;
+  /** Heights in pixels of the widgets the owner sized; the others fit their content. */
+  heights?: Record<string, number>;
 }
 
 export type DeviceKind = "mac" | "server" | "printer" | "other";
