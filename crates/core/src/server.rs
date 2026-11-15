@@ -213,6 +213,24 @@ fn parse_times(line: &str) -> Option<ContainerTimes> {
     })
 }
 
+/// A container's last 200 log lines, both streams, oldest first.
+pub fn logs(remote: &dyn Remote, name: &str) -> Result<String> {
+    let out = remote.run(&format!("echo --binder:logs--\ndocker logs --tail 200 {} 2>&1\nexit 0\n", quote(name)), None)?;
+    Ok(section(&out, "logs").trim_matches('\n').to_string())
+}
+
+pub fn restart(remote: &dyn Remote, name: &str) -> Result<()> {
+    remote.run(&format!("docker restart {} >/dev/null\n", quote(name)), None)?;
+    Ok(())
+}
+
+/// The owner's restart: logged first, so the watch knows the stop and start that follow are theirs. The database is
+/// free again before the SSH call.
+pub fn restart_and_log(db: &std::sync::Mutex<crate::Db>, remote: &dyn Remote, name: &str, now: i64) -> Result<()> {
+    db.lock().unwrap_or_else(|e| e.into_inner()).log_event(now, crate::events::EventKind::OwnerRestart, name, "")?;
+    restart(remote, name)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TopProcess {
     pub name: String,

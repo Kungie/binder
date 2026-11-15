@@ -126,6 +126,8 @@ pub fn run() {
             commands::set_config,
             commands::vault_connected,
             commands::server_status,
+            commands::container_logs,
+            commands::restart_container,
             commands::list_devices,
             commands::create_device,
             commands::update_device,

@@ -159,3 +159,37 @@ describe("What uses the server", () => {
     expect(disk).not.toHaveTextContent("SD card");
   });
 });
+
+describe("Containers", () => {
+  it("pressing_a_container_shows_its_log", async () => {
+    const { user } = setup();
+    const table = await screen.findByRole("table", { name: "Containers" });
+    await user.click(await within(table).findByRole("button", { name: "jellyfin" }));
+    const log = await screen.findByRole("region", { name: "jellyfin log" });
+    expect(within(log).getByText(/jellyfin started/)).toBeInTheDocument();
+    expect(within(log).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+  });
+
+  it("restart_asks_first_and_cancel_does_nothing", async () => {
+    const { api, user } = setup();
+    const table = await screen.findByRole("table", { name: "Containers" });
+    await user.click(await within(table).findByRole("button", { name: "jellyfin" }));
+    const log = await screen.findByRole("region", { name: "jellyfin log" });
+    await user.click(within(log).getByRole("button", { name: "Restart" }));
+    expect(within(log).getByText("Restart jellyfin? Its connections drop for a moment.")).toBeInTheDocument();
+    await user.click(within(log).getByRole("button", { name: "Cancel" }));
+    expect(api.restarted).toEqual([]);
+  });
+
+  it("restart_shows_restarting_then_the_status", async () => {
+    const { api, user } = setup();
+    const table = await screen.findByRole("table", { name: "Containers" });
+    await user.click(await within(table).findByRole("button", { name: "jellyfin" }));
+    const log = await screen.findByRole("region", { name: "jellyfin log" });
+    await user.click(within(log).getByRole("button", { name: "Restart" }));
+    await user.click(within(log).getByRole("button", { name: "Restart" }));
+    await waitFor(() => expect(api.restarted).toEqual(["jellyfin"]));
+    await waitFor(() => expect(within(log).queryByText("Restarting…")).toBeNull());
+    expect(within(log).getByRole("button", { name: "Restart" })).toBeEnabled();
+  });
+});

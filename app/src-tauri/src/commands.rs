@@ -185,6 +185,18 @@ pub async fn server_status(state: State<'_, AppState>) -> Res<ServerStatus> {
 }
 
 #[tauri::command]
+pub async fn container_logs(state: State<'_, AppState>, name: String) -> Res<String> {
+    let target = server_target(&state)?;
+    server::logs(&SshRemote::new(target), &name).map_err(text)
+}
+
+#[tauri::command]
+pub async fn restart_container(state: State<'_, AppState>, name: String) -> Res<()> {
+    let target = server_target(&state)?;
+    server::restart_and_log(&state.db, &SshRemote::new(target), &name, now()).map_err(text)
+}
+
+#[tauri::command]
 pub async fn list_devices(state: State<'_, AppState>) -> Res<Vec<Device>> {
     state.db.lock().unwrap().list_devices().map_err(text)
 }

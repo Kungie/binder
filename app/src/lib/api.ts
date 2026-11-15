@@ -67,6 +67,9 @@ export interface Api {
   setConfig(config: Config): Promise<void>;
   vaultConnected(): Promise<boolean>;
   serverStatus(): Promise<ServerStatus>;
+  /** A container's last 200 log lines. */
+  containerLogs(name: string): Promise<string>;
+  restartContainer(name: string): Promise<void>;
   listDevices(): Promise<Device[]>;
   createDevice(device: NewDevice): Promise<Device>;
   updateDevice(id: number, patch: DevicePatch): Promise<Device>;
@@ -243,6 +246,8 @@ export const tauriApi: Api = {
   setConfig: (config) => call("set_config", { config }),
   vaultConnected: () => call("vault_connected"),
   serverStatus: () => call("server_status"),
+  containerLogs: (name) => call("container_logs", { name }),
+  restartContainer: (name) => call("restart_container", { name }),
   listDevices: () => call("list_devices"),
   createDevice: (device) => call("create_device", { device }),
   updateDevice: (id, patch) => call("update_device", { id, patch }),

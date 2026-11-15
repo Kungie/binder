@@ -200,3 +200,26 @@ fn names_reach_inspect_through_docker_ps_only() {
     let script = r.seen.borrow()[0].0.clone();
     assert!(script.contains("docker inspect") && script.contains("$(docker ps -aq)"));
 }
+
+#[test]
+fn a_name_reaches_the_shell_quoted() {
+    let name = "web'; rm -rf ~";
+    let r = FakeRemote::new(vec![Ok("--binder:logs--\nline one\nline two\n".into()), Ok(String::new())]);
+    let log = binder_core::server::logs(&r, name).unwrap();
+    assert_eq!(log, "line one\nline two");
+    binder_core::server::restart(&r, name).unwrap();
+    let seen = r.seen.borrow();
+    let q = binder_core::remote::quote(name);
+    assert!(seen[0].0.contains(&format!("docker logs --tail 200 {q} 2>&1")), "{}", seen[0].0);
+    assert!(seen[1].0.contains(&format!("docker restart {q}")), "{}", seen[1].0);
+}
+
+#[test]
+fn restart_logs_it_as_yours() {
+    let db = std::sync::Mutex::new(binder_core::Db::in_memory().unwrap());
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    binder_core::server::restart_and_log(&db, &r, "web", 500).unwrap();
+    let events = db.lock().unwrap().events_between(0, 1000).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!((events[0].kind, events[0].subject.as_str(), events[0].at), (binder_core::events::EventKind::OwnerRestart, "web", 500));
+}

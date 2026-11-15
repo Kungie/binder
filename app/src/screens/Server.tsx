@@ -3,7 +3,8 @@ import { type TopKind, TopList } from "../components/TopList";
 import { Panel } from "../components/Panel";
 import { ServerTargetForm } from "../components/ServerTargetForm";
 import { Button, Notice } from "../components/ui";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useStore } from "../lib/store";
 import { loadPercent } from "../lib/load";
 import type { ServerStatus, Service } from "../lib/types";
 import { clock, gb, percent, useServer } from "../lib/useServer";
@@ -62,7 +63,7 @@ export function Server() {
               </div>
               {open && <TopList kind={open} />}
               <div className={`grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start gap-3 ${error ? "opacity-60" : ""}`}>
-                <Containers status={status} />
+                <Containers status={status} onRestarted={refresh} />
                 <Services services={status.services} />
               </div>
             </>
@@ -73,7 +74,8 @@ export function Server() {
   );
 }
 
-function Containers({ status }: { status: NonNullable<ReturnType<typeof useServer>["status"]> }) {
+function Containers({ status, onRestarted }: { status: NonNullable<ReturnType<typeof useServer>["status"]>; onRestarted(): void }) {
+  const [picked, setPicked] = useState<string | null>(null);
   const rows = [...status.containers].sort((a, b) => Number(b.state === "running") - Number(a.state === "running") || a.name.localeCompare(b.name));
   const up = rows.filter((c) => c.state === "running").length;
   return (
@@ -93,7 +95,16 @@ function Containers({ status }: { status: NonNullable<ReturnType<typeof useServe
               <td className="pl-3">
                 <Dot on={c.state === "running"} label={c.state} />
               </td>
-              <td className="truncate text-text">{c.name}</td>
+              <td className="truncate">
+                <button
+                  type="button"
+                  aria-pressed={picked === c.name}
+                  onClick={() => setPicked((p) => (p === c.name ? null : c.name))}
+                  className={`max-w-full truncate text-left hover:underline ${picked === c.name ? "text-text underline" : "text-text"}`}
+                >
+                  {c.name}
+                </button>
+              </td>
               <td className="truncate pr-3 font-mono text-[11px] text-text-3">{c.image}</td>
               <td className="truncate pr-3 text-text-2">{c.status}</td>
             </tr>
@@ -101,7 +112,76 @@ function Containers({ status }: { status: NonNullable<ReturnType<typeof useServe
         </tbody>
       </table>
       {rows.length === 0 && <p className="border-t border-line px-3 py-3 text-[12px] text-text-3">No containers, or Docker isn't readable.</p>}
+      {picked && <ContainerLog key={picked} name={picked} onRestarted={onRestarted} />}
     </Panel>
+  );
+}
+
+/** One container's recent log, with Refresh and a Restart that asks first. */
+function ContainerLog({ name, onRestarted }: { name: string; onRestarted(): void }) {
+  const { api } = useStore();
+  const [log, setLog] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const pre = useRef<HTMLPreElement>(null);
+  const load = useCallback(async () => {
+    try {
+      setLog(await api.containerLogs(name));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [api, name]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  useEffect(() => {
+    if (pre.current) pre.current.scrollTop = pre.current.scrollHeight;
+  }, [log]);
+  const restart = async () => {
+    setConfirm(false);
+    setRestarting(true);
+    try {
+      await api.restartContainer(name);
+      onRestarted();
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRestarting(false);
+    }
+  };
+  return (
+    <section aria-label={`${name} log`} className="border-t border-line">
+      <div className="flex h-9 items-center gap-2 px-3 text-[12px]">
+        <span className="font-medium text-text">{name}</span>
+        {error && <span className="truncate text-text-2">{error}</span>}
+        {confirm ? (
+          <span className="ml-auto flex items-center gap-2">
+            <span className="text-text-2">{`Restart ${name}? Its connections drop for a moment.`}</span>
+            <Button variant="primary" onClick={() => void restart()}>
+              Restart
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirm(false)}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <span className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" onClick={() => void load()}>
+              Refresh
+            </Button>
+            <Button disabled={restarting} onClick={() => setConfirm(true)}>
+              {restarting ? "Restarting…" : "Restart"}
+            </Button>
+          </span>
+        )}
+      </div>
+      <pre ref={pre} className="max-h-72 overflow-auto border-t border-line bg-bg px-3 py-2 font-mono text-[11px] leading-[1.5] text-text-2">
+        {log ?? "Reading the log…"}
+      </pre>
+    </section>
   );
 }
 

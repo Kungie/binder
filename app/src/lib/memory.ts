@@ -67,6 +67,8 @@ export function memoryApi(
   done: Record<number, DoneLine[]>;
   setServerReachable(v: boolean): void;
   printerCommands: [string, PrinterCommand][];
+  /** Containers restarted, in order. */
+  restarted: string[];
   cloudOpened: string[];
   /** Items Quick Look was asked to show. */
   quickLooked: string[];
@@ -94,6 +96,7 @@ export function memoryApi(
   const runs: AgentRun[] = [];
   const printers: PrinterView[] = (seed.printers ?? []).map((p) => ({ ...p, config: { ...p.config }, state: { ...p.state } }));
   const printerCommands: [string, PrinterCommand][] = [];
+  const restarted: string[] = [];
   const printer = (serial: string) => {
     const p = printers.find((x) => x.config.serial === serial);
     if (!p) throw new Error(`No printer ${serial}.`);
@@ -298,6 +301,7 @@ export function memoryApi(
     },
     done,
     printerCommands,
+    restarted,
     setServerReachable(v) {
       reachable = v;
     },
@@ -486,6 +490,14 @@ export function memoryApi(
     },
     async vaultConnected() {
       return connected();
+    },
+    async containerLogs(name) {
+      if (!reachable) throw new Error(`Can't reach ${config.server}`);
+      return [`${name} started`, "Listening on :8080", "GET / 200 3ms"].join("\n");
+    },
+    async restartContainer(name) {
+      if (!reachable) throw new Error(`Can't reach ${config.server}`);
+      restarted.push(name);
     },
     async serverStatus() {
       if (!config.server) throw new Error("No server set.");
