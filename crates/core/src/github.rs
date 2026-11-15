@@ -162,7 +162,7 @@ impl GhCli {
             .map(|program| GhCli { program })
     }
 
-    fn run(&self, args: &[&str]) -> Result<String> {
+    pub(crate) fn run(&self, args: &[&str]) -> Result<String> {
         let out = Command::new(&self.program).args(args).output().map_err(|e| Error::Invalid(format!("Couldn't run gh: {e}")))?;
         if out.status.success() {
             return Ok(String::from_utf8_lossy(&out.stdout).into_owned());

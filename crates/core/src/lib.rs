@@ -35,6 +35,7 @@ pub mod config;
 pub mod db;
 pub mod devices;
 pub mod events;
+pub mod gh_work;
 pub mod github;
 pub mod hooks;
 pub mod model;
