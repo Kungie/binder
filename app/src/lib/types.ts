@@ -23,6 +23,8 @@ export interface Task {
   sort: number;
   /** Runs on the server from 03:00 instead of being picked up during the day. */
   night: boolean;
+  /** Finishing it brings the next one. */
+  repeat?: Repeat | null;
   /** When it moved to Done or Canceled, Unix seconds; null while open and for tasks closed before 2.7. */
   closed: number | null;
   /** The GitHub issue it came from. */
@@ -41,6 +43,7 @@ export interface NewTask {
   due_time?: string;
   /** A night task, which also goes to the agent. */
   night?: boolean;
+  repeat?: Repeat;
 }
 
 export interface TaskPatch {
@@ -59,7 +62,12 @@ export interface TaskPatch {
   sort?: number;
   /** Marking a task for the night also assigns it to the agent. */
   night?: boolean;
+  repeat?: Repeat;
+  clear_repeat?: boolean;
 }
+
+/** How often a task comes back. */
+export type Repeat = "daily" | "weekdays" | "weekly" | "monthly" | "yearly";
 
 export type TaskView = { kind: "all" } | { kind: "mine" } | { kind: "agent" } | { kind: "night" } | { kind: "project"; id: number };
 

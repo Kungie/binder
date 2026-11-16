@@ -6,6 +6,8 @@ import { Chip } from "./Chip";
 import { PriorityChip } from "./PriorityIcon";
 import { ProjectDot } from "./ProjectDot";
 import { StatusIcon } from "./StatusIcon";
+import { RepeatIcon } from "./RepeatIcon";
+import { repeatInfo } from "../lib/repeat";
 
 const Calendar = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true">
@@ -75,6 +77,11 @@ export function BoardCard({ task, project, focused, dropping, menu, onOpen, onFo
             <Chip icon={task.due_time ? <Clock /> : <Calendar />} tone={due.overdue ? "warn" : "default"}>
               {due.text}
             </Chip>
+          )}
+          {task.repeat && (
+            <span title={`Repeats every ${repeatInfo(task.repeat).every}`} className="inline-flex">
+              <Chip icon={<RepeatIcon />}>{repeatInfo(task.repeat).short}</Chip>
+            </span>
           )}
           {project && <Chip icon={<ProjectDot color={project.color} />}>{project.name}</Chip>}
           {task.assignee === "agent" && <Chip icon={<ClaudeMark />}>Claude</Chip>}

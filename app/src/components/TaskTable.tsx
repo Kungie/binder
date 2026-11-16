@@ -1,4 +1,6 @@
 import { Moon } from "./Moon";
+import { RepeatIcon } from "./RepeatIcon";
+import { repeatInfo } from "../lib/repeat";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { type Assignee, type Priority, type Project, STATUSES, type Status, type Task, isClosed } from "../lib/types";
 import { PriorityIcon } from "./PriorityIcon";
@@ -176,6 +178,11 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
               <span role="gridcell" className={`flex min-w-0 items-center gap-1.5 ${closed ? "text-text-3 line-through" : "text-text"}`} onClick={() => onOpen(t.id)}>
                 <span className="truncate">{t.title}</span>
                 {t.night && <Moon />}
+                {t.repeat && (
+                  <span role="img" aria-label={`Repeats every ${repeatInfo(t.repeat).every}`} title={`Repeats every ${repeatInfo(t.repeat).every}`} className="shrink-0 text-text-3">
+                    <RepeatIcon />
+                  </span>
+                )}
                 {t.issue_number !== null && <span className="shrink-0 font-mono text-[11px] text-text-3">{`#${t.issue_number}`}</span>}
               </span>
               <span role="gridcell" className="truncate text-text-3">

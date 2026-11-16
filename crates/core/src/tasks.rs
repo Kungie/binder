@@ -4,7 +4,7 @@ use crate::model::*;
 use crate::{Db, Error, Result};
 use rusqlite::{OptionalExtension, Row, params};
 
-const COLUMNS: &str = "id, key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, attention, sort, night, closed, issue_number, issue_url";
+const COLUMNS: &str = "id, key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, attention, sort, night, closed, issue_number, issue_url, repeats";
 
 /// Open work first, most urgent first, most recently touched first.
 const ORDER: &str = "ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'done' THEN 3 ELSE 4 END,
@@ -30,6 +30,7 @@ fn row_to_task(r: &Row) -> rusqlite::Result<Task> {
         closed: r.get(15)?,
         issue_number: r.get(16)?,
         issue_url: r.get(17)?,
+        repeat: r.get::<_, Option<String>>(18)?.as_deref().and_then(Repeat::parse),
     })
 }
 
@@ -77,8 +78,8 @@ impl Db {
             }
         };
         tx.execute(
-            "INSERT INTO tasks (key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, sort, night, closed)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO tasks (key, title, notes, status, priority, project_id, assignee, due, created, updated, due_time, sort, night, closed, repeats)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 key,
                 title,
@@ -92,7 +93,8 @@ impl Db {
                 due_time,
                 sort,
                 night,
-                closed
+                closed,
+                t.repeat.map(Repeat::as_str)
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -134,6 +136,7 @@ impl Db {
 
     pub fn update_task(&mut self, id: i64, p: TaskPatch, now: i64) -> Result<Task> {
         let mut t = self.get_task(id)?;
+        let finished = p.status == Some(Status::Done) && t.status != Status::Done;
         if let Some(title) = p.title {
             t.title = title_of(&title)?;
         }
@@ -189,12 +192,61 @@ impl Db {
                 t.assignee = Assignee::Agent;
             }
         }
+        if p.clear_repeat {
+            t.repeat = None;
+        } else if let Some(r) = p.repeat {
+            t.repeat = Some(r);
+        }
+        // A finished repeating task hands its rule to the next one, so finishing it again brings no second copy.
+        let next = if finished { t.repeat.take() } else { None };
         self.conn.execute(
             "UPDATE tasks SET title = ?2, notes = ?3, status = ?4, priority = ?5, project_id = ?6, assignee = ?7, due = ?8, updated = ?9,
-             due_time = ?10, attention = ?11, sort = ?12, night = ?13, closed = ?14 WHERE id = ?1",
-            params![id, t.title, t.notes, t.status.as_str(), t.priority.as_i64(), t.project_id, t.assignee.as_str(), t.due, now, t.due_time, t.attention, t.sort, t.night, t.closed],
+             due_time = ?10, attention = ?11, sort = ?12, night = ?13, closed = ?14, repeats = ?15 WHERE id = ?1",
+            params![
+                id,
+                t.title,
+                t.notes,
+                t.status.as_str(),
+                t.priority.as_i64(),
+                t.project_id,
+                t.assignee.as_str(),
+                t.due,
+                now,
+                t.due_time,
+                t.attention,
+                t.sort,
+                t.night,
+                t.closed,
+                t.repeat.map(Repeat::as_str)
+            ],
         )?;
+        if let Some(repeat) = next {
+            self.repeat_task(&t, repeat, now)?;
+        }
         self.get_task(id)
+    }
+
+    /// The next one of a repeating task, due on the rule's next day.
+    fn repeat_task(&mut self, t: &Task, repeat: Repeat, now: i64) -> Result<Task> {
+        use chrono::TimeZone;
+        let today = chrono::Local.timestamp_opt(now, 0).single().map(|d| d.date_naive()).unwrap_or_default();
+        let due = t.due.as_deref().and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let next = next_due(repeat, due, today).format("%Y-%m-%d").to_string();
+        self.create_task(
+            NewTask {
+                title: t.title.clone(),
+                notes: Some(t.notes.clone()),
+                status: Some(Status::Todo),
+                priority: Some(t.priority),
+                project_id: t.project_id,
+                assignee: Some(t.assignee),
+                due: Some(next),
+                due_time: t.due_time.clone(),
+                night: Some(t.night),
+                repeat: Some(repeat),
+            },
+            now,
+        )
     }
 
     pub fn delete_task(&mut self, id: i64) -> Result<()> {

@@ -132,6 +132,72 @@ pub struct Task {
     /// The GitHub issue it came from.
     pub issue_number: Option<i64>,
     pub issue_url: Option<String>,
+    /// Finishing it brings the next one, due on the rule's next day.
+    pub repeat: Option<Repeat>,
+}
+
+/// How often a task comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Repeat {
+    Daily,
+    /// Monday to Friday.
+    Weekdays,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+impl Repeat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Repeat::Daily => "daily",
+            Repeat::Weekdays => "weekdays",
+            Repeat::Weekly => "weekly",
+            Repeat::Monthly => "monthly",
+            Repeat::Yearly => "yearly",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Repeat> {
+        [Repeat::Daily, Repeat::Weekdays, Repeat::Weekly, Repeat::Monthly, Repeat::Yearly].into_iter().find(|r| r.as_str() == s)
+    }
+
+    /// The `n`th day after `from` by this rule. Months and years count from `from` itself, so a 31st falls on the
+    /// last day of a shorter month without moving the later ones.
+    fn nth(self, from: chrono::NaiveDate, n: u32) -> chrono::NaiveDate {
+        use chrono::{Datelike, Days, Months, Weekday};
+        match self {
+            Repeat::Daily => from + Days::new(n.into()),
+            Repeat::Weekly => from + Days::new(7 * u64::from(n)),
+            Repeat::Monthly => from.checked_add_months(Months::new(n)).unwrap_or(from),
+            Repeat::Yearly => from.checked_add_months(Months::new(12 * n)).unwrap_or(from),
+            Repeat::Weekdays => {
+                let mut d = from;
+                for _ in 0..n {
+                    d = d.succ_opt().unwrap_or(d);
+                    while matches!(d.weekday(), Weekday::Sat | Weekday::Sun) {
+                        d = d.succ_opt().unwrap_or(d);
+                    }
+                }
+                d
+            }
+        }
+    }
+}
+
+/// When the next one is due: the rule's next day after the finished one's due date (or today, without one), and
+/// never on or before today, so a late finish brings one task, not a pile.
+pub fn next_due(repeat: Repeat, due: Option<chrono::NaiveDate>, today: chrono::NaiveDate) -> chrono::NaiveDate {
+    let from = due.unwrap_or(today);
+    let mut n = 1;
+    loop {
+        let d = repeat.nth(from, n);
+        if d > today || n > 100_000 {
+            return d;
+        }
+        n += 1;
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -147,6 +213,7 @@ pub struct NewTask {
     pub due_time: Option<String>,
     /// A night task, which also goes to the agent.
     pub night: Option<bool>,
+    pub repeat: Option<Repeat>,
 }
 
 /// What to change on a task. `None` leaves a field alone; the `clear_*` flags empty the optional ones.
@@ -169,6 +236,8 @@ pub struct TaskPatch {
     pub sort: Option<i64>,
     /// Marking a task for the night also assigns it to the agent.
     pub night: Option<bool>,
+    pub repeat: Option<Repeat>,
+    pub clear_repeat: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

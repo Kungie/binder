@@ -2,11 +2,12 @@ import { Moon } from "./Moon";
 import { useEffect, useRef, useState } from "react";
 import { animates } from "../lib/motion";
 import { useStore } from "../lib/store";
-import { STATUSES, STATUS_LABEL, type Task } from "../lib/types";
+import { type Repeat, STATUSES, STATUS_LABEL, type Task } from "../lib/types";
 import { AgentRun } from "./AgentRun";
 import { PRIORITY_SHORT, PriorityChip } from "./PriorityIcon";
 import { PriorityMenu } from "./PriorityMenu";
 import { Button, Field, Switch, fieldClass } from "./ui";
+import { REPEATS } from "../lib/repeat";
 
 /** The side sheet for one task. Text saves on blur, menus save on change. */
 export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): void; onStatus(status: Task["status"]): void }) {
@@ -156,6 +157,22 @@ export function TaskSheet({ task, onClose, onStatus }: { task: Task; onClose(): 
             />
           </div>
         </Field>
+        <Field label="Repeat">
+          <select
+            aria-label="Repeat"
+            className={fieldClass}
+            value={task.repeat ?? ""}
+            onChange={(e) => void updateTask(task.id, e.target.value ? { repeat: e.target.value as Repeat } : { clear_repeat: true })}
+          >
+            <option value="">Never</option>
+            {REPEATS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {task.repeat && <p className="-mt-1 pl-[96px] text-[11px] text-text-3">Marking it done brings the next one.</p>}
         {task.issue_url?.startsWith("https://github.com/") && (
           <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-2 text-[12px]">
             <span className="text-text-3">GitHub</span>

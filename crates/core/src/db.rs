@@ -111,6 +111,8 @@ const MIGRATIONS: &[&str] = &[
     // v9: whether a task's issue is on the owner's assigned list, so sync closes a task once, when its issue leaves.
     "ALTER TABLE tasks ADD COLUMN issue_listed INTEGER NOT NULL DEFAULT 0;
     UPDATE tasks SET issue_listed = 1 WHERE issue_repo IS NOT NULL AND status NOT IN ('done', 'canceled');",
+    // v10: tasks that come back: daily, weekdays, weekly, monthly or yearly.
+    "ALTER TABLE tasks ADD COLUMN repeats TEXT;",
 ];
 
 impl Db {

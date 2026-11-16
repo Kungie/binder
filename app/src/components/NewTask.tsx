@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../lib/store";
-import { type Assignee, type Priority, STATUSES, STATUS_LABEL, type Status } from "../lib/types";
+import { type Assignee, type Priority, type Repeat, STATUSES, STATUS_LABEL, type Status } from "../lib/types";
+import { REPEATS } from "../lib/repeat";
 import { Moon } from "./Moon";
 import { PRIORITY_SHORT, PriorityChip } from "./PriorityIcon";
 import { PriorityMenu } from "./PriorityMenu";
@@ -23,6 +24,7 @@ export function NewTask() {
   const [night, setNight] = useState(view.kind === "night");
   const [due, setDue] = useState("");
   const [dueTime, setDueTime] = useState("");
+  const [repeat, setRepeat] = useState<Repeat | "">("");
   const [error, setError] = useState<string | null>(null);
   const close = () => setCreatingTask(false);
 
@@ -39,6 +41,7 @@ export function NewTask() {
         night,
         due: due || undefined,
         due_time: due && dueTime ? dueTime : undefined,
+        repeat: repeat || undefined,
       });
       close();
     } catch (e) {
@@ -155,6 +158,14 @@ export function NewTask() {
             value={dueTime}
             onChange={(e) => setDueTime(e.target.value)}
           />
+          <select aria-label="Repeat" className={chip} value={repeat} onChange={(e) => setRepeat(e.target.value as Repeat | "")}>
+            <option value="">No repeat</option>
+            {REPEATS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
           <span className="flex h-7 items-center gap-2 rounded-control border border-line bg-card px-2 text-[12px] text-text-3">
             <Switch
               label="Night task"

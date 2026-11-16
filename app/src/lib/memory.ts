@@ -1,3 +1,4 @@
+import { nextDue } from "./repeat";
 import type { Api } from "./api";
 import type { GhAction, PullRow, IssueRow, Site, BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
@@ -457,12 +458,14 @@ export function memoryApi(
         closed: status === "done" || status === "canceled" ? now() : null,
         issue_number: null,
         issue_url: null,
+        repeat: t.repeat ?? null,
       };
       tasks.push(created);
       return { ...created };
     },
     async updateTask(id, p) {
       const t = task(id);
+      const finished = p.status === "done" && t.status !== "done";
       if (p.title !== undefined) {
         if (!p.title.trim()) throw new Error("A task needs a title.");
         t.title = p.title.trim();
@@ -494,7 +497,26 @@ export function memoryApi(
         t.night = p.night;
         if (p.night) t.assignee = "agent";
       }
+      if (p.clear_repeat) t.repeat = null;
+      else if (p.repeat) t.repeat = p.repeat;
       t.updated = Math.max(now(), t.updated + 1);
+      // A finished repeating task hands its rule to the next one.
+      const rule = finished ? t.repeat : null;
+      if (rule) {
+        t.repeat = null;
+        const { title, notes, priority, project_id, assignee, due_time, night } = t;
+        await this.createTask({
+          title,
+          notes,
+          priority,
+          project_id: project_id ?? undefined,
+          assignee,
+          due: nextDue(rule, t.due, localDay()),
+          due_time: due_time ?? undefined,
+          night,
+          repeat: rule,
+        });
+      }
       return { ...t };
     },
     async deleteTask(id) {

@@ -16,7 +16,7 @@ fn v4_database_migrates_to_v5() {
              ALTER TABLE tasks DROP COLUMN night;
              ALTER TABLE agent_runs DROP COLUMN queued;
              DROP TABLE events; DROP TABLE hidden_issues; DROP INDEX tasks_issue;
-             ALTER TABLE tasks DROP COLUMN issue_listed; ALTER TABLE tasks DROP COLUMN closed; ALTER TABLE tasks DROP COLUMN issue_repo;
+             ALTER TABLE tasks DROP COLUMN repeats; ALTER TABLE tasks DROP COLUMN issue_listed; ALTER TABLE tasks DROP COLUMN closed; ALTER TABLE tasks DROP COLUMN issue_repo;
              ALTER TABLE tasks DROP COLUMN issue_number; ALTER TABLE tasks DROP COLUMN issue_url;
              ALTER TABLE projects DROP COLUMN open_prs; ALTER TABLE projects DROP COLUMN ci; ALTER TABLE agent_runs DROP COLUMN night;
              DROP TABLE done_log;
@@ -29,7 +29,7 @@ fn v4_database_migrates_to_v5() {
     let db = Db::open(&path).unwrap();
     let conn = rusqlite::Connection::open(&path).unwrap();
     let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-    assert_eq!(version, 9);
+    assert_eq!(version, 10);
     assert_eq!(db.list_projects().unwrap()[0].name, "orbit");
     let (text, time): (String, Option<String>) = conn.query_row("SELECT text, time FROM pending_done", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
     assert_eq!((text.as_str(), time), ("old line", None));
