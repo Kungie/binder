@@ -1,30 +1,64 @@
-//! The Agents screen's two chats: tmux sessions on the home server, reached with the Mac's own `ssh -tt`.
+//! The Agents screen's chats: tmux sessions on the home server, reached with the Mac's own `ssh -tt`.
 //! Binder only builds the command lines here; the app runs them in a pseudo-terminal.
 
+use crate::agent::shell_dir;
 use crate::remote::quote;
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Agent {
-    Claude,
-    Qwen,
+/// One terminal on the Agents screen: Claude Code at home or in a project's folder, or Ollama with a model.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Pane {
+    Claude { project: Option<String>, dir: Option<String> },
+    Ollama { model: String },
 }
 
-impl Agent {
-    /// The tmux session on the server. Fixed, so every attach finds the same chat.
-    pub fn session(self) -> &'static str {
+/// The model Ollama runs until the owner picks another.
+pub const DEFAULT_MODEL: &str = "qwen3:4b";
+
+/// A project's name as part of a tmux session name: lowercase letters, digits and single dashes.
+pub fn slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let out = out.trim_matches('-');
+    if out.is_empty() { "project".into() } else { out.into() }
+}
+
+/// A model name Ollama could know: letters, digits and `._:/-`.
+pub fn valid_model(model: &str) -> bool {
+    !model.is_empty() && model.len() <= 200 && model.chars().all(|c| c.is_ascii_alphanumeric() || "._:/-".contains(c))
+}
+
+/// A tmux session of Binder's.
+pub fn valid_session(session: &str) -> bool {
+    session.strip_prefix("binder-").is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'))
+}
+
+impl Pane {
+    /// The tmux session on the server. Fixed per pane, so every attach finds the same chat.
+    pub fn session(&self) -> String {
         match self {
-            Agent::Claude => "binder-claude",
-            Agent::Qwen => "binder-qwen",
+            Pane::Claude { project: None, .. } => "binder-claude".into(),
+            Pane::Claude { project: Some(p), .. } => format!("binder-claude-{}", slug(p)),
+            Pane::Ollama { .. } => "binder-ollama".into(),
         }
     }
 
     /// What runs inside the session. A login shell stays after it exits, so the session survives.
-    fn program(self) -> &'static str {
+    fn program(&self) -> Result<String> {
         match self {
-            Agent::Claude => "claude; exec bash -l",
-            Agent::Qwen => "docker exec -it ollama ollama run qwen3:4b; exec bash -l",
+            Pane::Claude { dir: Some(d), .. } if !d.trim().is_empty() => Ok(format!("cd {} && claude; exec bash -l", shell_dir(d))),
+            Pane::Claude { .. } => Ok("claude; exec bash -l".into()),
+            Pane::Ollama { model } if valid_model(model) => Ok(format!("docker exec -it ollama ollama run {model}; exec bash -l")),
+            Pane::Ollama { .. } => Err(Error::Invalid("That isn't a model name.".into())),
         }
     }
 }
@@ -32,17 +66,17 @@ impl Agent {
 /// The command the server's login shell runs: create the session or attach to it, with scrollback set first
 /// (tmux applies `history-limit` only to new panes) and the session's own look set after. `-u` makes tmux send
 /// UTF-8 whatever locale the server gives a session from an app opened in Finder, which has no `LANG`.
-pub fn remote_command(agent: Agent) -> String {
-    let session = agent.session();
-    let inner = format!("bash -lc {}", quote(agent.program()));
-    format!(
+pub fn remote_command(pane: &Pane) -> Result<String> {
+    let session = pane.session();
+    let inner = format!("bash -lc {}", quote(&pane.program()?));
+    Ok(format!(
         "tmux -u start-server \\; set -g history-limit 10000 \\; new-session -A -s {session} {} \\; set-option -t {session} status off \\; set-option -t {session} mouse on \\; set-option -t {session} set-clipboard on",
         quote(&inner)
-    )
+    ))
 }
 
 /// `ssh`'s arguments: a forced terminal, keys only, keepalives, then the target as one argument.
-pub fn ssh_args(target: &str, agent: Agent) -> Vec<String> {
+pub fn ssh_args(target: &str, pane: &Pane) -> Result<Vec<String>> {
     let mut args: Vec<String> = [
         "-tt",
         "-o",
@@ -59,8 +93,95 @@ pub fn ssh_args(target: &str, agent: Agent) -> Vec<String> {
     .map(String::from)
     .collect();
     args.push(target.to_string());
-    args.push(remote_command(agent));
-    args
+    args.push(remote_command(pane)?);
+    Ok(args)
+}
+
+/// What a session is doing, as its screen shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum State {
+    Working,
+    /// Claude Code asks the owner something.
+    Waiting,
+    Idle,
+    /// The program ended and the session's shell is left.
+    Exited,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Session {
+    pub session: String,
+    pub state: State,
+    /// The screen's last line with text.
+    pub line: String,
+}
+
+const SHELLS: [&str; 4] = ["bash", "sh", "zsh", "fish"];
+
+/// A session's state from its foreground command and visible screen, and the screen's last line with text.
+pub fn classify(command: &str, screen: &str) -> (State, String) {
+    let line = screen.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("").to_string();
+    let state = if SHELLS.contains(&command) {
+        State::Exited
+    } else if screen.contains("Do you want") || screen.contains("\u{276f} 1.") {
+        State::Waiting
+    } else if screen.contains("esc to interrupt") {
+        State::Working
+    } else {
+        State::Idle
+    };
+    (state, line)
+}
+
+const MARK: &str = "--binder:pane-- ";
+
+/// Every `binder-*` session's foreground command and visible screen, in one call.
+pub fn sessions_script() -> &'static str {
+    "tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^binder-' | while read -r s; do\n\
+     printf '\\n--binder:pane-- %s %s\\n' \"$s\" \"$(tmux display-message -p -t \"=$s:\" '#{pane_current_command}')\"\n\
+     tmux capture-pane -p -t \"=$s:\"\n\
+     done\n"
+}
+
+pub fn parse_sessions(out: &str) -> Vec<Session> {
+    let mut found = vec![];
+    for part in out.split(MARK).skip(1) {
+        let (head, screen) = part.split_once('\n').unwrap_or((part, ""));
+        let mut words = head.split_whitespace();
+        let Some(session) = words.next().filter(|s| valid_session(s)) else { continue };
+        let (state, line) = classify(words.next().unwrap_or(""), screen);
+        found.push(Session { session: session.into(), state, line });
+    }
+    found
+}
+
+/// Sessions whose work just stopped: Working before, Waiting or Idle now. `seen` keeps each session's last state.
+pub fn alerts(seen: &mut HashMap<String, State>, now: &[Session]) -> Vec<(String, State)> {
+    let mut out = vec![];
+    for s in now {
+        let before = seen.insert(s.session.clone(), s.state);
+        if before == Some(State::Working) && matches!(s.state, State::Waiting | State::Idle) {
+            out.push((s.session.clone(), s.state));
+        }
+    }
+    seen.retain(|k, _| now.iter().any(|s| &s.session == k));
+    out
+}
+
+/// Ends one of Binder's tmux sessions on the server.
+pub fn close_script(session: &str) -> Result<String> {
+    if !valid_session(session) {
+        return Err(Error::Invalid("That isn't one of Binder's sessions.".into()));
+    }
+    Ok(format!("tmux kill-session -t {}", quote(&format!("={session}"))))
+}
+
+pub const MODELS_SCRIPT: &str = "docker exec ollama ollama list\n";
+
+/// The model names from `ollama list`, header left out.
+pub fn parse_models(out: &str) -> Vec<String> {
+    out.lines().skip(1).filter_map(|l| l.split_whitespace().next()).filter(|m| valid_model(m)).map(String::from).collect()
 }
 
 /// One line for a panel whose `ssh` ended: why, as far as the exit code and the last output tell.

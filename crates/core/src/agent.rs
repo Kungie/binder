@@ -125,6 +125,25 @@ pub fn list_runs(db: &Db, task_id: i64) -> Result<Vec<AgentRun>> {
     Ok(stmt.query_map([task_id], row_to_run)?.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// A run for the Agents screen's strip, with its task.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentRun {
+    pub run: AgentRun,
+    pub key: String,
+    pub title: String,
+}
+
+/// Runs that are live, waiting in the night queue, or ended in the last 24 hours, newest first.
+pub fn recent_runs(db: &Db, now: i64) -> Result<Vec<RecentRun>> {
+    let cols = COLUMNS.split(", ").map(|c| format!("r.{c}")).collect::<Vec<_>>().join(", ");
+    let mut stmt = db.conn.prepare(&format!(
+        "SELECT {cols}, t.key, t.title FROM agent_runs r JOIN tasks t ON t.id = r.task_id \
+         WHERE r.ended IS NULL OR r.ended > ?1 ORDER BY r.started DESC, r.id DESC LIMIT 20"
+    ))?;
+    let rows = stmt.query_map([now - 86_400], |r| Ok(RecentRun { run: row_to_run(r)?, key: r.get(10)?, title: r.get(11)? }))?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 pub(crate) fn set_status(db: &mut Db, task_id: i64, status: Status, now: i64) -> Result<()> {
     db.update_task(task_id, TaskPatch { status: Some(status), ..Default::default() }, now).map(|_| ())
 }

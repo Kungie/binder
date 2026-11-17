@@ -34,6 +34,8 @@ pub struct Config {
     pub site_addresses: std::collections::BTreeMap<String, String>,
     /// Which widgets Overview shows, and where.
     pub overview: OverviewLayout,
+    /// The model the Agents screen's Ollama session runs.
+    pub ollama_model: String,
 }
 
 /// Overview's two columns, each a list of widget ids from top to bottom, how wide the left one is in percent,
@@ -66,7 +68,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default() }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into() }
     }
 }
 

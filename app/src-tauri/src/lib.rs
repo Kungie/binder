@@ -1,3 +1,4 @@
+mod agents_watch;
 mod apps;
 mod background;
 mod commands;
@@ -90,6 +91,7 @@ pub fn run() {
             // these: two would start the same task twice and send every alert twice.
             if !cfg!(debug_assertions) {
                 background::start(app.handle());
+                agents_watch::start(app.handle());
             }
             Ok(())
         })
@@ -221,6 +223,13 @@ pub fn run() {
             commands::term_write,
             commands::term_resize,
             commands::term_reconnect,
+            commands::agent_sessions,
+            commands::agent_session_close,
+            commands::agent_viewing,
+            commands::ollama_models,
+            commands::set_ollama_model,
+            commands::claude_usage,
+            commands::recent_runs,
             commands::copy_text,
             commands::night_state,
             commands::night_setup,

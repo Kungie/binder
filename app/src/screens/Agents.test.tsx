@@ -43,12 +43,14 @@ async function openAgents(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("Agents", () => {
-  it("shows both agents with their sessions", async () => {
+  it("lists the sessions and shows Claude Code first", async () => {
     const { user } = setup();
     await openAgents(user);
+    const nav = await screen.findByRole("navigation", { name: "Sessions" });
+    expect(within(nav).getByRole("button", { name: /Claude Code.*Idle.*⌘1/ })).toHaveAttribute("aria-current", "true");
+    expect(within(nav).getByRole("button", { name: /Ollama.*⌘2/ })).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "Claude Code" })).toHaveTextContent("binder-claude");
-    expect(screen.getByRole("region", { name: "Qwen3 4B" })).toHaveTextContent("binder-qwen");
-    expect(await screen.findAllByText(/Connected to demo-dev@10.0.7.2/)).toHaveLength(2);
+    expect(await screen.findAllByText(/Connected to demo-dev@10.0.7.2/)).toHaveLength(1);
   });
 
   it("asks for a server when none is set", async () => {
@@ -86,22 +88,102 @@ describe("Agents", () => {
     expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
   });
 
-  it("cmd-2 focuses the right terminal", async () => {
+  it("cmd-2 opens and focuses Ollama", async () => {
     const { user } = setup();
     await openAgents(user);
-    const right = await screen.findByRole("region", { name: "Qwen3 4B" });
+    await screen.findByRole("region", { name: "Claude Code" });
     await user.keyboard("{Meta>}2{/Meta}");
+    const right = await screen.findByRole("region", { name: "Ollama · qwen3:4b" });
+    await within(right).findByText(/Connected to/);
     expect(within(right).getByLabelText("Terminal input")).toHaveFocus();
   });
 
-  it("the terminals stay connected across screens", async () => {
+  it("the terminals stay connected across screens and sessions", async () => {
     const { api, user } = setup();
     const open = vi.spyOn(api, "termOpen");
     await openAgents(user);
     await screen.findAllByText(/Connected to demo-dev/);
+    await user.click(screen.getByRole("button", { name: /Ollama/ }));
+    await user.click(screen.getByRole("button", { name: /Claude Code/ }));
     await user.click(screen.getByRole("button", { name: "Server" }));
     await openAgents(user);
-    expect(screen.getAllByText(/Connected to demo-dev/)).toHaveLength(2);
+    expect(screen.getAllByText(/Connected to demo-dev/, { ignore: "[hidden] *" }).length).toBeGreaterThan(0);
     expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows each session's state", async () => {
+    const { user } = setup({
+      sessions: [
+        { session: "binder-claude", state: "waiting", line: "Do you want to proceed?" },
+        { session: "binder-ollama", state: "working", line: "" },
+      ],
+    });
+    await openAgents(user);
+    const nav = await screen.findByRole("navigation", { name: "Sessions" });
+    expect(await within(nav).findByRole("button", { name: /Claude Code.*Waiting/ })).toHaveAttribute("title", "Do you want to proceed?");
+    expect(within(nav).getByRole("button", { name: /Ollama.*Working/ })).toBeInTheDocument();
+  });
+
+  it("starts a session in a project's folder and closes it", async () => {
+    const { api, user } = setup();
+    const p = (await api.listProjects()).find((x) => x.agent_dir)!;
+    const open = vi.spyOn(api, "termOpen");
+    await openAgents(user);
+    await user.selectOptions(await screen.findByRole("combobox", { name: "New session" }), String(p.id));
+    const region = await screen.findByRole("region", { name: `Claude Code · ${p.name}` });
+    expect(open).toHaveBeenLastCalledWith({ kind: "claude", project: p.name, dir: p.agent_dir }, expect.any(Number), expect.any(Number), expect.any(Function));
+    await user.click(within(region).getByRole("button", { name: "Close" }));
+    expect(api.closedSessions).toHaveLength(1);
+    expect(api.closedSessions[0]).toMatch(/^binder-claude-/);
+    expect(screen.queryByRole("region", { name: `Claude Code · ${p.name}` })).toBeNull();
+  });
+
+  it("a project session already on the server is listed", async () => {
+    const api0 = memoryApi(demoSeed());
+    const p = (await api0.listProjects()).find((x) => x.agent_dir)!;
+    const { user } = setup({ sessions: [{ session: `binder-claude-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`, state: "working", line: "" }] });
+    await openAgents(user);
+    expect(await screen.findByRole("button", { name: new RegExp(`${p.name}.*Working`) })).toBeInTheDocument();
+  });
+
+  it("picking a model saves it and reconnects Ollama", async () => {
+    const { api, user } = setup();
+    await openAgents(user);
+    await user.click(await screen.findByRole("button", { name: /Ollama/ }));
+    const region = await screen.findByRole("region", { name: "Ollama · qwen3:4b" });
+    await user.selectOptions(await within(region).findByRole("combobox", { name: "Model" }), "llama3.2:latest");
+    expect(await screen.findByRole("region", { name: "Ollama · llama3.2:latest" })).toBeInTheDocument();
+    expect((await api.getConfig()).ollama_model).toBe("llama3.2:latest");
+  });
+
+  it("another model name can be typed", async () => {
+    const { api, user } = setup();
+    await openAgents(user);
+    await user.click(await screen.findByRole("button", { name: /Ollama/ }));
+    const region = await screen.findByRole("region", { name: "Ollama · qwen3:4b" });
+    await user.selectOptions(await within(region).findByRole("combobox", { name: "Model" }), "Other…");
+    await user.type(within(region).getByRole("textbox", { name: "Model name" }), "gemma3:1b{Enter}");
+    expect(await screen.findByRole("region", { name: "Ollama · gemma3:1b" })).toBeInTheDocument();
+    expect((await api.getConfig()).ollama_model).toBe("gemma3:1b");
+  });
+
+  it("shows usage and server load", async () => {
+    const { user } = setup();
+    await openAgents(user);
+    expect(await screen.findByLabelText("Claude Code usage")).toHaveTextContent("Claude 5 h 182k · today 1.2M · 7 days 8.9M");
+    expect(await screen.findByLabelText("Server load")).toHaveTextContent(/CPU .* · RAM .*GB/);
+  });
+
+  it("lists a live run with Stop", async () => {
+    const { api, user } = setup();
+    const t = (await api.listTasks({ kind: "all" }, false))[0];
+    const run = await api.startRun(t.id, "~/code", "edits_only");
+    vi.spyOn(api, "pollRun").mockImplementation(async () => ({ ...run, tail: "Reading files\nRunning tests" }));
+    const stop = vi.spyOn(api, "stopRun");
+    await openAgents(user);
+    const strip = await screen.findByRole("region", { name: "Agent runs" });
+    expect(within(strip).getByText(t.title)).toBeInTheDocument();
+    await user.click(within(strip).getByRole("button", { name: "Stop" }));
+    expect(stop).toHaveBeenCalledWith(run.run);
   });
 });

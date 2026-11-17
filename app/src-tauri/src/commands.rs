@@ -8,7 +8,7 @@ use binder_core::printer::PrinterCommand;
 use crate::printer::{self, PrinterView};
 use binder_core::model::*;
 use binder_core::notes::{self, DoneItem, DoneLine};
-use binder_core::remote::SshRemote;
+use binder_core::remote::{Remote, SshRemote};
 use binder_core::repo::RepoStatus;
 use binder_core::server::ServerStatus;
 use binder_core::agent::{self, Access, AgentRun};
@@ -25,7 +25,7 @@ use tauri::{Emitter, Manager};
 use std::path::Path;
 use tauri::State;
 use tauri::ipc::{Channel, InvokeResponseBody};
-use binder_core::agents::{self, Agent};
+use binder_core::agents::{self, Pane};
 use tauri_plugin_opener::OpenerExt;
 
 type Res<T> = Result<T, String>;
@@ -1071,32 +1071,34 @@ pub async fn cloud_cancel(state: State<'_, AppState>, id: u64) -> Res<()> {
 
 #[derive(Clone, serde::Serialize)]
 struct TermExit {
-    agent: Agent,
+    session: String,
     message: String,
 }
 
-/// Starts the agent's `ssh` into its tmux session, or hands a running one's output to this window.
-fn term_start(app: tauri::AppHandle, state: &State<AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
+/// Starts the pane's `ssh` into its tmux session, or hands a running one's output to this window.
+fn term_start(app: tauri::AppHandle, state: &State<AppState>, pane: &Pane, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
     let target = server_target(state)?;
+    let session = pane.session();
+    let exit_session = session.clone();
     state.terminals.open(
-        agent,
+        &session,
         "ssh",
-        &agents::ssh_args(&target, agent),
+        &agents::ssh_args(&target, pane).map_err(text)?,
         cols,
         rows,
         move |bytes| {
             let _ = output.send(InvokeResponseBody::Raw(bytes));
         },
         move |message| {
-            let _ = app.emit("term-exit", TermExit { agent, message });
+            let _ = app.emit("term-exit", TermExit { session: exit_session, message });
         },
     )?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn term_open(app: tauri::AppHandle, state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
-    term_start(app, &state, agent, cols, rows, output)
+pub async fn term_open(app: tauri::AppHandle, state: State<'_, AppState>, pane: Pane, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
+    term_start(app, &state, &pane, cols, rows, output)
 }
 
 /// The terminals' copies, from a tmux selection or ⌘C.
@@ -1106,19 +1108,90 @@ pub async fn copy_text(text: String) -> Res<()> {
 }
 
 #[tauri::command]
-pub async fn term_write(state: State<'_, AppState>, agent: Agent, data: String) -> Res<()> {
-    state.terminals.write(agent, data.as_bytes())
+pub async fn term_write(state: State<'_, AppState>, session: String, data: String) -> Res<()> {
+    state.terminals.write(&session, data.as_bytes())
 }
 
 #[tauri::command]
-pub async fn term_resize(state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16) -> Res<()> {
-    state.terminals.resize(agent, cols, rows)
+pub async fn term_resize(state: State<'_, AppState>, session: String, cols: u16, rows: u16) -> Res<()> {
+    state.terminals.resize(&session, cols, rows)
 }
 
 #[tauri::command]
-pub async fn term_reconnect(app: tauri::AppHandle, state: State<'_, AppState>, agent: Agent, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
-    state.terminals.close(agent);
-    term_start(app, &state, agent, cols, rows, output)
+pub async fn term_reconnect(app: tauri::AppHandle, state: State<'_, AppState>, pane: Pane, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
+    state.terminals.close(&pane.session());
+    term_start(app, &state, &pane, cols, rows, output)
+}
+
+/// Every Binder tmux session on the server and what it's doing.
+#[tauri::command]
+pub async fn agent_sessions(state: State<'_, AppState>) -> Res<Vec<agents::Session>> {
+    let r = remote(&state)?;
+    Ok(agents::parse_sessions(&r.run(agents::sessions_script(), None).map_err(text)?))
+}
+
+/// Ends a session on the server, and its terminal here.
+#[tauri::command]
+pub async fn agent_session_close(state: State<'_, AppState>, session: String) -> Res<()> {
+    let script = agents::close_script(&session).map_err(text)?;
+    state.terminals.close(&session);
+    remote(&state)?.run(&script, None).map_err(text)?;
+    Ok(())
+}
+
+/// The session the Agents screen shows, or none: its alerts stay quiet while Binder is in front.
+#[tauri::command]
+pub async fn agent_viewing(session: Option<String>) -> Res<()> {
+    crate::agents_watch::viewing(session);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn ollama_models(state: State<'_, AppState>) -> Res<Vec<String>> {
+    Ok(agents::parse_models(&remote(&state)?.run(agents::MODELS_SCRIPT, None).map_err(text)?))
+}
+
+/// Saves the model and ends the Ollama session, so the next attach runs it.
+#[tauri::command]
+pub async fn set_ollama_model(state: State<'_, AppState>, model: String) -> Res<()> {
+    let model = model.trim().to_string();
+    if !agents::valid_model(&model) {
+        return Err("That isn't a model name.".into());
+    }
+    {
+        let mut c = state.config.lock().unwrap();
+        c.ollama_model = model;
+        c.save(&state.config_path).map_err(text)?;
+    }
+    let session = Pane::Ollama { model: String::new() }.session();
+    state.terminals.close(&session);
+    remote(&state)?.run(&agents::close_script(&session).map_err(text)?, None).map_err(text)?;
+    Ok(())
+}
+
+/// Claude Code's tokens on the server and on this Mac together. A server that can't be read counts nothing.
+#[tauri::command]
+pub async fn claude_usage(state: State<'_, AppState>) -> Res<binder_core::usage::Usage> {
+    use binder_core::usage;
+    let now = now();
+    let midnight = chrono::Local::now().date_naive().and_hms_opt(0, 0, 0).and_then(|d| d.and_local_timezone(chrono::Local).earliest()).map_or(now - 86_400, |d| d.timestamp());
+    static MAC: std::sync::Mutex<Option<usage::Cache>> = std::sync::Mutex::new(None);
+    let local = {
+        let root = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".claude/projects");
+        MAC.lock().unwrap().get_or_insert_with(usage::Cache::default).read(&root)
+    };
+    let mut total = usage::summary(&local, now, midnight);
+    if let Ok(r) = remote(&state) {
+        if let Ok(out) = r.run(usage::SCRIPT, None) {
+            total = total + usage::summary(&usage::parse(&out), now, midnight);
+        }
+    }
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn recent_runs(state: State<'_, AppState>) -> Res<Vec<agent::RecentRun>> {
+    agent::recent_runs(&state.db.lock().unwrap(), now()).map_err(text)
 }
 
 /// The SD card's mount point inside Cloud on the server.

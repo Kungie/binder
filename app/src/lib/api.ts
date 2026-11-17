@@ -2,7 +2,10 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime, PrintRecord,
   Access,
-  Agent,
+  Pane,
+  AgentSession,
+  ClaudeUsage,
+  RecentRun,
   NewPrinter,
   PrinterCommand,
   PrinterView,
@@ -183,16 +186,29 @@ export interface Api {
   onDragOver(cb: (p: { x: number; y: number } | null) => void): () => void;
   /** Starts a native drag of these Mac paths, out to Finder or back onto the window. */
   startDrag(paths: string[]): Promise<void>;
-  /** Connects the agent's terminal, or hands a running one's output to `onData`. */
-  termOpen(agent: Agent, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
-  termWrite(agent: Agent, data: string): Promise<void>;
-  termResize(agent: Agent, cols: number, rows: number): Promise<void>;
+  /** Connects the pane's terminal, or hands a running one's output to `onData`. */
+  termOpen(pane: Pane, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
+  termWrite(session: string, data: string): Promise<void>;
+  termResize(session: string, cols: number, rows: number): Promise<void>;
   /** Ends the local ssh and connects again; the tmux session on the server stays. */
-  termReconnect(agent: Agent, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
+  termReconnect(pane: Pane, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
+  /** Binder's tmux sessions on the server and what each is doing. */
+  agentSessions(): Promise<AgentSession[]>;
+  /** The watcher's latest read of the sessions. */
+  onAgentSessions(cb: (s: AgentSession[]) => void): () => void;
+  /** Ends a session on the server and its terminal here. */
+  closeAgentSession(session: string): Promise<void>;
+  /** The session on screen, or null when the Agents screen is hidden. */
+  agentViewing(session: string | null): Promise<void>;
+  ollamaModels(): Promise<string[]>;
+  /** Saves the model and ends the Ollama session, so the next connect runs it. */
+  setOllamaModel(model: string): Promise<void>;
+  claudeUsage(): Promise<ClaudeUsage>;
+  recentRuns(): Promise<RecentRun[]>;
   /** Puts text on the Mac clipboard from the app, which works without a click. */
   copyText(text: string): Promise<void>;
   /** A terminal's ssh ended, with one line saying why. */
-  onTermExit(cb: (agent: Agent, message: string) => void): () => void;
+  onTermExit(cb: (session: string, message: string) => void): () => void;
   appInfo(): Promise<AppInfo>;
   /** The newer release, or null when Binder is up to date. */
   checkUpdate(): Promise<UpdateInfo | null>;
@@ -372,10 +388,18 @@ export const tauriApi: Api = {
     const { startDrag } = await import("@crabnebula/tauri-plugin-drag");
     await startDrag({ item: paths, icon: dragIcon(paths.length) });
   },
-  termOpen: (agent, cols, rows, onData) => call("term_open", { agent, cols, rows, output: bytesChannel(onData) }),
-  termWrite: (agent, data) => call("term_write", { agent, data }),
-  termResize: (agent, cols, rows) => call("term_resize", { agent, cols, rows }),
-  termReconnect: (agent, cols, rows, onData) => call("term_reconnect", { agent, cols, rows, output: bytesChannel(onData) }),
+  termOpen: (pane, cols, rows, onData) => call("term_open", { pane, cols, rows, output: bytesChannel(onData) }),
+  termWrite: (session, data) => call("term_write", { session, data }),
+  termResize: (session, cols, rows) => call("term_resize", { session, cols, rows }),
+  termReconnect: (pane, cols, rows, onData) => call("term_reconnect", { pane, cols, rows, output: bytesChannel(onData) }),
+  agentSessions: () => call("agent_sessions"),
+  onAgentSessions: (cb) => subscribe<AgentSession[]>("agents://sessions", cb),
+  closeAgentSession: (session) => call("agent_session_close", { session }),
+  agentViewing: (session) => call("agent_viewing", { session }),
+  ollamaModels: () => call("ollama_models"),
+  setOllamaModel: (model) => call("set_ollama_model", { model }),
+  claudeUsage: () => call("claude_usage"),
+  recentRuns: () => call("recent_runs"),
   copyText: (text) => call("copy_text", { text }),
   appInfo: () => call("app_info"),
   nightState: () => call("night_state"),
@@ -393,7 +417,7 @@ export const tauriApi: Api = {
     progress.onmessage = onProgress;
     return call("update_install", { progress });
   },
-  onTermExit: (cb) => subscribe<{ agent: Agent; message: string }>("term-exit", (e) => cb(e.agent, e.message)),
+  onTermExit: (cb) => subscribe<{ session: string; message: string }>("term-exit", (e) => cb(e.session, e.message)),
 };
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

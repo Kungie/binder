@@ -1,7 +1,7 @@
-//! The Agents screen's terminals: one pseudo-terminal per agent running the Mac's own `ssh -tt` into a tmux
+//! The Agents screen's terminals: one pseudo-terminal per tmux session running the Mac's own `ssh -tt` into a tmux
 //! session on the server. Bytes pass through untouched; the window's xterm.js decodes them.
 
-use binder_core::agents::{Agent, exit_message};
+use binder_core::agents::exit_message;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -28,7 +28,7 @@ struct Running {
 
 #[derive(Default)]
 pub struct Terminals {
-    running: Arc<Mutex<HashMap<Agent, Running>>>,
+    running: Arc<Mutex<HashMap<String, Running>>>,
     generation: AtomicU64,
 }
 
@@ -41,7 +41,7 @@ impl Terminals {
     /// callback replace the old ones (a reloaded window takes over the same child). True when a child started.
     pub fn open(
         &self,
-        agent: Agent,
+        agent: &str,
         program: &str,
         args: &[String],
         cols: u16,
@@ -50,7 +50,7 @@ impl Terminals {
         on_exit: impl FnOnce(String) + Send + 'static,
     ) -> Result<bool, String> {
         let mut running = self.running.lock().unwrap();
-        if let Some(r) = running.get(&agent) {
+        if let Some(r) = running.get(agent) {
             *r.sink.lock().unwrap() = Box::new(on_bytes);
             *r.on_exit.lock().unwrap() = Some(Box::new(on_exit));
             let _ = r.master.resize(size(cols, rows));
@@ -80,7 +80,7 @@ impl Terminals {
             std::thread::spawn(move || read_loop(reader, sink, tail, done_tx));
         }
         {
-            let (running, exit, tail) = (self.running.clone(), exit.clone(), tail.clone());
+            let (running, exit, tail, agent) = (self.running.clone(), exit.clone(), tail.clone(), agent.to_string());
             std::thread::spawn(move || {
                 let code = match child.wait() {
                     Ok(s) if s.signal().is_none() => Some(s.exit_code() as i32),
@@ -103,30 +103,30 @@ impl Terminals {
         }
 
         running.insert(
-            agent,
+            agent.to_string(),
             Running { generation, master: pair.master, writer: Arc::new(Mutex::new(writer)), killer, sink, on_exit: exit, pid },
         );
         Ok(true)
     }
 
     /// Typed keys and pasted text, as bytes. The map is unlocked before writing, so a full terminal
-    /// can't stall the other agent.
-    pub fn write(&self, agent: Agent, data: &[u8]) -> Result<(), String> {
-        let writer = self.running.lock().unwrap().get(&agent).map(|r| r.writer.clone()).ok_or("Not connected.")?;
+    /// can't stall the others.
+    pub fn write(&self, agent: &str, data: &[u8]) -> Result<(), String> {
+        let writer = self.running.lock().unwrap().get(agent).map(|r| r.writer.clone()).ok_or("Not connected.")?;
         let mut w = writer.lock().unwrap();
         w.write_all(data).and_then(|_| w.flush()).map_err(|e| e.to_string())
     }
 
-    pub fn resize(&self, agent: Agent, cols: u16, rows: u16) -> Result<(), String> {
-        match self.running.lock().unwrap().get(&agent) {
+    pub fn resize(&self, agent: &str, cols: u16, rows: u16) -> Result<(), String> {
+        match self.running.lock().unwrap().get(agent) {
             Some(r) => r.master.resize(size(cols, rows)).map_err(|e| e.to_string()),
             None => Ok(()),
         }
     }
 
     /// Ends the local `ssh`; the tmux session on the server stays. No exit message: the caller asked for it.
-    pub fn close(&self, agent: Agent) {
-        let r = self.running.lock().unwrap().remove(&agent);
+    pub fn close(&self, agent: &str) {
+        let r = self.running.lock().unwrap().remove(agent);
         if let Some(mut r) = r {
             r.on_exit.lock().unwrap().take();
             let _ = r.killer.kill();
@@ -134,14 +134,15 @@ impl Terminals {
     }
 
     pub fn close_all(&self) {
-        for agent in [Agent::Claude, Agent::Qwen] {
-            self.close(agent);
+        let all: Vec<String> = self.running.lock().unwrap().keys().cloned().collect();
+        for agent in all {
+            self.close(&agent);
         }
     }
 
     #[cfg(test)]
-    fn pid(&self, agent: Agent) -> Option<u32> {
-        self.running.lock().unwrap().get(&agent).and_then(|r| r.pid)
+    fn pid(&self, agent: &str) -> Option<u32> {
+        self.running.lock().unwrap().get(agent).and_then(|r| r.pid)
     }
 }
 
@@ -189,7 +190,7 @@ fn read_loop(mut reader: Box<dyn Read + Send>, sink: Sink, tail: Arc<Mutex<Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use binder_core::agents::{Agent, exit_message};
+    use binder_core::agents::exit_message;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
@@ -213,7 +214,7 @@ mod tests {
     fn bytes_pass_through_unchanged() {
         let t = Terminals::default();
         let (tx, rx) = mpsc::channel();
-        t.open(Agent::Claude, "/bin/sh", &sh("printf 'g\\303'; sleep 0.2; printf '\\274l'"), 80, 24, move |b| tx.send(b).unwrap(), |_| {}).unwrap();
+        t.open("binder-claude", "/bin/sh", &sh("printf 'g\\303'; sleep 0.2; printf '\\274l'"), 80, 24, move |b| tx.send(b).unwrap(), |_| {}).unwrap();
         let out = collect(&rx, |o| o.ends_with(b"l"));
         assert_eq!(out, "gül".as_bytes());
     }
@@ -222,9 +223,9 @@ mod tests {
     fn write_reaches_the_child() {
         let t = Terminals::default();
         let (tx, rx) = mpsc::channel();
-        t.open(Agent::Qwen, "/bin/sh", &sh("stty -echo; read x; printf 'got:%s' \"$x\""), 80, 24, move |b| tx.send(b).unwrap(), |_| {}).unwrap();
+        t.open("binder-ollama", "/bin/sh", &sh("stty -echo; read x; printf 'got:%s' \"$x\""), 80, 24, move |b| tx.send(b).unwrap(), |_| {}).unwrap();
         std::thread::sleep(Duration::from_millis(200));
-        t.write(Agent::Qwen, b"hi\r").unwrap();
+        t.write("binder-ollama", b"hi\r").unwrap();
         let out = collect(&rx, |o| o.ends_with(b"got:hi"));
         assert!(out.ends_with(b"got:hi"), "{}", String::from_utf8_lossy(&out));
     }
@@ -232,25 +233,25 @@ mod tests {
     #[test]
     fn open_twice_reuses() {
         let t = Terminals::default();
-        assert_eq!(t.open(Agent::Claude, "/bin/sh", &sh("sleep 30"), 80, 24, |_| {}, |_| {}), Ok(true));
-        let pid = t.pid(Agent::Claude).unwrap();
-        assert_eq!(t.open(Agent::Claude, "/bin/sh", &sh("sleep 30"), 80, 24, |_| {}, |_| {}), Ok(false));
-        assert_eq!(t.pid(Agent::Claude), Some(pid));
-        assert_eq!(t.resize(Agent::Qwen, 100, 30), Ok(()));
+        assert_eq!(t.open("binder-claude", "/bin/sh", &sh("sleep 30"), 80, 24, |_| {}, |_| {}), Ok(true));
+        let pid = t.pid("binder-claude").unwrap();
+        assert_eq!(t.open("binder-claude", "/bin/sh", &sh("sleep 30"), 80, 24, |_| {}, |_| {}), Ok(false));
+        assert_eq!(t.pid("binder-claude"), Some(pid));
+        assert_eq!(t.resize("binder-ollama", 100, 30), Ok(()));
     }
 
     #[test]
     fn exit_reports_message() {
         let t = Terminals::default();
         let (tx, rx) = mpsc::channel();
-        t.open(Agent::Claude, "/bin/sh", &sh("exit 127"), 80, 24, |_| {}, move |m| tx.send(m).unwrap()).unwrap();
+        t.open("binder-claude", "/bin/sh", &sh("exit 127"), 80, 24, |_| {}, move |m| tx.send(m).unwrap()).unwrap();
         let m = rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(m, exit_message(Some(127), ""));
         let end = Instant::now() + Duration::from_secs(2);
-        while t.pid(Agent::Claude).is_some() && Instant::now() < end {
+        while t.pid("binder-claude").is_some() && Instant::now() < end {
             std::thread::sleep(Duration::from_millis(20));
         }
-        assert_eq!(t.pid(Agent::Claude), None);
+        assert_eq!(t.pid("binder-claude"), None);
     }
 
     #[test]
@@ -274,8 +275,8 @@ mod tests {
     #[test]
     fn drop_kills_children() {
         let t = Terminals::default();
-        t.open(Agent::Claude, "/bin/sh", &sh("sleep 30"), 80, 24, |_| {}, |_| {}).unwrap();
-        let pid = t.pid(Agent::Claude).unwrap() as i32;
+        t.open("binder-claude", "/bin/sh", &sh("sleep 30"), 80, 24, |_| {}, |_| {}).unwrap();
+        let pid = t.pid("binder-claude").unwrap() as i32;
         drop(t);
         let end = Instant::now() + Duration::from_secs(2);
         while unsafe { libc::kill(pid, 0) } == 0 && Instant::now() < end {

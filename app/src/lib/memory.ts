@@ -1,6 +1,7 @@
+import { paneSession } from "./agents";
 import { nextDue } from "./repeat";
 import type { Api } from "./api";
-import type { GhAction, PullRow, IssueRow, Site, BriefItem, Agent, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -33,6 +34,8 @@ export interface MemoryOptions {
   offline?: string[];
   /** When set, the agents' terminals fail to connect with this line. */
   termFail?: string;
+  /** The tmux sessions on the server; Claude Code and Ollama, idle, when unset. */
+  sessions?: AgentSession[];
   /** The newer release the update check finds. Defaults to none. */
   update?: UpdateInfo | null;
   /** Makes the update check or the install fail. */
@@ -69,6 +72,8 @@ export function memoryApi(
   setServerReachable(v: boolean): void;
   printerCommands: [string, PrinterCommand][];
   cameraStops: string[];
+  /** Sessions ended from the Agents screen, in order. */
+  closedSessions: string[];
   /** Containers restarted, in order. */
   restarted: string[];
   /** Links opened in the browser. */
@@ -144,7 +149,12 @@ export function memoryApi(
   };
   const offline = options.offline ?? ["10.0.7.30"];
   let reachable = true;
-  const terms = new Map<Agent, (bytes: Uint8Array) => void>();
+  const terms = new Map<string, (bytes: Uint8Array) => void>();
+  const sessions: AgentSession[] = options.sessions ?? [
+    { session: "binder-claude", state: "idle", line: "? for shortcuts" },
+    { session: "binder-ollama", state: "idle", line: ">>> Send a message" },
+  ];
+  const closedSessions: string[] = [];
   const encoder = new TextEncoder();
   const copied: string[] = [];
   let installed = false;
@@ -161,13 +171,15 @@ export function memoryApi(
     { path: "/home/demo-dev", bytes: 150_000_000_000 },
     { path: "/srv/cloud/SD/photos", bytes: 70_000_000_000 },
   ];
-  async function openTerm(agent: Agent, onData: (bytes: Uint8Array) => void) {
+  async function openTerm(pane: Pane, onData: (bytes: Uint8Array) => void) {
     if (!config.server) throw new Error("No server set.");
     if (options.termFail) throw new Error(options.termFail);
+    const agent = paneSession(pane);
+    if (!sessions.some((s) => s.session === agent)) sessions.push({ session: agent, state: "idle", line: "" });
     terms.set(agent, onData);
     onData(encoder.encode("Connected to demo-dev@10.0.7.2 (demo)\r\n"));
   }
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} } };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} }, ollama_model: "qwen3:4b" };
   let lastDone: number | null = seed.lastDone ?? null;
   let briefDismissed = false;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
@@ -275,6 +287,34 @@ export function memoryApi(
     async copyText(text) {
       copied.push(text);
     },
+    async agentSessions() {
+      if (!config.server) throw new Error("No server set.");
+      return sessions.map((s) => ({ ...s }));
+    },
+    onAgentSessions() {
+      return () => {};
+    },
+    async closeAgentSession(session) {
+      closedSessions.push(session);
+      terms.delete(session);
+      const i = sessions.findIndex((s) => s.session === session);
+      if (i >= 0) sessions.splice(i, 1);
+    },
+    async agentViewing() {},
+    async ollamaModels() {
+      return ["qwen3:4b", "llama3.2:latest"];
+    },
+    async setOllamaModel(model) {
+      if (!/^[A-Za-z0-9._:/-]+$/.test(model)) throw new Error("That isn't a model name.");
+      config = { ...config, ollama_model: model };
+      terms.delete("binder-ollama");
+    },
+    async claudeUsage() {
+      return { five_hours: 182_000, today: 1_240_000, week: 8_900_000, sessions_today: 3 };
+    },
+    async recentRuns(): Promise<RecentRun[]> {
+      return runs.filter((r) => r.ended === null || r.ended > now() - 86_400).map((r) => ({ run: { ...r }, key: task(r.task_id).key, title: task(r.task_id).title }));
+    },
     onTermExit() {
       return () => {};
     },
@@ -341,6 +381,7 @@ export function memoryApi(
     done,
     printerCommands,
     cameraStops,
+    closedSessions,
     restarted,
     openedLinks,
     ghActions,

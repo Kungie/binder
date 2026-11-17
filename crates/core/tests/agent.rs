@@ -192,3 +192,16 @@ fn a_read_only_run_can_neither_edit_nor_run_commands() {
     assert_eq!(run.access, Access::ReadOnly);
     assert_eq!(list_runs(&db.lock().unwrap(), t.id).unwrap()[0].access, Access::ReadOnly);
 }
+
+#[test]
+fn recent_runs_are_live_or_from_the_last_day() {
+    let (db, t, run, r) = started(vec![]);
+    let live = recent_runs(&db.lock().unwrap(), 1_700_000_000 + 9 * 86_400).unwrap();
+    assert_eq!(live.len(), 1);
+    assert_eq!(live[0].run, run);
+    assert_eq!(live[0].title, "Prune old images");
+    assert_eq!(live[0].key, t.key);
+    stop_run(&db, &r, &run.run, 1_700_000_010).unwrap();
+    assert_eq!(recent_runs(&db.lock().unwrap(), 1_700_000_000 + 3600).unwrap().len(), 1);
+    assert!(recent_runs(&db.lock().unwrap(), 1_700_000_000 + 2 * 86_400).unwrap().is_empty());
+}

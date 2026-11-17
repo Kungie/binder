@@ -272,6 +272,8 @@ export interface Config {
   site_addresses: Record<string, string>;
   /** Overview's two columns, widget ids from top to bottom, with their sizes. */
   overview: OverviewLayout;
+  /** The model the Agents screen's Ollama session runs. */
+  ollama_model?: string;
 }
 
 export interface OverviewLayout {
@@ -545,8 +547,34 @@ export interface Transfer {
   error: string | null;
 }
 
-/** The Agents screen's two chats, each a tmux session on the home server. */
-export type Agent = "claude" | "qwen";
+/** One terminal on the Agents screen: Claude Code at home or in a project's folder, or Ollama with a model. */
+export type Pane = { kind: "claude"; project: string | null; dir: string | null } | { kind: "ollama"; model: string };
+
+/** What a session is doing, as its screen shows it. */
+export type PaneState = "working" | "waiting" | "idle" | "exited";
+
+/** A Binder tmux session on the server. */
+export interface AgentSession {
+  session: string;
+  state: PaneState;
+  /** The screen's last line with text. */
+  line: string;
+}
+
+/** Claude Code's tokens on the server and this Mac: input, output and cache writes. */
+export interface ClaudeUsage {
+  five_hours: number;
+  today: number;
+  week: number;
+  sessions_today: number;
+}
+
+/** A run for the Agents screen's strip, with its task. */
+export interface RecentRun {
+  run: AgentRun;
+  key: string;
+  title: string;
+}
 
 /** The running app, as the updater sees it. */
 export interface AppInfo {

@@ -1,17 +1,20 @@
-import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../lib/store";
-import type { Agent } from "../lib/types";
+import { paneSession } from "../lib/agents";
+import type { Pane } from "../lib/types";
 import { Dot } from "./Metric";
 import { Panel } from "./Panel";
 import { Button } from "./ui";
 import { XtermView } from "./XtermView";
 
-/** ⌘ keys that still reach Binder while a terminal has focus: the palette, the panes, the interface size. */
-const PASS = new Set(["k", "1", "2", "=", "+", "-", "0"]);
+/** ⌘ keys that still reach Binder while a terminal has focus: the palette, the sessions, the interface size. */
+const PASS = new Set(["k", "1", "2", "3", "4", "5", "6", "7", "8", "9", "=", "+", "-", "0"]);
 
-/** One agent's terminal: its tmux session on the server, over ssh. Connects once, on mount. */
-export function Terminal({ agent, name, session, registerFocus }: { agent: Agent; name: string; session: string; registerFocus(focus: () => void): void }) {
+/** One pane's terminal: its tmux session on the server, over ssh. Connects once, on mount. */
+export function Terminal({ pane, name, registerFocus, actions }: { pane: Pane; name: string; registerFocus(focus: () => void): void; actions?: ReactNode }) {
   const { api } = useStore();
+  const session = paneSession(pane);
+  const agent = session;
   const [connected, setConnected] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const size = useRef({ cols: 80, rows: 24 });
@@ -26,7 +29,7 @@ export function Terminal({ agent, name, session, registerFocus }: { agent: Agent
   const connect = useCallback(
     (run: typeof api.termOpen) => {
       setMessage(null);
-      run(agent, size.current.cols, size.current.rows, sink).then(
+      run(pane, size.current.cols, size.current.rows, sink).then(
         () => setConnected(true),
         (e: unknown) => {
           setConnected(false);
@@ -34,7 +37,9 @@ export function Terminal({ agent, name, session, registerFocus }: { agent: Agent
         },
       );
     },
-    [agent, sink],
+    // The pane is fixed for a mounted terminal; a new model remounts it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, sink],
   );
 
   useEffect(
@@ -74,7 +79,7 @@ export function Terminal({ agent, name, session, registerFocus }: { agent: Agent
 
   const onCopy = useCallback((text: string) => void api.copyText(text).catch(() => {}), [api]);
 
-  // Every key goes to the terminal; only ⌘K and ⌘1/⌘2 travel on to Binder.
+  // Every key goes to the terminal; only ⌘K, ⌘1 to ⌘9 and the size keys travel on to Binder.
   const keep = (e: KeyboardEvent) => {
     if (!(e.metaKey && PASS.has(e.key.toLowerCase()))) e.stopPropagation();
   };
@@ -91,12 +96,14 @@ export function Terminal({ agent, name, session, registerFocus }: { agent: Agent
         </span>
       }
       action={
-        !connected &&
-        message !== null && (
-          <Button variant="ghost" onClick={() => connect(api.termReconnect)}>
-            Reconnect
-          </Button>
-        )
+        <span className="flex items-center gap-2">
+          {actions}
+          {!connected && message !== null && (
+            <Button variant="ghost" onClick={() => connect(api.termReconnect)}>
+              Reconnect
+            </Button>
+          )}
+        </span>
       }
     >
       <div className="flex min-h-0 flex-1 flex-col border-t border-line" onKeyDown={keep} onMouseDown={() => focus.current()}>
