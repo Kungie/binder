@@ -24,6 +24,56 @@ pub struct PrinterView {
     pub state: PrinterState,
     pub online: bool,
     pub error: Option<String>,
+    /// The printer's health and error messages now on, in Bambu's own words.
+    pub problems: Vec<Problem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Problem {
+    pub code: String,
+    pub text: String,
+}
+
+/// Bambu's messages for its codes, read from `hms.json` in the data folder and fetched again weekly.
+static CATALOG: Mutex<Option<printer::hms::Catalog>> = Mutex::new(None);
+const CATALOG_URL: &str = "https://e.bambulab.com/query.php?lang=en";
+
+/// Loads the saved list, and fetches a new one when it's missing or a week old.
+pub fn load_catalog(dir: std::path::PathBuf) {
+    std::thread::spawn(move || {
+        let path = dir.join("hms.json");
+        let read = |p: &std::path::Path| std::fs::read_to_string(p).ok().and_then(|t| printer::hms::Catalog::parse(&t));
+        if let Some(c) = read(&path) {
+            *CATALOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(c);
+        }
+        let old = std::fs::metadata(&path).and_then(|m| m.modified()).map(|t| t.elapsed().unwrap_or_default() > Duration::from_secs(7 * 86_400)).unwrap_or(true);
+        if !old {
+            return;
+        }
+        let tmp = dir.join("hms.json.part");
+        let ok = std::process::Command::new("/usr/bin/curl")
+            .args(["-sS", "--max-time", "30", "--proto", "=https", "-o"])
+            .arg(&tmp)
+            .arg(CATALOG_URL)
+            .status()
+            .is_ok_and(|s| s.success());
+        if let Some(c) = ok.then(|| read(&tmp)).flatten().filter(|c| !c.is_empty()) {
+            let _ = std::fs::rename(&tmp, &path);
+            *CATALOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(c);
+        } else {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    });
+}
+
+fn problems(state: &PrinterState) -> Vec<Problem> {
+    let catalog = CATALOG.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default();
+    state
+        .print_error
+        .iter()
+        .chain(state.hms.iter())
+        .map(|code| Problem { code: code.clone(), text: catalog.describe(code).unwrap_or_default() })
+        .collect()
 }
 
 struct Live {
@@ -212,11 +262,17 @@ fn report(app: &AppHandle, serial: &str, change: impl FnOnce(&mut PrinterView)) 
         let Some(live) = map.get_mut(serial) else { return };
         let before = live.view.clone();
         change(&mut live.view);
+        live.view.problems = problems(&live.view.state);
         let v = &live.view;
         if *v == before {
             return;
         }
-        let big = v.online != before.online || v.error != before.error || v.state.gcode_state != before.state.gcode_state;
+        let big = v.online != before.online
+            || v.error != before.error
+            || v.state.gcode_state != before.state.gcode_state
+            || v.problems != before.problems
+            || v.state.light_on != before.state.light_on
+            || v.state.fan_percent != before.state.fan_percent;
         let mut sent = SENT.lock().unwrap_or_else(|e| e.into_inner());
         let sent = sent.get_or_insert_with(Default::default);
         let now = std::time::Instant::now();
@@ -243,7 +299,7 @@ pub fn start(app: &AppHandle, config: PrinterConfig) {
     let serial = config.serial.clone();
     let state = app.state::<AppState>();
     state.printers.stop(&serial);
-    let view = PrinterView { config: config.clone(), state: PrinterState::default(), online: false, error: None };
+    let view = PrinterView { config: config.clone(), state: PrinterState::default(), online: false, error: None, problems: vec![] };
     state.printers.0.lock().unwrap().insert(serial.clone(), Live { view, client: None, task: None, seq: 0 });
     let task = tauri::async_runtime::spawn(run(app.clone(), config));
     if let Some(live) = state.printers.0.lock().unwrap().get_mut(&serial) {
@@ -275,6 +331,7 @@ async fn run(app: AppHandle, config: PrinterConfig) {
 
     let mut failures = 0u32;
     let mut prints = printer::PrintWatch::default();
+    let mut told: Vec<String> = vec![];
     loop {
         match events.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
@@ -289,13 +346,21 @@ async fn run(app: AppHandle, config: PrinterConfig) {
             Ok(Event::Incoming(Packet::Publish(p))) => {
                 if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&p.payload) {
                     let mut outcome = None;
+                    let mut codes = vec![];
                     report(&app, &serial, |v| {
                         v.state.merge(&json);
                         v.online = true;
                         outcome = prints.seen(&v.state, chrono::Utc::now().timestamp());
+                        codes = v.state.print_error.iter().chain(v.state.hms.iter()).cloned().collect();
                     });
                     if let Some(o) = outcome {
                         print_ended(&app, &o);
+                    }
+                    // Each message once while it stays on; one that clears and comes back tells again.
+                    let new: Vec<String> = codes.iter().filter(|c| !told.contains(*c)).cloned().collect();
+                    told = codes;
+                    if !new.is_empty() {
+                        problems_appeared(&app, &config.name, &new);
                     }
                 }
             }
@@ -322,11 +387,78 @@ fn print_ended(app: &AppHandle, o: &printer::PrintOutcome) {
     use tauri_plugin_notification::NotificationExt;
     let state = app.state::<AppState>();
     let kind = if matches!(o, printer::PrintOutcome::Done { .. }) { EventKind::PrintDone } else { EventKind::PrintFailed };
-    let _ = state.db.lock().unwrap().log_event(chrono::Utc::now().timestamp(), kind, o.job(), &o.body());
+    let now = chrono::Utc::now().timestamp();
+    {
+        let mut db = state.db.lock().unwrap();
+        let _ = db.log_event(now, kind, o.job(), &o.body());
+        let _ = printer::history::record(&mut db, now, o);
+    }
+    let _ = app.emit("printer://history", ());
     let _ = app.emit("brief://changed", ());
     if state.config.lock().unwrap().print_notify {
         let _ = app.notification().builder().title(o.title()).body(o.body()).show();
     }
+}
+
+/// A health or error message the printer just raised, in Bambu's words, with the switch on.
+fn problems_appeared(app: &AppHandle, name: &str, codes: &[String]) {
+    use tauri_plugin_notification::NotificationExt;
+    if !app.state::<AppState>().config.lock().unwrap().print_notify {
+        return;
+    }
+    let catalog = CATALOG.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default();
+    for code in codes {
+        let text = catalog.describe(code).unwrap_or_default();
+        let _ = app.notification().builder().title(format!("{name} needs a look")).body(text).show();
+    }
+}
+
+/// The cameras streaming now, by serial: setting the flag stops one.
+static CAMERAS: Mutex<Option<HashMap<String, Arc<AtomicBool>>>> = Mutex::new(None);
+
+pub fn camera_stop(serial: &str) {
+    if let Some(stop) = CAMERAS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).remove(serial) {
+        stop.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Streams the camera's JPEG frames to `send` until stopped or the window stops listening. The camera's certificate
+/// must be the one pinned for the printer.
+pub fn camera_start(app: &AppHandle, serial: &str, send: impl Fn(Vec<u8>) -> bool + Send + 'static) -> Result<(), String> {
+    use std::io::{Read, Write};
+    let config = app.state::<AppState>().config.lock().unwrap().printers.iter().find(|p| p.serial == serial).cloned().ok_or("No such printer.")?;
+    let code = keychain(serial).and_then(|e| e.get_password()).map_err(|_| "No access code in the Keychain.".to_string())?;
+    camera_stop(serial);
+    let stop = Arc::new(AtomicBool::new(false));
+    CAMERAS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).insert(serial.to_string(), stop.clone());
+    std::thread::spawn(move || {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let pin = Arc::new(Pin { pinned: Mutex::new(config.cert_sha256.clone()), fresh: Mutex::new(None), changed: AtomicBool::new(false) });
+        let Ok(tls) = rustls::ClientConfig::builder_with_provider(provider).with_safe_default_protocol_versions() else { return };
+        let tls = Arc::new(tls.dangerous().with_custom_certificate_verifier(pin).with_no_client_auth());
+        let Ok(addr) = config.address.parse::<std::net::IpAddr>() else { return };
+        let Ok(conn) = rustls::ClientConnection::new(tls, ServerName::IpAddress(addr.into())) else { return };
+        let Ok(tcp) = std::net::TcpStream::connect_timeout(&std::net::SocketAddr::new(addr, 6000), Duration::from_secs(5)) else { return };
+        let _ = tcp.set_read_timeout(Some(Duration::from_secs(10)));
+        let mut stream = rustls::StreamOwned::new(conn, tcp);
+        if stream.write_all(&printer::camera::auth(&code)).is_err() {
+            return;
+        }
+        let mut frames = printer::camera::Frames::default();
+        let mut buf = vec![0u8; 64 * 1024];
+        while !stop.load(Ordering::SeqCst) {
+            let Ok(n) = stream.read(&mut buf) else { break };
+            if n == 0 {
+                break;
+            }
+            for jpeg in frames.push(&buf[..n]) {
+                if !send(jpeg) {
+                    stop.store(true, Ordering::SeqCst);
+                }
+            }
+        }
+    });
+    Ok(())
 }
 
 pub async fn send(app: &AppHandle, serial: &str, kind: PrinterCommand) -> Result<(), String> {

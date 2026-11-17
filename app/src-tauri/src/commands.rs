@@ -540,7 +540,7 @@ pub async fn printers(state: State<'_, AppState>) -> Res<Vec<PrinterView>> {
     let list = state.config.lock().unwrap().printers.clone();
     Ok(list
         .into_iter()
-        .map(|c| state.printers.view(&c.serial).unwrap_or(PrinterView { config: c, state: Default::default(), online: false, error: None }))
+        .map(|c| state.printers.view(&c.serial).unwrap_or(PrinterView { config: c, state: Default::default(), online: false, error: None, problems: vec![] }))
         .collect())
 }
 
@@ -581,6 +581,24 @@ pub async fn remove_printer(state: State<'_, AppState>, serial: String) -> Res<(
 #[tauri::command]
 pub async fn printer_command(app: tauri::AppHandle, serial: String, kind: PrinterCommand) -> Res<()> {
     printer::send(&app, &serial, kind).await
+}
+
+/// The last 50 prints, newest first.
+#[tauri::command]
+pub async fn printer_history(state: State<'_, AppState>) -> Res<Vec<binder_core::printer::history::Print>> {
+    binder_core::printer::history::list(&state.db.lock().unwrap(), 50).map_err(text)
+}
+
+/// Streams a printer's camera as raw JPEG frames until `printer_camera_stop`.
+#[tauri::command]
+pub async fn printer_camera(app: tauri::AppHandle, serial: String, frames: Channel<InvokeResponseBody>) -> Res<()> {
+    printer::camera_start(&app, &serial, move |jpeg| frames.send(InvokeResponseBody::Raw(jpeg)).is_ok())
+}
+
+#[tauri::command]
+pub async fn printer_camera_stop(serial: String) -> Res<()> {
+    printer::camera_stop(&serial);
+    Ok(())
 }
 
 fn claude_settings() -> Res<std::path::PathBuf> {

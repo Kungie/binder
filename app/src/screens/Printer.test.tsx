@@ -108,4 +108,56 @@ describe("Printer", () => {
     expect(within(panel).getByText("case-lid")).toBeInTheDocument();
     expect(within(panel).getByText("42%")).toBeInTheDocument();
   });
+
+  it("problems_show_in_plain_words", async () => {
+    const seed = demoSeed();
+    seed.printers![0].problems = [{ code: "0700200000020001", text: "AMS A Slot 1 filament has run out." }];
+    setup("printer", seed);
+    const panel = await screen.findByRole("region", { name: "workshop" });
+    const list = within(panel).getByRole("list", { name: "Printer messages" });
+    expect(within(list).getByText("AMS A Slot 1 filament has run out.")).toBeInTheDocument();
+    expect(within(list).getByText("0700-2000-0002-0001")).toBeInTheDocument();
+  });
+
+  it("light_and_fan_send_their_commands", async () => {
+    const seed = demoSeed();
+    seed.printers![0].state.light_on = false;
+    seed.printers![0].state.fan_percent = 0;
+    const { api, user } = setup("printer", seed);
+    const panel = await screen.findByRole("region", { name: "workshop" });
+    await user.click(within(panel).getByRole("switch", { name: "Light" }));
+    await user.selectOptions(within(panel).getByLabelText("Part fan"), "50");
+    expect(api.printerCommands).toEqual([
+      ["DEMO0SERIAL01", { light: { on: true } }],
+      ["DEMO0SERIAL01", { fan: { percent: 50 } }],
+    ]);
+  });
+
+  it("history_lists_ended_prints", async () => {
+    const { user } = setup();
+    const panel = await screen.findByRole("region", { name: "Print history" });
+    const rows = within(panel).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("bracket");
+    expect(rows[0]).toHaveTextContent("Failed at layer 12");
+    expect(rows[1]).toHaveTextContent("case-lid");
+    expect(rows[1]).toHaveTextContent("1 h 35 min");
+    void user;
+  });
+
+  it("the_camera_shows_its_frames_and_stops_when_hidden", async () => {
+    const seed = demoSeed();
+    const { api, user } = setup("printer", seed);
+    const urls: string[] = [];
+    globalThis.URL.createObjectURL = (b: Blob) => {
+      urls.push(`blob:${b.size}`);
+      return `blob:frame-${urls.length}`;
+    };
+    globalThis.URL.revokeObjectURL = () => {};
+    const panel = await screen.findByRole("region", { name: "workshop" });
+    await user.click(within(panel).getByRole("button", { name: "Show camera" }));
+    const img = await within(panel).findByRole("img", { name: "workshop camera" });
+    await waitFor(() => expect(img.getAttribute("src")).toMatch(/^blob:frame-/));
+    await user.click(within(panel).getByRole("button", { name: "Hide camera" }));
+    expect(api.cameraStops).toEqual(["DEMO0SERIAL01"]);
+  });
 });

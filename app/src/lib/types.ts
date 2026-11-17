@@ -354,6 +354,17 @@ export interface PrinterState {
   bed_c: number | null;
   bed_target_c: number | null;
   job: string | null;
+  /** Health messages now on, as Bambu's 16 hex digit codes. */
+  hms?: string[];
+  print_error?: string | null;
+  light_on?: boolean | null;
+  fan_percent?: number | null;
+}
+
+/** A health or error message, in Bambu's own words. */
+export interface PrinterProblem {
+  code: string;
+  text: string;
 }
 
 export interface PrinterView {
@@ -361,6 +372,16 @@ export interface PrinterView {
   state: PrinterState;
   online: boolean;
   error: string | null;
+  problems?: PrinterProblem[];
+}
+
+/** A print that ended. */
+export interface PrintRecord {
+  at: number;
+  job: string;
+  ok: boolean;
+  minutes: number | null;
+  layer: number | null;
 }
 
 export interface NewPrinter {
@@ -370,7 +391,7 @@ export interface NewPrinter {
   accessCode: string;
 }
 
-export type PrinterCommand = "pause" | "resume" | "stop";
+export type PrinterCommand = "pause" | "resume" | "stop" | { light: { on: boolean } } | { fan: { percent: number } };
 
 /** A job is on the plate: printing, paused or getting ready. */
 export const isPrinting = (s: PrinterState) => ["RUNNING", "PAUSE", "PREPARE"].includes(s.gcode_state ?? "");

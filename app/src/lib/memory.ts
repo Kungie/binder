@@ -68,6 +68,7 @@ export function memoryApi(
   done: Record<number, DoneLine[]>;
   setServerReachable(v: boolean): void;
   printerCommands: [string, PrinterCommand][];
+  cameraStops: string[];
   /** Containers restarted, in order. */
   restarted: string[];
   /** Links opened in the browser. */
@@ -103,6 +104,7 @@ export function memoryApi(
   const runs: AgentRun[] = [];
   const printers: PrinterView[] = (seed.printers ?? []).map((p) => ({ ...p, config: { ...p.config }, state: { ...p.state } }));
   const printerCommands: [string, PrinterCommand][] = [];
+  const cameraStops: string[] = [];
   const restarted: string[] = [];
   const openedLinks: string[] = [];
   const ghActions: [string, number, boolean, GhAction][] = [];
@@ -338,6 +340,7 @@ export function memoryApi(
     },
     done,
     printerCommands,
+    cameraStops,
     restarted,
     openedLinks,
     ghActions,
@@ -746,6 +749,24 @@ export function memoryApi(
     onPrinter() {
       return () => {};
     },
+    async printerHistory() {
+      const t = now();
+      return [
+        { at: t - 3 * 3600, job: "bracket", ok: false, minutes: null, layer: 12 },
+        { at: t - 26 * 3600, job: "case-lid", ok: true, minutes: 95, layer: null },
+      ];
+    },
+    onPrintEnded() {
+      return () => {};
+    },
+    printerCamera(serial, onFrame) {
+      printer(serial);
+      const timer = setTimeout(() => onFrame(new Uint8Array([0xff, 0xd8, 0xff, 0xd9])), 10);
+      return () => {
+        clearTimeout(timer);
+        cameraStops.push(serial);
+      };
+    },
     async claudeHooks() {
       return config.claude_hooks;
     },
@@ -974,6 +995,8 @@ export function demoSeed(): Seed {
           bed_c: 54.9,
           bed_target_c: 55,
           job: "case-lid",
+          light_on: true,
+          fan_percent: 60,
         },
         online: true,
         error: null,

@@ -112,10 +112,12 @@ pub fn render(db: &Db, projects: &[Project], year: i32, week: u32, offset: Fixed
     let events = db.events_between(from, to)?;
     let alerts = events.iter().filter(|e| matches!(e.kind, EventKind::ContainerStopped | EventKind::ContainerRestarting | EventKind::ContainerUnhealthy)).count();
     let prints = events.iter().filter(|e| matches!(e.kind, EventKind::PrintDone | EventKind::PrintFailed)).count();
-    if alerts + prints == 0 {
+    // Prints from the history, with their time; weeks from before it count the print events.
+    let printed = crate::printer::history::summary(db, from, to)?.unwrap_or_else(|| plural(prints, "print"));
+    if alerts + prints == 0 && printed == plural(0, "print") {
         let _ = writeln!(s, "{NOTHING}");
     } else {
-        let _ = writeln!(s, "{}, {}", plural(alerts, "container alert"), plural(prints, "print"));
+        let _ = writeln!(s, "{}, {printed}", plural(alerts, "container alert"));
     }
     Ok(s)
 }

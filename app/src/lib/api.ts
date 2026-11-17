@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime,
+import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime, PrintRecord,
   Access,
   Agent,
   NewPrinter,
@@ -122,6 +122,12 @@ export interface Api {
   addPrinter(printer: NewPrinter): Promise<void>;
   removePrinter(serial: string): Promise<void>;
   printerCommand(serial: string, kind: PrinterCommand): Promise<void>;
+  /** The last 50 prints, newest first. */
+  printerHistory(): Promise<PrintRecord[]>;
+  /** Calls back when a print ends, so the history reloads. Returns the unsubscribe. */
+  onPrintEnded(cb: () => void): () => void;
+  /** Streams the printer's camera, one JPEG per call. Returns the stop. */
+  printerCamera(serial: string, onFrame: (jpeg: Uint8Array) => void): () => void;
   /** Calls back with each printer update. Returns the unsubscribe. */
   onPrinter(cb: (view: PrinterView) => void): () => void;
   /** Whether Binder's hooks are in ~/.claude/settings.json. */
@@ -316,6 +322,16 @@ export const tauriApi: Api = {
   addPrinter: ({ name, address, serial, accessCode }) => call("add_printer", { name, address, serial, accessCode }),
   removePrinter: (serial) => call("remove_printer", { serial }),
   printerCommand: (serial, kind) => call("printer_command", { serial, kind }),
+  printerHistory: () => call("printer_history"),
+  onPrintEnded: (cb) => subscribe<null>("printer://history", () => cb()),
+  printerCamera: (serial, onFrame) => {
+    const frames = bytesChannel(onFrame);
+    void call("printer_camera", { serial, frames });
+    return () => {
+      frames.onmessage = () => {};
+      void call("printer_camera_stop", { serial });
+    };
+  },
   claudeHooks: () => call("claude_hooks"),
   setClaudeHooks: (on) => call("set_claude_hooks", { on }),
   onPrinter: (cb) => subscribe<PrinterView>("printer://state", cb),

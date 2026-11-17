@@ -118,6 +118,8 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE site_checks (at INTEGER NOT NULL, site TEXT NOT NULL, ok INTEGER NOT NULL, ms INTEGER);
     CREATE INDEX site_checks_site_at ON site_checks(site, at);
     CREATE TABLE pomodoros (at INTEGER NOT NULL, minutes INTEGER NOT NULL);",
+    // v12: every print that ended.
+    "CREATE TABLE prints (at INTEGER NOT NULL, job TEXT NOT NULL, ok INTEGER NOT NULL, minutes INTEGER, layer INTEGER);",
 ];
 
 impl Db {

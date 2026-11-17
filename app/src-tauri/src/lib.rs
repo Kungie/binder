@@ -67,6 +67,7 @@ pub fn run() {
             let db = Db::open(&dir.join("binder.db"))?;
             let printers = config.printers.clone();
             app.manage(AppState { db: Mutex::new(db), config: Mutex::new(config), config_path, printers: Default::default(), transfers: Default::default(), fast: Default::default(), quicklook: Default::default(), terminals: Default::default() });
+            printer::load_catalog(dir.clone());
             for p in printers {
                 printer::start(app.handle(), p);
             }
@@ -182,6 +183,9 @@ pub fn run() {
             commands::add_printer,
             commands::remove_printer,
             commands::printer_command,
+            commands::printer_history,
+            commands::printer_camera,
+            commands::printer_camera_stop,
             commands::claude_hooks,
             commands::set_claude_hooks,
             commands::github_sync,
