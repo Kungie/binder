@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Notice, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
-import type { Site, SiteCheck } from "../lib/types";
+import type { Site, SiteCheck, Uptime } from "../lib/types";
 
 const EVERY = 30_000;
 const PAGE_W = 1280;
@@ -116,6 +116,7 @@ function SiteCard({ site, check, round, onSaved }: { site: Site; check: SiteChec
         </div>
         {!site.address && <AddAddress name={site.name} onSaved={onSaved} />}
         <span className="font-mono text-[11px] text-text-3">{figures(site)}</span>
+        {site.address && <UptimeBars name={site.name} round={round} />}
       </div>
     </article>
   );
@@ -179,6 +180,31 @@ function Preview({ site, check, round }: { site: Site; check: SiteCheck | undefi
           <span className="text-[11px] text-text-3">{site.name}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The last week in 28 six-hour bars: green when every check answered, red when one didn't, grey with none. */
+function UptimeBars({ name, round }: { name: string; round: number }) {
+  const { api } = useStore();
+  const [u, setU] = useState<Uptime | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api.siteUptime(name).then((x) => live && setU(x), () => {});
+    return () => {
+      live = false;
+    };
+  }, [api, name, round]);
+  if (!u || u.percent === null) return null;
+  const pct = `${u.percent.toFixed(1)}%`;
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <div role="img" aria-label={`Uptime last 7 days: ${pct} of checks answered`} className="flex h-3 flex-1 gap-px">
+        {u.buckets.map((b, i) => (
+          <span key={i} data-bar className={`flex-1 rounded-[1px] ${b === null ? "bg-card" : b ? "bg-ok/70" : "bg-bad"}`} />
+        ))}
+      </div>
+      <span className="shrink-0 font-mono text-[11px] text-text-3">{u.ms !== null ? `${pct} · ${u.ms} ms` : pct}</span>
     </div>
   );
 }

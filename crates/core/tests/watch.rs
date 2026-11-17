@@ -190,3 +190,15 @@ fn an_owner_restart_allows_a_server_clock_a_little_behind() {
     let t = [times("web", "running", Some(498), Some(497))];
     assert!(catch_up(0, 1000, &t, &[("web".into(), 500)]).is_empty());
 }
+
+#[test]
+fn a_disk_past_90_percent_warns_once_until_it_drops_below_85() {
+    use binder_core::watch::disk_warnings;
+    let mut warned = std::collections::BTreeSet::new();
+    assert!(disk_warnings(&[("Server disk", 100, 89)], &mut warned).is_empty());
+    assert_eq!(disk_warnings(&[("Server disk", 100, 91)], &mut warned), vec![("Server disk".to_string(), 91)]);
+    assert!(disk_warnings(&[("Server disk", 100, 95)], &mut warned).is_empty());
+    assert!(disk_warnings(&[("Server disk", 100, 86)], &mut warned).is_empty());
+    assert!(disk_warnings(&[("Server disk", 100, 84)], &mut warned).is_empty());
+    assert_eq!(disk_warnings(&[("Server disk", 100, 90), ("SD card", 0, 0)], &mut warned), vec![("Server disk".to_string(), 90)]);
+}

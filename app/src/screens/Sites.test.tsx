@@ -58,6 +58,14 @@ describe("Sites", () => {
     await waitFor(() => expect(spy.mock.calls.filter(([u]) => u === "https://blog.example.com").length).toBe(before + 1));
   });
 
+  it("each_card_shows_a_week_of_uptime", async () => {
+    setup();
+    const card = await screen.findByRole("article", { name: "blog" });
+    const bars = await within(card).findByRole("img", { name: /^Uptime last 7 days: 99\.\d% / });
+    expect(bars.querySelectorAll("[data-bar]")).toHaveLength(28);
+    expect(within(card).getByText(/· 120 ms$/)).toBeInTheDocument();
+  });
+
   it("a_site_whose_snapshot_fails_shows_its_name", async () => {
     const { api } = setup();
     vi.spyOn(api, "siteSnapshot").mockRejectedValue(new Error("No answer"));

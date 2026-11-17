@@ -20,12 +20,16 @@ pub enum BriefItem {
     ServerRestart { at: i64 },
     Print { job: String, ok: bool, at: i64 },
     Issue { task_id: i64, key: String, title: String, at: i64 },
+    /// A site that stopped answering, and when it answered again.
+    Site { name: String, at: i64, back_at: Option<i64> },
+    Disk { name: String, percent: u32, at: i64 },
 }
 
 impl BriefItem {
     fn at(&self) -> i64 {
         match self {
-            BriefItem::Run { at, .. } | BriefItem::Container { at, .. } | BriefItem::ServerRestart { at } | BriefItem::Print { at, .. } | BriefItem::Issue { at, .. } => *at,
+            BriefItem::Run { at, .. } | BriefItem::Container { at, .. } | BriefItem::ServerRestart { at } | BriefItem::Print { at, .. } | BriefItem::Issue { at, .. }
+            | BriefItem::Site { at, .. } | BriefItem::Disk { at, .. } => *at,
         }
     }
 }
@@ -89,6 +93,18 @@ pub fn items(db: &Db, since: i64, now: i64) -> Result<Vec<BriefItem>> {
                 }
             }
             EventKind::ServerRestart => out.push(BriefItem::ServerRestart { at: e.at }),
+            EventKind::SiteDown => {
+                containers.retain(|c| !matches!(c, BriefItem::Site { name, .. } if *name == e.subject));
+                containers.push(BriefItem::Site { name: e.subject.clone(), at: e.at, back_at: None });
+            }
+            EventKind::SiteBack => {
+                if let Some(BriefItem::Site { back_at, .. }) =
+                    containers.iter_mut().find(|c| matches!(c, BriefItem::Site { name, back_at: None, .. } if *name == e.subject))
+                {
+                    *back_at = Some(e.at);
+                }
+            }
+            EventKind::DiskFull => out.push(BriefItem::Disk { name: e.subject.clone(), percent: e.detail.parse().unwrap_or(90), at: e.at }),
             EventKind::PrintDone | EventKind::PrintFailed => out.push(BriefItem::Print { job: e.subject.clone(), ok: e.kind == EventKind::PrintDone, at: e.at }),
             EventKind::IssueAdded => {
                 let task: Option<(i64, String)> = {

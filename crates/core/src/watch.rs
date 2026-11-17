@@ -219,3 +219,21 @@ pub fn rebooted(previous: Option<i64>, boot_at: Option<i64>) -> Option<i64> {
         _ => None,
     }
 }
+
+/// Disks past 90 % full, each named once until it drops below 85 %. Each disk is `(name, size, used)`; a size of
+/// 0 is unknown and skipped.
+pub fn disk_warnings(disks: &[(&str, u64, u64)], warned: &mut std::collections::BTreeSet<String>) -> Vec<(String, u32)> {
+    let mut out = vec![];
+    for (name, size, used) in disks {
+        if *size == 0 {
+            continue;
+        }
+        let pct = ((*used as f64 / *size as f64) * 100.0).round() as u32;
+        if pct >= 90 && warned.insert(name.to_string()) {
+            out.push((name.to_string(), pct));
+        } else if pct < 85 {
+            warned.remove(*name);
+        }
+    }
+    out
+}

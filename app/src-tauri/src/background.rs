@@ -16,6 +16,8 @@ const PICK_UP_EVERY: Duration = Duration::from_secs(600);
 const WATCH_EVERY: Duration = Duration::from_secs(60);
 /// How often the vault share is checked and mounted again when it dropped (after sleep, say).
 const SHARES_EVERY: Duration = Duration::from_secs(60);
+const REMIND_EVERY: Duration = Duration::from_secs(30);
+const SITES_EVERY: Duration = Duration::from_secs(300);
 /// Events are kept five weeks, for the weekly note.
 const KEEP_EVENTS: i64 = 35 * 86_400;
 
@@ -32,6 +34,20 @@ fn settings(app: &AppHandle) -> (Option<String>, bool, bool, String) {
 }
 
 pub fn start(app: &AppHandle) {
+    let a = app.clone();
+    std::thread::spawn(move || loop {
+        remind(&a);
+        std::thread::sleep(REMIND_EVERY);
+    });
+    let a = app.clone();
+    std::thread::spawn(move || {
+        let mut watch = binder_core::uptime::Watch::default();
+        std::thread::sleep(PICK_UP_FIRST);
+        loop {
+            check_sites(&a, &mut watch);
+            std::thread::sleep(SITES_EVERY);
+        }
+    });
     let a = app.clone();
     std::thread::spawn(move || loop {
         let (path, share) = {
@@ -119,6 +135,7 @@ fn look(app: &AppHandle, watch: &mut Watch) {
     let quiet_names: Vec<String> = quiet.iter().map(|(n, _)| n.clone()).collect();
     let mut logged: Vec<(i64, EventKind, String, String)> = vec![];
     let mut caught: Vec<(i64, EventKind, String)> = vec![];
+    let mut full: Vec<(String, u32)> = vec![];
     let alerts = match fetched {
         // A failed `docker ps` says nothing about the containers: skip it rather than call them all removed.
         Ok(status) if status.docker_failed => vec![],
@@ -145,7 +162,14 @@ fn look(app: &AppHandle, watch: &mut Watch) {
             if let Some(b) = status.boot_at {
                 let _ = db.set_meta("server_boot", &b.to_string());
             }
+            // Disks past 90 %, each once until it drops below 85 %; remembered across starts.
+            let mut warned: std::collections::BTreeSet<String> =
+                db.meta("disk_warned").ok().flatten().unwrap_or_default().split('|').filter(|s| !s.is_empty()).map(String::from).collect();
+            let disks = [("Server disk", status.disk_size, status.disk_used), ("SD card", status.sd_size.unwrap_or(0), status.sd_used.unwrap_or(0))];
+            full = watch::disk_warnings(&disks, &mut warned);
+            let _ = db.set_meta("disk_warned", &warned.into_iter().collect::<Vec<_>>().join("|"));
             drop(db);
+            logged.extend(full.iter().map(|(name, pct)| (now, EventKind::DiskFull, name.clone(), pct.to_string())));
             watch.seen_with(&status.containers, &quiet_names)
         }
         Err(_) => watch.missed(),
@@ -165,5 +189,54 @@ fn look(app: &AppHandle, watch: &mut Watch) {
     for alert in alerts {
         let _ = app.notification().builder().title(alert.title()).body(alert.body()).show();
         let _ = app.emit("watch://alert", alert.title());
+    }
+    for (name, pct) in full {
+        let _ = app.notification().builder().title(format!("{name} is {pct}% full")).body("Free some space before it fills up.").show();
+    }
+}
+
+/// Every 30 seconds: a notification for each open task whose due time has come.
+fn remind(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let due = state.db.lock().unwrap().due_reminders(chrono::Local::now().naive_local()).unwrap_or_default();
+    for t in due {
+        let when = t.due_time.clone().unwrap_or_default();
+        let _ = app.notification().builder().title(&t.title).body(format!("Due at {when}")).sound("default").show();
+    }
+}
+
+/// Every 5 minutes: each site is asked from the Mac, kept a week for its uptime bars, and two failures in a row
+/// make it down.
+fn check_sites(app: &AppHandle, watch: &mut binder_core::uptime::Watch) {
+    let (Some(target), _, on, _) = settings(app) else { return };
+    let state = app.state::<AppState>();
+    let saved = state.config.lock().unwrap().site_addresses.clone();
+    let Ok(sites) = binder_core::sites::read(&SshRemote::new(target), &saved) else { return };
+    let now = now();
+    let mut news = vec![];
+    for s in sites {
+        let Some(url) = s.address.as_deref() else { continue };
+        let Ok((check, ms)) = crate::commands::check_site(url) else { continue };
+        let ok = check.error.is_none() && check.status.is_some_and(|c| c < 500);
+        let _ = binder_core::uptime::record(&mut state.db.lock().unwrap(), &s.name, now, ok, ms);
+        if let Some(kind) = watch.saw(&s.name, ok) {
+            news.push((kind, s.name.clone()));
+        }
+    }
+    let mut db = state.db.lock().unwrap();
+    let _ = binder_core::uptime::prune(&mut db, now - 8 * 86_400);
+    for (kind, name) in &news {
+        let _ = db.log_event(now, *kind, name, "");
+    }
+    drop(db);
+    if news.is_empty() {
+        return;
+    }
+    let _ = app.emit("brief://changed", ());
+    if on {
+        for (kind, name) in news {
+            let (title, body) = if kind == EventKind::SiteDown { (format!("{name} is down"), "It didn't answer twice in a row.") } else { (format!("{name} is up again"), "It answers again.") };
+            let _ = app.notification().builder().title(title).body(body).show();
+        }
     }
 }

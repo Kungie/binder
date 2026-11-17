@@ -115,3 +115,18 @@ fn shown_from_five_until_noon_until_dismissed() {
     // Dismissed today before 05:00 (late last night) still shows this morning's.
     assert!(brief::shown(at(9, 0), Some(at(1, 0))));
 }
+
+#[test]
+fn the_brief_has_sites_that_went_down_and_full_disks() {
+    use binder_core::brief::{BriefItem, items};
+    use binder_core::events::EventKind;
+    let mut db = binder_core::Db::in_memory().unwrap();
+    db.log_event(100, EventKind::SiteDown, "blog", "").unwrap();
+    db.log_event(400, EventKind::SiteBack, "blog", "").unwrap();
+    db.log_event(500, EventKind::DiskFull, "Server disk", "92").unwrap();
+    let got = items(&db, 0, 1000).unwrap();
+    assert_eq!(
+        got,
+        vec![BriefItem::Site { name: "blog".into(), at: 100, back_at: Some(400) }, BriefItem::Disk { name: "Server disk".into(), percent: 92, at: 500 }]
+    );
+}

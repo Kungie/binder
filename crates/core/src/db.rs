@@ -113,6 +113,11 @@ const MIGRATIONS: &[&str] = &[
     UPDATE tasks SET issue_listed = 1 WHERE issue_repo IS NOT NULL AND status NOT IN ('done', 'canceled');",
     // v10: tasks that come back: daily, weekdays, weekly, monthly or yearly.
     "ALTER TABLE tasks ADD COLUMN repeats TEXT;",
+    // v11: which due time a task was reminded for, each site check, and finished focus sessions.
+    "ALTER TABLE tasks ADD COLUMN reminded TEXT;
+    CREATE TABLE site_checks (at INTEGER NOT NULL, site TEXT NOT NULL, ok INTEGER NOT NULL, ms INTEGER);
+    CREATE INDEX site_checks_site_at ON site_checks(site, at);
+    CREATE TABLE pomodoros (at INTEGER NOT NULL, minutes INTEGER NOT NULL);",
 ];
 
 impl Db {

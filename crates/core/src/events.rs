@@ -18,9 +18,14 @@ pub enum EventKind {
     PrintDone,
     PrintFailed,
     IssueAdded,
+    /// A site failed two checks in a row.
+    SiteDown,
+    SiteBack,
+    /// A disk passed 90 %; the detail is the percent.
+    DiskFull,
 }
 
-const ALL: [EventKind; 9] = [
+const ALL: [EventKind; 12] = [
     EventKind::ContainerStopped,
     EventKind::ContainerRestarting,
     EventKind::ContainerUnhealthy,
@@ -30,6 +35,9 @@ const ALL: [EventKind; 9] = [
     EventKind::PrintDone,
     EventKind::PrintFailed,
     EventKind::IssueAdded,
+    EventKind::SiteDown,
+    EventKind::SiteBack,
+    EventKind::DiskFull,
 ];
 
 impl EventKind {
@@ -44,6 +52,9 @@ impl EventKind {
             EventKind::PrintDone => "print_done",
             EventKind::PrintFailed => "print_failed",
             EventKind::IssueAdded => "issue_added",
+            EventKind::SiteDown => "site_down",
+            EventKind::SiteBack => "site_back",
+            EventKind::DiskFull => "disk_full",
         }
     }
 

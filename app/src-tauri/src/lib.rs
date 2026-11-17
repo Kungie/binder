@@ -5,6 +5,7 @@ mod printer;
 mod shares;
 mod terminal;
 mod transfers;
+mod tray;
 mod updates;
 
 use binder_core::{Db, config::Config};
@@ -47,6 +48,17 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcuts(["ctrl+alt+KeyN"])
+                .expect("the quick add shortcut parses")
+                .with_handler(|app, _, e| {
+                    if e.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        tray::show_quick(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -72,6 +84,7 @@ pub fn run() {
             let data = dir.clone();
             std::thread::spawn(move || commands::sync_and_tell(&handle, &data));
             commands::apply_zoom(app.handle());
+            tray::start(app.handle())?;
             // A development build shares binder.db and the server with the installed app, which already runs
             // these: two would start the same task twice and send every alert twice.
             if !cfg!(debug_assertions) {
@@ -84,6 +97,13 @@ pub fn run() {
             // can tell which folder is under it: Cloud paths are a move, others an upload.
             let scale = window.scale_factor().unwrap_or(1.0);
             let at = |p: &tauri::PhysicalPosition<f64>| DropPoint { x: p.x / scale, y: p.y / scale };
+            if window.label() == "quick" {
+                // Quick add goes away when it loses focus, like Spotlight.
+                if let tauri::WindowEvent::Focused(false) = event {
+                    let _ = window.hide();
+                }
+                return;
+            }
             match event {
                 // Closing the window hides it: Binder keeps picking up tasks and watching the server. ⌘Q quits.
                 tauri::WindowEvent::CloseRequested { api, .. } => {
@@ -127,6 +147,9 @@ pub fn run() {
             commands::set_config,
             commands::vault_connected,
             commands::vault_connect,
+            commands::site_uptime,
+            commands::quick_added,
+            commands::quick_close,
             commands::server_status,
             commands::container_logs,
             commands::restart_container,

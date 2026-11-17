@@ -26,6 +26,10 @@ export function briefText(i: BriefItem): string {
       return `${i.job} ${i.ok ? "is done" : "failed"}`;
     case "issue":
       return `${i.key} from GitHub: ${i.title}`;
+    case "site":
+      return i.back_at ? `${i.name} was down from ${clock(i.at)}, up again at ${clock(i.back_at)}` : `${i.name} went down at ${clock(i.at)}`;
+    case "disk":
+      return `${i.name} is ${i.percent}% full`;
   }
 }
 
@@ -54,7 +58,8 @@ export function Brief() {
   };
   const open = (i: BriefItem) => {
     if (i.kind === "run" || i.kind === "issue") flow.open(i.task_id);
-    else if (i.kind === "container" || i.kind === "server_restart") setScreen("server");
+    else if (i.kind === "container" || i.kind === "server_restart" || i.kind === "disk") setScreen("server");
+    else if (i.kind === "site") setScreen("sites");
     else setScreen("printer");
   };
   return (
@@ -73,7 +78,7 @@ export function Brief() {
           {brief.items.map((i, n) => (
             <li key={n} className="border-b border-line last:border-b-0">
               <button type="button" onClick={() => open(i)} className="flex h-8 w-full items-center gap-2 px-3 text-left text-[12px] hover:bg-raised">
-                <span className="w-10 shrink-0 font-mono text-[11px] text-text-3">{i.kind === "container" || i.kind === "server_restart" ? "" : clock(i.at)}</span>
+                <span className="w-10 shrink-0 font-mono text-[11px] text-text-3">{i.kind === "container" || i.kind === "server_restart" || i.kind === "site" ? "" : clock(i.at)}</span>
                 {i.kind === "run" && i.night && <Moon />}
                 <span className={`truncate ${(i.kind === "run" || i.kind === "print") && !i.ok ? "text-text" : "text-text-2"}`}>{briefText(i)}</span>
               </button>

@@ -215,18 +215,50 @@ pub async fn sites(state: State<'_, AppState>) -> Res<Vec<binder_core::sites::Si
 /// Asks the address from the Mac with the system curl, the url as one argument and never through a shell.
 #[tauri::command]
 pub async fn site_check(url: String) -> Res<binder_core::sites::SiteCheck> {
+    check_site(&url).map(|(c, _)| c)
+}
+
+/// One https check from the Mac and how long the answer took, in milliseconds.
+pub fn check_site(url: &str) -> Res<(binder_core::sites::SiteCheck, Option<u32>)> {
     if !url.starts_with("https://") {
         return Err("Only https addresses are checked.".into());
     }
     let out = std::process::Command::new("/usr/bin/curl")
-        .args(["-sS", "-o", "/dev/null", "-D", "-", "--max-time", "5", "--proto", "=https", "--proto-redir", "=https", "-L", "--", &url])
+        .args(["-sS", "-o", "/dev/null", "-D", "-", "-w", "\n--binder:time--%{time_total}", "--max-time", "5", "--proto", "=https", "--proto-redir", "=https", "-L", "--", url])
         .output()
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
         let error = if out.status.code() == Some(28) { "No answer in 5 s".to_string() } else { "No answer".to_string() };
-        return Ok(binder_core::sites::SiteCheck { status: None, frameable: false, error: Some(error) });
+        return Ok((binder_core::sites::SiteCheck { status: None, frameable: false, error: Some(error) }, None));
     }
-    Ok(binder_core::sites::parse_check(&String::from_utf8_lossy(&out.stdout)))
+    let text = String::from_utf8_lossy(&out.stdout);
+    let (headers, time) = text.rsplit_once("\n--binder:time--").unwrap_or((&text, ""));
+    let ms = time.trim().parse::<f64>().ok().map(|s| (s * 1000.0).round() as u32);
+    Ok((binder_core::sites::parse_check(headers), ms))
+}
+
+/// A site's last week: 28 bars of six hours, the share of good checks and the last answer time.
+#[tauri::command]
+pub async fn site_uptime(state: State<'_, AppState>, name: String) -> Res<binder_core::uptime::Summary> {
+    binder_core::uptime::summary(&state.db.lock().unwrap(), &name, now(), 7 * 86_400, 28).map_err(text)
+}
+
+/// The quick add window made a task: the main window reloads its tasks.
+#[tauri::command]
+pub async fn quick_added(app: tauri::AppHandle) -> Res<()> {
+    if let Some(w) = app.get_webview_window("quick") {
+        let _ = w.hide();
+    }
+    app.emit("tasks://changed", ()).map_err(|e| e.to_string())
+}
+
+/// Hides the quick add window without a task.
+#[tauri::command]
+pub async fn quick_close(app: tauri::AppHandle) -> Res<()> {
+    if let Some(w) = app.get_webview_window("quick") {
+        let _ = w.hide();
+    }
+    Ok(())
 }
 
 /// The page of a site that refuses to be framed, fetched from the Mac (https only, at most 3 MB) and made into a

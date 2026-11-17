@@ -100,4 +100,12 @@ describe("GitHub on tasks and projects", () => {
       vi.useRealTimers();
     }
   });
+
+  it("site_and_disk_lines_read_plainly", async () => {
+    const { briefText } = await import("../components/Brief");
+    const at = new Date(2026, 10, 17, 3, 10).getTime() / 1000;
+    expect(briefText({ kind: "site", name: "blog", at, back_at: at + 600 })).toBe("blog was down from 03:10, up again at 03:20");
+    expect(briefText({ kind: "site", name: "blog", at, back_at: null })).toBe("blog went down at 03:10");
+    expect(briefText({ kind: "disk", name: "Server disk", percent: 92, at })).toBe("Server disk is 92% full");
+  });
 });

@@ -2,6 +2,13 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "What the main window may do",
-  "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "drag:default"]
+  "windows": [
+    "main",
+    "quick"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "drag:default"
+  ]
 }

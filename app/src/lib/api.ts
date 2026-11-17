@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief,
+import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime,
   Access,
   Agent,
   NewPrinter,
@@ -71,6 +71,14 @@ export interface Api {
   siteCheck(url: string): Promise<SiteCheck>;
   /** A site's page as a still snapshot, for sites that refuse to be framed. */
   siteSnapshot(url: string): Promise<string>;
+  /** A site's last week: 28 six-hour bars, the share of good checks and the last answer time. */
+  siteUptime(name: string): Promise<Uptime>;
+  /** The quick add window made a task: it hides and the main window reloads. */
+  quickAdded(): Promise<void>;
+  /** Hides the quick add window. */
+  quickClose(): Promise<void>;
+  /** Calls back each time the quick add window is shown. Returns the unsubscribe. */
+  onQuickOpen(cb: () => void): () => void;
   /** Saves the address of a site Binder found none for; returns it as kept (https added). */
   setSiteAddress(name: string, url: string): Promise<string>;
   /** Open pull requests and issues in the owner's projects, narrowed by a filter and maybe one project. */
@@ -272,6 +280,10 @@ export const tauriApi: Api = {
   sites: () => call("sites"),
   siteCheck: (url) => call("site_check", { url }),
   siteSnapshot: (url) => call("site_snapshot", { url }),
+  siteUptime: (name) => call("site_uptime", { name }),
+  quickAdded: () => call("quick_added"),
+  quickClose: () => call("quick_close"),
+  onQuickOpen: (cb) => subscribe<null>("quick://open", () => cb()),
   setSiteAddress: (name, url) => call("set_site_address", { name, url }),
   openLink: (url) => call("open_link", { url }),
   ghList: (filter, projectId) => call("gh_list", { filter, projectId }),

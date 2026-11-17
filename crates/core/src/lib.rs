@@ -41,6 +41,7 @@ pub mod hooks;
 pub mod model;
 pub mod night;
 pub mod pickup;
+pub mod pomodoro;
 pub mod notes;
 pub mod printer;
 pub mod projects;
@@ -52,6 +53,7 @@ pub mod session;
 pub mod shell;
 pub mod sites;
 pub mod tasks;
+pub mod uptime;
 pub mod watch;
 pub mod weekly;
 

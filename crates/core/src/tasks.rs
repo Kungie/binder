@@ -281,4 +281,28 @@ impl Db {
             .query_row("SELECT id FROM tasks WHERE lower(issue_repo) = lower(?1) AND issue_number = ?2", params![repo, number], |r| r.get(0))
             .optional()?)
     }
+
+    /// Open tasks whose due date and time have come, each once per due time: the reminder is marked as it is
+    /// returned, and moving the time arms it again. One more than a day late is marked without a reminder.
+    pub fn due_reminders(&mut self, local_now: chrono::NaiveDateTime) -> Result<Vec<Task>> {
+        let now = local_now.format("%Y-%m-%d %H:%M").to_string();
+        let day_ago = (local_now - chrono::Duration::days(1)).format("%Y-%m-%d %H:%M").to_string();
+        let due: Vec<(i64, String)> = self
+            .conn
+            .prepare(
+                "SELECT id, due || ' ' || due_time FROM tasks WHERE due IS NOT NULL AND due_time IS NOT NULL
+                 AND status NOT IN ('done', 'canceled') AND due || ' ' || due_time <= ?1
+                 AND (reminded IS NULL OR reminded != due || ' ' || due_time)",
+            )?
+            .query_map([&now], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        let mut out = vec![];
+        for (id, when) in due {
+            self.conn.execute("UPDATE tasks SET reminded = ?2 WHERE id = ?1", params![id, when])?;
+            if when >= day_ago {
+                out.push(self.get_task(id)?);
+            }
+        }
+        Ok(out)
+    }
 }

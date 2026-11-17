@@ -216,7 +216,17 @@ export type BriefItem =
   | { kind: "container"; name: string; problem: "stopped" | "restarting" | "unhealthy"; at: number; back_at: number | null }
   | { kind: "server_restart"; at: number }
   | { kind: "print"; job: string; ok: boolean; at: number }
-  | { kind: "issue"; task_id: number; key: string; title: string; at: number };
+  | { kind: "issue"; task_id: number; key: string; title: string; at: number }
+  | { kind: "site"; name: string; at: number; back_at: number | null }
+  | { kind: "disk"; name: string; percent: number; at: number };
+
+/** A site's last week of checks. */
+export interface Uptime {
+  /** Oldest first; null with no check, false when any check in it failed. */
+  buckets: (boolean | null)[];
+  percent: number | null;
+  ms: number | null;
+}
 
 export interface Brief {
   since: number;
