@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Manager};
 pub const KEYCHAIN_SERVICE: &str = "io.github.kungie.binder.printer";
 const CHANGED: &str = "The printer's certificate changed. Remove the printer and add it again if you trust it.";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PrinterView {
     pub config: PrinterConfig,
     pub state: PrinterState,
@@ -202,13 +202,28 @@ pub fn keychain(serial: &str) -> keyring::Result<keyring::Entry> {
     keyring::Entry::new(KEYCHAIN_SERVICE, serial)
 }
 
-/// Changes one printer's view and tells the interface.
+/// Changes one printer's view and tells the interface: only when something changed, and while only temperatures
+/// and progress move, at most every 2 seconds (a printing Bambu reports several times a second).
 fn report(app: &AppHandle, serial: &str, change: impl FnOnce(&mut PrinterView)) {
+    static SENT: std::sync::Mutex<Option<std::collections::HashMap<String, std::time::Instant>>> = std::sync::Mutex::new(None);
     let view = {
         let state = app.state::<AppState>();
         let mut map = state.printers.0.lock().unwrap();
         let Some(live) = map.get_mut(serial) else { return };
+        let before = live.view.clone();
         change(&mut live.view);
+        let v = &live.view;
+        if *v == before {
+            return;
+        }
+        let big = v.online != before.online || v.error != before.error || v.state.gcode_state != before.state.gcode_state;
+        let mut sent = SENT.lock().unwrap_or_else(|e| e.into_inner());
+        let sent = sent.get_or_insert_with(Default::default);
+        let now = std::time::Instant::now();
+        if !big && sent.get(serial).is_some_and(|t| now.duration_since(*t) < std::time::Duration::from_secs(2)) {
+            return;
+        }
+        sent.insert(serial.to_string(), now);
         live.view.clone()
     };
     let _ = app.emit("printer://state", view);

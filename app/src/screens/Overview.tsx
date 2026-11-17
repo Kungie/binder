@@ -1,4 +1,5 @@
 import { DiskBars, useSdSpace } from "../components/DiskBars";
+import { whileVisible } from "../lib/usePoll";
 import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_LAYOUT, GithubWidget, SitesWidget, clean } from "../components/OverviewWidgets";
 import { EditBar, OverviewGrid } from "../components/OverviewGrid";
@@ -70,8 +71,7 @@ export function Overview() {
   useEffect(() => {
     const check = () => void api.lastDone().then(setLastDone, () => {});
     check();
-    const timer = window.setInterval(check, 30_000);
-    return () => window.clearInterval(timer);
+    return whileVisible(check, 30_000);
   }, [api]);
 
   const widget = (id: string) => {

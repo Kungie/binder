@@ -42,9 +42,10 @@ pub fn start(app: &AppHandle) {
     let a = app.clone();
     std::thread::spawn(move || {
         let mut watch = binder_core::uptime::Watch::default();
+        let mut known = (0, vec![]);
         std::thread::sleep(PICK_UP_FIRST);
         loop {
-            check_sites(&a, &mut watch);
+            check_sites(&a, &mut watch, &mut known);
             std::thread::sleep(SITES_EVERY);
         }
     });
@@ -207,20 +208,23 @@ fn remind(app: &AppHandle) {
 
 /// Every 5 minutes: each site is asked from the Mac, kept a week for its uptime bars, and two failures in a row
 /// make it down.
-fn check_sites(app: &AppHandle, watch: &mut binder_core::uptime::Watch) {
+fn check_sites(app: &AppHandle, watch: &mut binder_core::uptime::Watch, known: &mut (i64, Vec<(String, String)>)) {
     let (Some(target), _, on, _) = settings(app) else { return };
     let state = app.state::<AppState>();
-    let saved = state.config.lock().unwrap().site_addresses.clone();
-    let Ok(sites) = binder_core::sites::read(&SshRemote::new(target), &saved) else { return };
     let now = now();
+    // The list of sites costs the server a `docker stats`; it is read again every 30 minutes, not every check.
+    if known.1.is_empty() || now - known.0 >= 1800 {
+        let saved = state.config.lock().unwrap().site_addresses.clone();
+        let Ok(sites) = binder_core::sites::read(&SshRemote::new(target), &saved) else { return };
+        *known = (now, sites.into_iter().filter_map(|s| Some((s.name, s.address?))).collect());
+    }
     let mut news = vec![];
-    for s in sites {
-        let Some(url) = s.address.as_deref() else { continue };
+    for (name, url) in &known.1 {
         let Ok((check, ms)) = crate::commands::check_site(url) else { continue };
         let ok = check.error.is_none() && check.status.is_some_and(|c| c < 500);
-        let _ = binder_core::uptime::record(&mut state.db.lock().unwrap(), &s.name, now, ok, ms);
-        if let Some(kind) = watch.saw(&s.name, ok) {
-            news.push((kind, s.name.clone()));
+        let _ = binder_core::uptime::record(&mut state.db.lock().unwrap(), name, now, ok, ms);
+        if let Some(kind) = watch.saw(name, ok) {
+            news.push((kind, name.clone()));
         }
     }
     let mut db = state.db.lock().unwrap();

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { whileVisible } from "../lib/usePoll";
 import { useStore } from "../lib/store";
 import type { Brief as BriefData, BriefItem } from "../lib/types";
 import { Moon } from "./Moon";
@@ -44,11 +45,11 @@ export function Brief() {
     load();
     const off = api.onBriefChanged(load);
     // Read again now and then, so the card goes at noon and picks up what changed without an event.
-    const t = window.setInterval(load, 5 * 60_000);
+    const stop = whileVisible(load, 5 * 60_000);
     return () => {
       live = false;
       off();
-      window.clearInterval(t);
+      stop();
     };
   }, [api]);
   if (!brief?.shown || brief.items.length === 0) return <>{flow.overlays}</>;

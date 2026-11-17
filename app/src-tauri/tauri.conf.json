@@ -21,21 +21,6 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "backgroundColor": "#000000"
-      },
-      {
-        "label": "quick",
-        "title": "New task",
-        "url": "index.html#quick",
-        "width": 560,
-        "height": 64,
-        "resizable": false,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "visible": false,
-        "center": true,
-        "skipTaskbar": true,
-        "focus": false,
-        "backgroundColor": "#141416"
       }
     ],
     "security": {

@@ -64,10 +64,16 @@ fn refresh(app: &AppHandle) {
     title(app);
 }
 
+/// The time left beside the icon; the menu bar is only touched when the text changes.
 fn title(app: &AppHandle) {
+    static SHOWN: Mutex<Option<String>> = Mutex::new(None);
     let Some(tray) = app.tray_by_id(TRAY) else { return };
     let label = app.state::<Timer>().0.lock().unwrap().label(now());
-    let _ = tray.set_title(label.as_deref());
+    let mut shown = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
+    if *shown != label {
+        let _ = tray.set_title(label.as_deref());
+        *shown = label;
+    }
 }
 
 pub fn show_main(app: &AppHandle) {
@@ -78,13 +84,45 @@ pub fn show_main(app: &AppHandle) {
     }
 }
 
-/// The quick add window, centred and focused, its field cleared.
+/// When the quick add window was last hidden; it is closed after 5 minutes unused, so its web view doesn't hold
+/// memory all day.
+static QUICK_HIDDEN: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+/// The quick add window, centred and focused, its field cleared; made on first use.
 pub fn show_quick(app: &AppHandle) {
+    *QUICK_HIDDEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
     if let Some(w) = app.get_webview_window("quick") {
         let _ = w.center();
         let _ = w.show();
         let _ = w.set_focus();
         let _ = w.emit("quick://open", ());
+        return;
+    }
+    let _ = tauri::WebviewWindowBuilder::new(app, "quick", tauri::WebviewUrl::App("index.html#quick".into()))
+        .title("New task")
+        .inner_size(560.0, 64.0)
+        .resizable(false)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .center()
+        .focused(true)
+        .background_color(tauri::window::Color(0x14, 0x14, 0x16, 0xff))
+        .build();
+}
+
+pub fn quick_hidden() {
+    *QUICK_HIDDEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::time::Instant::now());
+}
+
+/// Closes the quick add window once it has been hidden 5 minutes.
+fn close_idle_quick(app: &AppHandle) {
+    let idle = QUICK_HIDDEN.lock().unwrap_or_else(|e| e.into_inner()).is_some_and(|t| t.elapsed() >= Duration::from_secs(300));
+    if idle {
+        if let Some(w) = app.get_webview_window("quick") {
+            let _ = w.destroy();
+        }
+        *QUICK_HIDDEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -138,7 +176,10 @@ pub fn start(app: &AppHandle) -> tauri::Result<()> {
         } else {
             title(&a);
         }
-        std::thread::sleep(Duration::from_secs(1));
+        close_idle_quick(&a);
+        // Idle, nothing moves: look again less often.
+        let idle = a.state::<Timer>().0.lock().unwrap().phase().is_none();
+        std::thread::sleep(Duration::from_secs(if idle { 2 } else { 1 }));
     });
     Ok(())
 }

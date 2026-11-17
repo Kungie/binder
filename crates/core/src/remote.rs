@@ -14,7 +14,9 @@ pub trait Remote {
 }
 
 /// The system's `ssh`, non-interactive: keys only, a 5 second connect timeout, keepalives, and a deadline for the
-/// whole call so a stalled connection can't hang Binder.
+/// whole call so a stalled connection can't hang Binder. Calls ride one shared connection (an ssh master kept 10
+/// minutes after its last use, its socket in /tmp, never in ~/.ssh), so a check doesn't pay a new handshake on both
+/// machines every time; without the master a call simply connects on its own.
 pub struct SshRemote {
     pub target: String,
     /// `ssh`; tests put a stand-in here.
@@ -26,6 +28,35 @@ impl SshRemote {
     pub fn new(target: impl Into<String>) -> SshRemote {
         SshRemote { target: target.into(), program: "ssh".into(), deadline: Duration::from_secs(20) }
     }
+
+    /// The master's socket: short enough for a Unix socket path, one per user and target.
+    fn socket(&self) -> String {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&self.program, &self.target).hash(&mut h);
+        // SAFETY: getuid has no preconditions and can't fail.
+        let uid = unsafe { libc::getuid() };
+        format!("/tmp/binder-{uid}-{:016x}", h.finish())
+    }
+
+    /// Starts the shared connection when there is none. It detaches after logging in, with nothing on its pipes,
+    /// so no call waits on it; two starting at once leave one.
+    fn ensure_master(&self, socket: &str) {
+        if std::path::Path::new(socket).exists() {
+            return;
+        }
+        let child = Command::new(&self.program)
+            .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"])
+            .args(["-o", "ControlMaster=yes", "-o", "ControlPersist=600", "-o", &format!("ControlPath={socket}"), "-N", "-f"])
+            .args(["--", &self.target])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        if let Ok(mut child) = child {
+            std::thread::spawn(move || child.wait());
+        }
+    }
 }
 
 impl Remote for SshRemote {
@@ -36,8 +67,11 @@ impl Remote for SshRemote {
             Some(data) => format!("printf %s '{}' | base64 -d | sh -c {}\n", STANDARD.encode(data), quote(script)),
             None => script.to_string(),
         };
+        let socket = self.socket();
+        self.ensure_master(&socket);
         let mut child = Command::new(&self.program)
             .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2"])
+            .args(["-o", "ControlMaster=no", "-o", &format!("ControlPath={socket}")])
             .args(["--", &self.target, "sh", "-l", "-s"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

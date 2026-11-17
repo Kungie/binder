@@ -101,6 +101,7 @@ pub fn run() {
                 // Quick add goes away when it loses focus, like Spotlight.
                 if let tauri::WindowEvent::Focused(false) = event {
                     let _ = window.hide();
+                    tray::quick_hidden();
                 }
                 return;
             }

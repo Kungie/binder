@@ -1,4 +1,5 @@
 import { DiskBars, useSdSpace } from "../components/DiskBars";
+import { whileVisible } from "../lib/usePoll";
 import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { FileInfo } from "../components/FileInfo";
@@ -161,8 +162,7 @@ export function Cloud() {
   // While not connected, look again every few seconds: Finder mounts the share on its own after Connect.
   useEffect(() => {
     if (mounted) return;
-    const timer = window.setInterval(() => void refreshStatus(), 3000);
-    return () => clearInterval(timer);
+    return whileVisible(refreshStatus, 3000);
   }, [mounted, refreshStatus]);
 
   const refreshSpace = useCallback(() => {

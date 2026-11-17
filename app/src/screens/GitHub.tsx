@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { whileVisible } from "../lib/usePoll";
 import { CiIcon } from "../components/CiIcon";
 import { ProjectDot } from "../components/ProjectDot";
 import { Button, Notice, fieldClass } from "../components/ui";
@@ -44,8 +45,7 @@ export function GitHub() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), EVERY);
-    return () => window.clearInterval(t);
+    return whileVisible(load, EVERY);
   }, [load]);
 
   const rows = tab === "pulls" ? (lists?.pulls ?? []) : (lists?.issues ?? []);
@@ -217,10 +217,10 @@ function DetailView({ picked, project, onChanged }: { picked: Picked; project: P
         },
       );
     ask();
-    const t = window.setInterval(ask, 10_000);
+    const stop = whileVisible(ask, 10_000);
     return () => {
       live = false;
-      window.clearInterval(t);
+      stop();
     };
   }, [api, reviewRun, draft]);
 

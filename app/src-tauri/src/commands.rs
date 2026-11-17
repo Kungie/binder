@@ -248,6 +248,7 @@ pub async fn site_uptime(state: State<'_, AppState>, name: String) -> Res<binder
 pub async fn quick_added(app: tauri::AppHandle) -> Res<()> {
     if let Some(w) = app.get_webview_window("quick") {
         let _ = w.hide();
+        crate::tray::quick_hidden();
     }
     app.emit("tasks://changed", ()).map_err(|e| e.to_string())
 }
@@ -257,6 +258,7 @@ pub async fn quick_added(app: tauri::AppHandle) -> Res<()> {
 pub async fn quick_close(app: tauri::AppHandle) -> Res<()> {
     if let Some(w) = app.get_webview_window("quick") {
         let _ = w.hide();
+        crate::tray::quick_hidden();
     }
     Ok(())
 }

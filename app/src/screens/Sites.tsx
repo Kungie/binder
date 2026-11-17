@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { whileVisible } from "../lib/usePoll";
 import { Button, Notice, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
 import type { Site, SiteCheck, Uptime } from "../lib/types";
@@ -50,8 +51,7 @@ export function Sites() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), EVERY);
-    return () => window.clearInterval(t);
+    return whileVisible(load, EVERY);
   }, [load]);
 
   return (
