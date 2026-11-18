@@ -22,14 +22,18 @@ fn shown() -> bool {
     VIEWING.lock().unwrap().is_some()
 }
 
-/// A session's name for people: "Claude Code", "Ollama", or "Claude Code · <project>".
+/// A session's name for people: the name the owner gave it, "Claude Code", "Ollama", or "Claude Code · <project>".
 fn label(app: &AppHandle, session: &str) -> String {
+    let state = app.state::<AppState>();
+    let given = state.config.lock().ok().and_then(|c| c.agent_names.get(session).cloned().or_else(|| c.agents.iter().find(|a| format!("binder-claude-{}", agents::slug(&a.name)) == session).map(|a| a.name.clone())));
+    if let Some(name) = given {
+        return name;
+    }
     match session {
         "binder-claude" => "Claude Code".into(),
         "binder-ollama" => "Ollama".into(),
         s => {
             let slug = s.strip_prefix("binder-claude-").unwrap_or(s);
-            let state = app.state::<AppState>();
             let name = state.db.lock().ok().and_then(|db| db.list_projects().ok()).and_then(|ps| ps.into_iter().find(|p| agents::slug(&p.name) == slug).map(|p| p.name));
             format!("Claude Code · {}", name.unwrap_or_else(|| slug.to_string()))
         }

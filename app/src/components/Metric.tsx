@@ -4,7 +4,7 @@ import { Kpi } from "./panelui/kpi";
 /** One number in a panel, PanelUI style. With `onClick` the box is a button that opens what is behind it. */
 export function Metric({ title, value, detail, onClick, pressed }: { title: string; value: ReactNode; detail?: ReactNode; onClick?(): void; pressed?: boolean }) {
   const box = (
-    <Kpi surface role="group" aria-label={`${title}: ${value}`} className="!gap-1 !p-4">
+    <Kpi surface role="group" aria-label={`${title}: ${value}`} className={`h-full !gap-1 !p-4 transition-colors duration-[120ms] ${pressed ? "!border-line-strong" : ""}`}>
       <Kpi.Header>
         <Kpi.Title className="!text-[12px] !font-normal">{title}</Kpi.Title>
       </Kpi.Header>
@@ -19,7 +19,7 @@ export function Metric({ title, value, detail, onClick, pressed }: { title: stri
       aria-label={title}
       aria-pressed={pressed ?? false}
       onClick={onClick}
-      className={`rounded-panel text-left transition-shadow duration-[120ms] focus:outline-none focus-visible:ring-1 focus-visible:ring-text-3 ${pressed ? "ring-1 ring-line-strong" : ""}`}
+      className="h-full rounded-3xl text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-text-3"
     >
       {box}
     </button>

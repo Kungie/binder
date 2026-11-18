@@ -136,7 +136,7 @@ describe("Printer", () => {
   it("history_lists_ended_prints", async () => {
     const { user } = setup();
     const panel = await screen.findByRole("region", { name: "Print history" });
-    const rows = within(panel).getAllByRole("listitem");
+    const rows = await within(panel).findAllByRole("listitem");
     expect(rows[0]).toHaveTextContent("bracket");
     expect(rows[0]).toHaveTextContent("Failed at layer 12");
     expect(rows[1]).toHaveTextContent("case-lid");
