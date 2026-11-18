@@ -50,18 +50,18 @@ describe("Container notifications", () => {
   it("an_alert_opens_the_server_screen", async () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
     const { api } = setup("overview");
-    await screen.findByRole("button", { name: "Server" });
+    await screen.findByRole("button", { name: "Servers" });
     act(() => api.emitWatchAlert("web stopped"));
-    expect(await screen.findByRole("heading", { name: "Server" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
     vi.restoreAllMocks();
   });
 
   it("an_alert_leaves_the_screen_while_the_window_is_in_use", async () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(true);
     const { api } = setup("overview");
-    await screen.findByRole("button", { name: "Server" });
+    await screen.findByRole("button", { name: "Servers" });
     act(() => api.emitWatchAlert("web stopped"));
-    expect(screen.queryByRole("heading", { name: "Server" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Servers" })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
 });

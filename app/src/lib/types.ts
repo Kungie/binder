@@ -278,6 +278,10 @@ export interface Config {
   agents?: { name: string; dir: string }[];
   /** Names given to sessions, by tmux session. */
   agent_names?: Record<string, string>;
+  /** Every server added, by SSH target; `server` is the one in use. */
+  servers?: string[];
+  /** Each server's own name, by SSH target, as last read. */
+  server_names?: Record<string, string>;
 }
 
 export interface OverviewLayout {
@@ -331,6 +335,8 @@ export interface Service {
 }
 
 export interface ServerStatus {
+  /** The server's own name, from hostname. */
+  hostname?: string;
   containers: Container[];
   services: Service[];
   load: [number, number, number];

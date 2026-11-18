@@ -2,6 +2,7 @@ import { Dot, Metric } from "../components/Metric";
 import { type TopKind, TopList } from "../components/TopList";
 import { Panel } from "../components/Panel";
 import { ServerTargetForm } from "../components/ServerTargetForm";
+import { ServerSwitcher } from "../components/ServerSwitcher";
 import { Button, Notice } from "../components/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "../lib/store";
@@ -17,8 +18,8 @@ export function Server() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
-        <h1 className="text-[13px] font-medium">Server</h1>
-        {target && <span className="font-mono text-[11px] text-text-3">{target}</span>}
+        <h1 className="text-[13px] font-medium">Servers</h1>
+        {target && <ServerSwitcher target={target} hostname={error ? undefined : status?.hostname} onSwitched={() => void refresh()} />}
         {status && !error && <span className="text-[12px] text-text-3">Read {clock(status.at)}</span>}
         {target && (
           <Button variant="ghost" className="ml-auto" onClick={() => void refresh()}>

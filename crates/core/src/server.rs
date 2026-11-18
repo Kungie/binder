@@ -41,6 +41,9 @@ pub struct ServerStatus {
     /// When the server booted, from its uptime; `None` when it couldn't be read.
     #[serde(default)]
     pub boot_at: Option<i64>,
+    /// The server's own name, from `hostname`; empty when it couldn't be read.
+    #[serde(default)]
+    pub hostname: String,
     pub at: i64,
 }
 
@@ -54,6 +57,7 @@ echo --binder:temp--; cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null
 echo --binder:cores--; nproc 2>/dev/null
 echo --binder:power--; vcgencmd pmic_read_adc 2>/dev/null
 echo --binder:uptime--; cat /proc/uptime 2>/dev/null
+echo --binder:host--; hostname 2>/dev/null
 exit 0
 "#;
 
@@ -81,6 +85,7 @@ pub fn fetch(remote: &dyn Remote, now: i64, sd: Option<&str>) -> Result<ServerSt
         sd_size: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(s, _)| s),
         sd_used: sd.and_then(|sd| parse_mount(part("sd"), sd)).map(|(_, u)| u),
         docker_failed: out.contains("--binder:docker-failed--"),
+        hostname: part("host").trim().to_string(),
         boot_at: part("uptime").split_whitespace().next().and_then(|u| u.parse::<f64>().ok()).map(|u| now - u.round() as i64),
         at: now,
     })

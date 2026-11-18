@@ -54,7 +54,7 @@ describe("Morning brief", () => {
     const { user } = setup();
     const brief = await screen.findByRole("region", { name: "Morning brief" });
     await user.click(within(brief).getByRole("button", { name: /web stopped/ }));
-    expect(await screen.findByRole("heading", { name: "Server" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
   });
 });
 

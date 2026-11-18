@@ -105,7 +105,7 @@ describe("Agents", () => {
     await screen.findAllByText(/Connected to demo-dev/);
     await user.click(screen.getByRole("button", { name: /Ollama/ }));
     await user.click(screen.getByRole("button", { name: /Claude Code/ }));
-    await user.click(screen.getByRole("button", { name: "Server" }));
+    await user.click(screen.getByRole("button", { name: "Servers" }));
     await openAgents(user);
     expect(screen.getAllByText(/Connected to demo-dev/, { ignore: "[hidden] *" }).length).toBeGreaterThan(0);
     expect(open).toHaveBeenCalledTimes(2);

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useStore } from "./store";
 import type { ServerStatus } from "./types";
 import { usePoll } from "./usePoll";
@@ -10,8 +10,15 @@ export function useServer(ms: number) {
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const last = useRef<string | null | undefined>(undefined);
   const refresh = useCallback(async () => {
     const cfg = await api.getConfig();
+    // Another server: what was read from the last one doesn't belong to it.
+    if (last.current !== undefined && last.current !== cfg.server) {
+      setStatus(null);
+      setError(null);
+    }
+    last.current = cfg.server;
     setTarget(cfg.server);
     if (!cfg.server) return;
     try {

@@ -232,3 +232,13 @@ fn a_failed_restart_leaves_no_owner_restart() {
     // Nothing was restarted, so the alerts for web stay on.
     assert!(db.lock().unwrap().events_between(0, 1000).unwrap().is_empty());
 }
+
+#[test]
+fn the_servers_own_name_comes_back() {
+    let out = "--binder:load--\n0.1 0.2 0.3 1/2 3\n--binder:host--\ncitadel\n";
+    let s = fetch(&FakeRemote::new(vec![Ok(out.into())]), 0, None).unwrap();
+    assert_eq!(s.hostname, "citadel");
+    let r = FakeRemote::new(vec![Ok(String::new())]);
+    fetch(&r, 0, None).unwrap();
+    assert!(r.seen.borrow()[0].0.contains("echo --binder:host--; hostname"));
+}

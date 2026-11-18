@@ -40,6 +40,10 @@ pub struct Config {
     pub agents: Vec<SavedAgent>,
     /// Names the owner gave sessions, by tmux session.
     pub agent_names: std::collections::BTreeMap<String, String>,
+    /// Every server the owner added, by SSH target; `server` is the one in use.
+    pub servers: Vec<String>,
+    /// Each server's own name (`hostname`), by SSH target, as last read.
+    pub server_names: std::collections::BTreeMap<String, String>,
 }
 
 /// A Claude Code session of the owner's: what it is called and the server folder it starts in.
@@ -80,7 +84,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into(), agents: vec![], agent_names: Default::default() }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into(), agents: vec![], agent_names: Default::default(), servers: vec![], server_names: Default::default() }
     }
 }
 
