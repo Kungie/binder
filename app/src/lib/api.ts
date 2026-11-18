@@ -17,6 +17,7 @@ import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site
   Config,
   Conflict,
   Device,
+  ClaudeLimits,
   PingResult,
   PingSample,
   TailnetStatus,
@@ -194,6 +195,9 @@ export interface Api {
   termWrite(session: string, data: string): Promise<void>;
   /** Ends a terminal here only. */
   termClose(session: string): Promise<void>;
+  claudeLimits(): Promise<ClaudeLimits>;
+  /** Adds Binder's status line to Claude Code on the server. */
+  installClaudeLimits(): Promise<void>;
   tailnetStatus(): Promise<TailnetStatus>;
   /** Each device's pings of the last day, by Tailscale id. */
   tailnetHistory(): Promise<Record<string, PingSample[]>>;
@@ -402,6 +406,8 @@ export const tauriApi: Api = {
   termOpen: (pane, cols, rows, onData) => call("term_open", { pane, cols, rows, output: bytesChannel(onData) }),
   termWrite: (session, data) => call("term_write", { session, data }),
   termClose: (session) => call("term_close", { session }),
+  claudeLimits: () => call("claude_limits"),
+  installClaudeLimits: () => call("install_claude_limits"),
   tailnetStatus: () => call("tailnet_status"),
   tailnetHistory: () => call("tailnet_history"),
   tailnetPing: (ip) => call("tailnet_ping", { ip }),

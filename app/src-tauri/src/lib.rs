@@ -233,6 +233,8 @@ pub fn run() {
             commands::tailnet_ping,
             commands::taildrop,
             commands::term_close,
+            commands::claude_limits,
+            commands::install_claude_limits,
             commands::ollama_models,
             commands::set_ollama_model,
             commands::claude_usage,

@@ -258,4 +258,23 @@ describe("Agents", () => {
     expect(api.closedSessions).toEqual(["binder-qwen"]);
     expect(screen.queryByRole("button", { name: /^qwen/ })).toBeNull();
   });
+
+  it("shows the plan limits in percent once the status line keeps them", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { user } = setup({ limits: { installed: true, limits: { five_hour: { percent: 34.4, resets_at: now + 3600 }, seven_day: { percent: 82, resets_at: now + 86_400 * 3 }, read_at: now } } });
+    await openAgents(user);
+    const usage = await screen.findByLabelText("Claude Code usage");
+    await within(usage).findByText("34%");
+    expect(within(usage).getByText("34%")).toHaveClass("text-ok");
+    expect(within(usage).getByText("82%")).toHaveClass("text-bad");
+  });
+
+  it("Show % adds the status line, then waits for Claude's next reply", async () => {
+    const { api, user } = setup();
+    const install = vi.spyOn(api, "installClaudeLimits");
+    await openAgents(user);
+    await user.click(await screen.findByRole("button", { name: "Show %" }));
+    expect(install).toHaveBeenCalled();
+    expect(await screen.findByText("% after Claude's next reply")).toBeInTheDocument();
+  });
 });

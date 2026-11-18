@@ -38,6 +38,7 @@ pub mod events;
 pub mod gh_work;
 pub mod github;
 pub mod hooks;
+pub mod limits;
 pub mod model;
 pub mod night;
 pub mod pickup;

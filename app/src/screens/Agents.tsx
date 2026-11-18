@@ -5,7 +5,7 @@ import { Button, fieldClass } from "../components/ui";
 import { STATE_COLOR, STATE_WORD, paneSession, projectPane, slug, tokens } from "../lib/agents";
 import { loadPercent } from "../lib/load";
 import { useStore } from "../lib/store";
-import type { AgentSession, ClaudeUsage, Config, Pane, PaneState, Project, RecentRun, ServerStatus } from "../lib/types";
+import type { AgentSession, ClaudeLimits, ClaudeUsage, Config, LimitWindow, Pane, PaneState, Project, RecentRun, ServerStatus } from "../lib/types";
 import { whileVisible } from "../lib/usePoll";
 import { gb } from "../lib/useServer";
 
@@ -409,41 +409,79 @@ function Load() {
   );
 }
 
-const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** Green under half, yellow under 80 %, red above. */
+const level = (p: number) => (p >= 80 ? { bar: "bg-bad", text: "text-bad" } : p >= 50 ? { bar: "bg-st-progress", text: "text-st-progress" } : { bar: "bg-ok", text: "text-ok" });
 
-/** Claude Code's tokens on the server and this Mac, once a minute while the screen shows: a bar per day of the
- *  last week, today's brightest, then the 5 hour, today and 7 day sums. */
+function resets(at: number | null): string {
+  if (at === null) return "";
+  const d = new Date(at * 1000);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return `Resets ${sameDay ? "" : `${d.toLocaleDateString([], { weekday: "short" })} `}${time}`;
+}
+
+function Meter({ label, w }: { label: string; w: LimitWindow }) {
+  const c = level(w.percent);
+  return (
+    <span className="flex items-center gap-1.5" title={resets(w.resets_at)}>
+      <span className="text-text-3">{label}</span>
+      <span aria-hidden className="h-1.5 w-12 overflow-hidden rounded-full bg-raised">
+        <span className={`block h-full rounded-full ${c.bar}`} style={{ width: `${Math.min(100, Math.max(2, w.percent))}%` }} />
+      </span>
+      <span className={c.text}>{`${Math.round(w.percent)}%`}</span>
+    </span>
+  );
+}
+
+/** Claude Code's plan limits in percent when Binder's status line is on the server; the tokens otherwise. Read once a
+ *  minute while the screen shows. */
 function Usage() {
   const { api } = useStore();
   const [u, setU] = useState<ClaudeUsage | null>(null);
-  useEffect(() => {
-    const read = () => api.claudeUsage().then(setU, () => {});
-    void read();
-    return whileVisible(read, 60_000);
+  const [l, setL] = useState<ClaudeLimits | null>(null);
+  const [busy, setBusy] = useState(false);
+  const read = useCallback(() => {
+    void api.claudeUsage().then(setU, () => {});
+    void api.claudeLimits().then(setL, () => {});
   }, [api]);
-  if (!u) return null;
-  const days = u.days ?? [];
-  const top = Math.max(1, ...days);
-  const today = new Date().getDay();
+  useEffect(() => {
+    read();
+    return whileVisible(read, 60_000);
+  }, [read]);
+  const sums = u ? `5 h ${tokens(u.five_hours)} · today ${tokens(u.today)} · 7 days ${tokens(u.week)} tokens` : "";
+  const lim = l?.limits;
   return (
-    <span className="flex items-center gap-3 font-mono text-[11px]" aria-label="Claude Code usage" title="Input, output and cache writes, on the server and this Mac">
+    <span className="flex items-center gap-3 font-mono text-[11px]" aria-label="Claude Code usage" title={sums}>
       <span className="text-text-2">Claude</span>
-      {days.length === 7 && (
-        <span aria-hidden className="flex h-4 items-end gap-[2px]">
-          {days.map((n, i) => (
-            <span
-              key={i}
-              title={`${DAY[(today + i + 1) % 7]} ${tokens(n)}`}
-              className={`w-[5px] rounded-[1px] ${i === 6 ? "bg-st-done" : "bg-st-done/40"}`}
-              style={{ height: `${Math.max(n > 0 ? 15 : 6, Math.round((n / top) * 100))}%` }}
-            />
-          ))}
-        </span>
+      {lim && (lim.five_hour || lim.seven_day) ? (
+        <>
+          {lim.five_hour && <Meter label="5 h" w={lim.five_hour} />}
+          {lim.seven_day && <Meter label="week" w={lim.seven_day} />}
+        </>
+      ) : (
+        <>
+          {u && (
+            <span className="text-text-3">
+              5 h <span className="text-st-done">{tokens(u.five_hours)}</span> · today <span className="text-text">{tokens(u.today)}</span> · 7 days{" "}
+              <span className="text-text">{tokens(u.week)}</span>
+            </span>
+          )}
+          {l?.installed && <span className="text-text-3">% after Claude's next reply</span>}
+          {l && !l.installed && (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              title="Adds a status line to Claude Code on the server that keeps its plan limits for Binder"
+              onClick={() => {
+                setBusy(true);
+                void api.installClaudeLimits().then(read, () => {}).finally(() => setBusy(false));
+              }}
+            >
+              Show %
+            </Button>
+          )}
+        </>
       )}
-      <span className="text-text-3">
-        5 h <span className="text-st-done">{tokens(u.five_hours)}</span> · today <span className="text-text">{tokens(u.today)}</span> · 7 days{" "}
-        <span className="text-text">{tokens(u.week)}</span>
-      </span>
     </span>
   );
 }

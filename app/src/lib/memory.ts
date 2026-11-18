@@ -1,7 +1,7 @@
 import { paneSession } from "./agents";
 import { nextDue } from "./repeat";
 import type { Api } from "./api";
-import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, ClaudeLimits, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -23,6 +23,8 @@ export interface Seed {
 }
 
 export interface MemoryOptions {
+  /** Claude Code's limits; not installed when unset. */
+  limits?: ClaudeLimits;
   /** The tailnet; null when Tailscale isn't installed. A demo tailnet when unset. */
   tailnet?: TailnetStatus | null;
   /** Whether the Cloud share is mounted. Defaults to true. */
@@ -160,6 +162,7 @@ export function memoryApi(
   ];
   const closedSessions: string[] = [];
   const dropped: { target: string; paths: string[] }[] = [];
+  const limits: ClaudeLimits = options.limits ?? { installed: false, limits: null };
   const tailnet: TailnetStatus | null =
     options.tailnet === undefined
       ? {
@@ -297,6 +300,12 @@ export function memoryApi(
     termOpen: (agent, _cols, _rows, onData) => openTerm(agent, onData),
     async termWrite(agent, data) {
       terms.get(agent)?.(encoder.encode(data));
+    },
+    async claudeLimits() {
+      return structuredClone(limits);
+    },
+    async installClaudeLimits() {
+      limits.installed = true;
     },
     async termClose(session) {
       terms.delete(session);

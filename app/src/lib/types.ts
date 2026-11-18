@@ -647,3 +647,14 @@ export interface PingSample {
   ms: number | null;
   via: string;
 }
+
+export interface LimitWindow {
+  percent: number;
+  resets_at: number | null;
+}
+
+/** Claude Code's plan limits in percent, as last handed to Binder's status line on the server. */
+export interface ClaudeLimits {
+  installed: boolean;
+  limits: { five_hour: LimitWindow | null; seven_day: LimitWindow | null; read_at: number } | null;
+}

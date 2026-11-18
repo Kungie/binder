@@ -1288,3 +1288,26 @@ pub async fn term_close(state: State<'_, AppState>, session: String) -> Res<()> 
     state.terminals.close(&session);
     Ok(())
 }
+
+#[derive(serde::Serialize)]
+pub struct ClaudeLimits {
+    /// Whether Binder's status line is in the server's Claude Code settings.
+    installed: bool,
+    limits: Option<binder_core::limits::Limits>,
+}
+
+/// Claude Code's plan limits in percent, as last handed to the status line on the server.
+#[tauri::command]
+pub async fn claude_limits(state: State<'_, AppState>) -> Res<ClaudeLimits> {
+    use binder_core::limits;
+    let script = format!("if grep -qs binder-statusline.sh \"$HOME/.claude/settings.json\"; then echo on; else echo off; fi\n{}", limits::READ_SCRIPT);
+    let out = remote(&state)?.run(&script, None).map_err(text)?;
+    let (head, rest) = out.split_once('\n').unwrap_or((&out, ""));
+    Ok(ClaudeLimits { installed: head.trim() == "on", limits: limits::parse(rest, now()) })
+}
+
+/// Adds Binder's status line to Claude Code on the server, so the limits can be read.
+#[tauri::command]
+pub async fn install_claude_limits(state: State<'_, AppState>) -> Res<()> {
+    binder_core::limits::install(&remote(&state)?).map_err(text)
+}
