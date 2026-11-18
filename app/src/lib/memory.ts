@@ -324,6 +324,9 @@ export function memoryApi(
       }
       return structuredClone(tailnet);
     },
+    async serverReachable(target) {
+      return !target.includes("10.0.7.99");
+    },
     async vpnSet(exit) {
       if (tailnet === null) throw new Error("Tailscale isn't installed on this Mac.");
       const node = exit === null ? null : tailnet.peers.find((p) => p.ip === exit && p.exit_option);

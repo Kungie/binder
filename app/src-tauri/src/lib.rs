@@ -236,6 +236,7 @@ pub fn run() {
             commands::claude_limits,
             commands::install_claude_limits,
             commands::vpn_set,
+            commands::server_reachable,
             commands::ollama_models,
             commands::set_ollama_model,
             commands::claude_usage,

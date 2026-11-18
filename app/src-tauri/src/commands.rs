@@ -1323,3 +1323,12 @@ pub async fn vpn_set(state: State<'_, AppState>, exit: Option<String>) -> Res<()
     }
     Ok(())
 }
+
+/// Whether a server answers over SSH now, for the server list's dots. Any target from the list, checked first.
+#[tauri::command]
+pub async fn server_reachable(target: String) -> Res<bool> {
+    if !binder_core::tailscale::valid_target(&target) {
+        return Err("That isn't an SSH target.".into());
+    }
+    Ok(SshRemote::new(target).run("true\n", None).is_ok())
+}

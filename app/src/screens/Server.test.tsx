@@ -220,4 +220,27 @@ describe("Containers", () => {
     expect(await screen.findByRole("button", { name: "Server: home" })).toBeInTheDocument();
     expect((await api.getConfig()).server_names).toEqual({ lab: "home" });
   });
+
+  it("every server's dot says whether it answers, and the one in use is marked apart", async () => {
+    const { api, user } = setup();
+    const c = await api.getConfig();
+    await api.setConfig({ ...c, servers: ["lab", "root@10.0.7.99", "root@vps"], server_names: { lab: "homelab" } });
+    await user.click(await screen.findByRole("button", { name: "Server: homelab" }));
+    const list = screen.getByRole("menu", { name: "Servers" });
+    await waitFor(() => expect(within(list).getByRole("menuitemradio", { name: /root@vps/ })).toHaveTextContent("Up"));
+    expect(within(list).getByRole("menuitemradio", { name: /10.0.7.99/ })).toHaveTextContent("Down");
+    expect(within(list).getByRole("menuitemradio", { name: /homelab/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(list).getByRole("menuitemradio", { name: /root@vps/ })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("renames a server in the list", async () => {
+    const { api, user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Server: homelab" }));
+    await user.click(within(screen.getByRole("menu", { name: "Servers" })).getByRole("button", { name: "Rename homelab" }));
+    const field = screen.getByRole("textbox", { name: "Server name" });
+    await user.clear(field);
+    await user.type(field, "home{Enter}");
+    expect(await screen.findByRole("button", { name: "Server: home" })).toBeInTheDocument();
+    expect((await api.getConfig()).server_names).toEqual({ lab: "home" });
+  });
 });

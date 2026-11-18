@@ -200,6 +200,8 @@ export interface Api {
   installClaudeLimits(): Promise<void>;
   /** Sends this Mac's traffic through an exit node, by its Tailscale address, or stops it with null. */
   vpnSet(exit: string | null): Promise<void>;
+  /** Whether a server answers over SSH now. */
+  serverReachable(target: string): Promise<boolean>;
   tailnetStatus(): Promise<TailnetStatus>;
   /** Each device's pings of the last day, by Tailscale id. */
   tailnetHistory(): Promise<Record<string, PingSample[]>>;
@@ -411,6 +413,7 @@ export const tauriApi: Api = {
   claudeLimits: () => call("claude_limits"),
   installClaudeLimits: () => call("install_claude_limits"),
   vpnSet: (exit) => call("vpn_set", { exit }),
+  serverReachable: (target) => call("server_reachable", { target }),
   tailnetStatus: () => call("tailnet_status"),
   tailnetHistory: () => call("tailnet_history"),
   tailnetPing: (ip) => call("tailnet_ping", { ip }),

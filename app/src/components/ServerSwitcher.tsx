@@ -10,6 +10,9 @@ export function ServerSwitcher({ target, hostname, onSwitched }: { target: strin
   const [adding, setAdding] = useState(false);
   const [typed, setTyped] = useState("");
   const [cfg, setCfg] = useState<Config | null>(null);
+  const [up, setUp] = useState<Record<string, boolean>>({});
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
   // Remember this server, and its hostname as its name when it has none yet; a name already saved stays.
@@ -27,7 +30,11 @@ export function ServerSwitcher({ target, hostname, onSwitched }: { target: strin
 
   useEffect(() => {
     if (!open) return;
-    void api.getConfig().then(setCfg);
+    void api.getConfig().then((c) => {
+      setCfg(c);
+      // Each server is asked on its own, so one that's down doesn't hold up the others.
+      for (const t of c.servers?.length ? c.servers : [target]) void api.serverReachable(t).then((ok) => setUp((u) => ({ ...u, [t]: ok })), () => setUp((u) => ({ ...u, [t]: false })));
+    });
     const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && (setOpen(false), setAdding(false));
     const esc = (e: KeyboardEvent) => e.key === "Escape" && (setOpen(false), setAdding(false));
     document.addEventListener("mousedown", away);
@@ -36,7 +43,18 @@ export function ServerSwitcher({ target, hostname, onSwitched }: { target: strin
       document.removeEventListener("mousedown", away);
       window.removeEventListener("keydown", esc);
     };
-  }, [api, open]);
+  }, [api, open, target]);
+
+  const rename = async (t: string) => {
+    const c = await api.getConfig();
+    const names = { ...(c.server_names ?? {}) };
+    if (newName.trim()) names[t] = newName.trim();
+    else delete names[t];
+    const next = { ...c, server_names: names };
+    await api.setConfig(next);
+    setCfg(next);
+    setRenaming(null);
+  };
 
   const use = async (t: string) => {
     const c = await api.getConfig();
@@ -68,21 +86,66 @@ export function ServerSwitcher({ target, hostname, onSwitched }: { target: strin
         </svg>
       </button>
       {open && (
-        <div role="menu" aria-label="Servers" className="absolute left-0 top-8 z-40 flex w-72 flex-col rounded-panel border border-line bg-panel p-1 shadow-menu">
-          {list.map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="menuitemradio"
-              aria-checked={t === target}
-              onClick={() => void use(t)}
-              className="flex items-center gap-2 rounded-control px-2 py-1.5 text-left text-[12px] hover:bg-raised"
-            >
-              <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${t === target ? "bg-ok" : "border border-line-strong"}`} />
-              <span className="text-text">{names[t] || t}</span>
-              <span className="ml-auto truncate font-mono text-[11px] text-text-3">{t}</span>
-            </button>
-          ))}
+        <div role="menu" aria-label="Servers" className="absolute left-0 top-8 z-40 flex w-96 flex-col rounded-panel border border-line bg-panel p-1 shadow-menu">
+          {list.map((t) =>
+            renaming === t ? (
+              <form
+                key={t}
+                className="p-1"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void rename(t);
+                }}
+              >
+                <input
+                  aria-label="Server name"
+                  autoFocus
+                  className={`${fieldClass} w-full`}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.stopPropagation();
+                      setRenaming(null);
+                    }
+                  }}
+                />
+              </form>
+            ) : (
+              <div key={t} className="group flex items-center rounded-control hover:bg-raised">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={t === target}
+                  onClick={() => void use(t)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-[12px]"
+                >
+                  <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${up[t] === undefined ? "border border-line-strong" : up[t] ? "bg-ok" : "border border-bad"}`} />
+                  <span className="sr-only">{up[t] === undefined ? "Checking" : up[t] ? "Up" : "Down"}</span>
+                  <span className={t === target ? "font-medium text-text" : "text-text-2"}>{names[t] || t}</span>
+                  <span className="ml-auto truncate font-mono text-[11px] text-text-3">{t}</span>
+                  <span aria-hidden className="w-3 shrink-0 text-text">
+                    {t === target && (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2.5 6.2 5 8.5 9.5 3.5" />
+                      </svg>
+                    )}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Rename ${names[t] || t}`}
+                  onClick={() => {
+                    setNewName(names[t] || "");
+                    setRenaming(t);
+                  }}
+                  className="mr-1 rounded-control px-1.5 py-1 text-[11px] text-text-3 opacity-0 hover:text-text focus:opacity-100 group-hover:opacity-100"
+                >
+                  Rename
+                </button>
+              </div>
+            ),
+          )}
           <div className="mt-1 border-t border-line pt-1">
             {adding ? (
               <form
