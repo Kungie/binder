@@ -6,6 +6,7 @@ import { useStore } from "../lib/store";
 import { DEVICE_KIND_LABEL, type Device, type DevicePatch } from "../lib/types";
 import { usePoll } from "../lib/usePoll";
 import { Empty } from "../components/Mascot";
+import { Tailnet } from "../components/Tailnet";
 
 export function Devices() {
   const { api } = useStore();
@@ -31,7 +32,8 @@ export function Devices() {
           New device
         </Button>
       </header>
-      <div className="px-5 pb-5">
+      <div className="flex flex-col gap-3 px-5 pb-5">
+        <Tailnet />
         <div className="rounded-panel border border-line bg-panel">
           <table aria-label="Devices" className="w-full table-fixed text-[12px]">
             <thead>

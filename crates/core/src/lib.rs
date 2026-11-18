@@ -54,6 +54,7 @@ pub mod shell;
 pub mod sites;
 pub mod tasks;
 pub mod uptime;
+pub mod tailscale;
 pub mod usage;
 pub mod watch;
 pub mod weekly;

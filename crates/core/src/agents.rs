@@ -15,6 +15,8 @@ pub enum Pane {
     Claude { project: Option<String>, dir: Option<String> },
     Ollama { model: String },
     Attach { session: String },
+    /// A login shell on a device, no tmux: the Devices screen's SSH.
+    Ssh { target: String },
 }
 
 /// The model Ollama runs until the owner picks another.
@@ -52,6 +54,7 @@ impl Pane {
             Pane::Claude { project: Some(p), .. } => format!("binder-claude-{}", slug(p)),
             Pane::Ollama { .. } => "binder-ollama".into(),
             Pane::Attach { session } => session.clone(),
+            Pane::Ssh { target } => format!("ssh-{}", slug(target)),
         }
     }
 
@@ -68,6 +71,7 @@ impl Pane {
             Pane::Ollama { .. } => Err(Error::Invalid("That isn't a model name.".into())),
             Pane::Attach { session } if valid_session(session) => Ok("exec bash -l".into()),
             Pane::Attach { .. } => Err(Error::Invalid("That isn't one of Binder's sessions.".into())),
+            Pane::Ssh { .. } => Err(Error::Invalid("A device's shell runs no program.".into())),
         }
     }
 }
@@ -102,6 +106,13 @@ pub fn ssh_args(target: &str, pane: &Pane) -> Result<Vec<String>> {
     .into_iter()
     .map(String::from)
     .collect();
+    if let Pane::Ssh { target } = pane {
+        if !crate::tailscale::valid_target(target) {
+            return Err(Error::Invalid("That isn't a host to connect to.".into()));
+        }
+        args.push(target.clone());
+        return Ok(args);
+    }
     args.push(target.to_string());
     args.push(remote_command(pane)?);
     Ok(args)

@@ -552,7 +552,7 @@ export interface Transfer {
 }
 
 /** One terminal on the Agents screen: Claude Code at home or in a project's folder, or Ollama with a model. */
-export type Pane = { kind: "claude"; project: string | null; dir: string | null } | { kind: "ollama"; model: string } | { kind: "attach"; session: string };
+export type Pane = { kind: "claude"; project: string | null; dir: string | null } | { kind: "ollama"; model: string } | { kind: "attach"; session: string } | { kind: "ssh"; target: string };
 
 /** What a session is doing, as its screen shows it. */
 export type PaneState = "working" | "waiting" | "idle" | "exited";
@@ -611,4 +611,39 @@ export interface TopProcess {
 export interface TopFolder {
   path: string;
   bytes: number;
+}
+
+/** A device on the tailnet, as the Mac's Tailscale app reports it. */
+export interface TailnetPeer {
+  id: string;
+  name: string;
+  dns: string;
+  os: string;
+  ip: string;
+  online: boolean;
+  last_seen: number | null;
+  key_expiry: number | null;
+  expired: boolean;
+  /** The DERP region traffic goes through without a direct path. */
+  relay: string;
+  taildrop: boolean;
+  this_mac: boolean;
+}
+
+export interface TailnetStatus {
+  running: boolean;
+  /** This Mac first, then the others by name. */
+  peers: TailnetPeer[];
+}
+
+export interface PingResult {
+  ms: number;
+  /** "direct" or "DERP <region>". */
+  via: string;
+}
+
+export interface PingSample {
+  at: number;
+  ms: number | null;
+  via: string;
 }

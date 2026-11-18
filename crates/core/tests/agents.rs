@@ -178,3 +178,13 @@ fn models_parse_from_ollama_list() {
     assert_eq!(parse_models(out), vec!["qwen3:4b", "llama3.2:latest"]);
     assert!(parse_models("").is_empty());
 }
+
+#[test]
+fn an_ssh_pane_opens_a_plain_shell_on_its_own_host() {
+    let p = Pane::Ssh { target: "demo-dev@lab.tail0.ts.net".into() };
+    assert_eq!(p.session(), "ssh-demo-dev-lab-tail0-ts-net");
+    let a = ssh_args("ignored@10.0.7.2", &p).unwrap();
+    assert_eq!(a[10], "demo-dev@lab.tail0.ts.net");
+    assert_eq!(a.len(), 11);
+    assert!(ssh_args("x", &Pane::Ssh { target: "-oProxyCommand=x".into() }).is_err());
+}

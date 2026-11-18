@@ -14,6 +14,7 @@ export function slug(name: string): string {
 export function paneSession(pane: Pane): string {
   if (pane.kind === "ollama") return "binder-ollama";
   if (pane.kind === "attach") return pane.session;
+  if (pane.kind === "ssh") return `ssh-${slug(pane.target)}`;
   return pane.project ? `binder-claude-${slug(pane.project)}` : "binder-claude";
 }
 

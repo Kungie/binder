@@ -1,7 +1,7 @@
 import { paneSession } from "./agents";
 import { nextDue } from "./repeat";
 import type { Api } from "./api";
-import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -23,6 +23,8 @@ export interface Seed {
 }
 
 export interface MemoryOptions {
+  /** The tailnet; null when Tailscale isn't installed. A demo tailnet when unset. */
+  tailnet?: TailnetStatus | null;
   /** Whether the Cloud share is mounted. Defaults to true. */
   cloudMounted?: boolean;
   vaultConnected?: boolean;
@@ -74,6 +76,8 @@ export function memoryApi(
   cameraStops: string[];
   /** Sessions ended from the Agents screen, in order. */
   closedSessions: string[];
+  /** Files sent with Taildrop. */
+  dropped: { target: string; paths: string[] }[];
   /** Containers restarted, in order. */
   restarted: string[];
   /** Links opened in the browser. */
@@ -155,6 +159,18 @@ export function memoryApi(
     { session: "binder-ollama", state: "idle", line: ">>> Send a message" },
   ];
   const closedSessions: string[] = [];
+  const dropped: { target: string; paths: string[] }[] = [];
+  const tailnet: TailnetStatus | null =
+    options.tailnet === undefined
+      ? {
+          running: true,
+          peers: [
+            { id: "n1", name: "demo-mac", dns: "demo-mac.tail0.ts.net", os: "macOS", ip: "100.64.0.1", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: false, this_mac: true },
+            { id: "n2", name: "lab", dns: "lab.tail0.ts.net", os: "linux", ip: "100.64.0.2", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: true, this_mac: false },
+            { id: "n3", name: "phone", dns: "phone.tail0.ts.net", os: "iOS", ip: "100.64.0.3", online: false, last_seen: Math.floor(Date.now() / 1000) - 3 * 86_400, key_expiry: null, expired: true, relay: "", taildrop: true, this_mac: false },
+          ],
+        }
+      : options.tailnet;
   const encoder = new TextEncoder();
   const copied: string[] = [];
   let installed = false;
@@ -282,6 +298,25 @@ export function memoryApi(
     async termWrite(agent, data) {
       terms.get(agent)?.(encoder.encode(data));
     },
+    async termClose(session) {
+      terms.delete(session);
+    },
+    async tailnetStatus() {
+      if (tailnet === null) throw new Error("Tailscale isn't installed on this Mac.");
+      return structuredClone(tailnet);
+    },
+    async tailnetHistory() {
+      const now = Math.floor(Date.now() / 1000);
+      const lab: PingSample[] = Array.from({ length: 24 }, (_, i) => ({ at: now - (23 - i) * 3600, ms: 28 + ((i * 7) % 11), via: "DERP fra" }));
+      return { n2: lab };
+    },
+    async tailnetPing(ip) {
+      const p = tailnet?.peers.find((x) => x.ip === ip);
+      return p?.online ? { ms: 31, via: "DERP fra" } : null;
+    },
+    async taildrop(target, paths) {
+      dropped.push({ target, paths });
+    },
     async termResize() {},
     termReconnect: (agent, _cols, _rows, onData) => openTerm(agent, onData),
     async copyText(text) {
@@ -382,6 +417,7 @@ export function memoryApi(
     printerCommands,
     cameraStops,
     closedSessions,
+    dropped,
     restarted,
     openedLinks,
     ghActions,

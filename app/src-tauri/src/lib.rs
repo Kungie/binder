@@ -1,4 +1,5 @@
 mod agents_watch;
+mod tailnet;
 mod apps;
 mod background;
 mod commands;
@@ -92,6 +93,7 @@ pub fn run() {
             if !cfg!(debug_assertions) {
                 background::start(app.handle());
                 agents_watch::start(app.handle());
+                tailnet::start(app.handle());
             }
             Ok(())
         })
@@ -226,6 +228,11 @@ pub fn run() {
             commands::agent_sessions,
             commands::agent_session_close,
             commands::agent_viewing,
+            commands::tailnet_status,
+            commands::tailnet_history,
+            commands::tailnet_ping,
+            commands::taildrop,
+            commands::term_close,
             commands::ollama_models,
             commands::set_ollama_model,
             commands::claude_usage,

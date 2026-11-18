@@ -1077,7 +1077,8 @@ struct TermExit {
 
 /// Starts the pane's `ssh` into its tmux session, or hands a running one's output to this window.
 fn term_start(app: tauri::AppHandle, state: &State<AppState>, pane: &Pane, cols: u16, rows: u16, output: Channel<InvokeResponseBody>) -> Res<()> {
-    let target = server_target(state)?;
+    // A device's shell goes to its own host; ssh_args takes it from the pane.
+    let target = if matches!(pane, Pane::Ssh { .. }) { String::new() } else { server_target(state)? };
     let session = pane.session();
     let exit_session = session.clone();
     state.terminals.open(
@@ -1255,5 +1256,35 @@ pub async fn set_zoom(app: tauri::AppHandle, state: State<'_, AppState>, percent
     };
     config.save(&state.config_path).map_err(text)?;
     apply_zoom(&app);
+    Ok(())
+}
+
+/// The tailnet as the Mac's Tailscale app sees it.
+#[tauri::command]
+pub async fn tailnet_status() -> Res<binder_core::tailscale::Status> {
+    crate::tailnet::status()
+}
+
+/// Each device's pings of the last day, by Tailscale id.
+#[tauri::command]
+pub async fn tailnet_history() -> Res<std::collections::HashMap<String, Vec<crate::tailnet::Sample>>> {
+    Ok(crate::tailnet::history())
+}
+
+#[tauri::command]
+pub async fn tailnet_ping(ip: String) -> Res<Option<binder_core::tailscale::Ping>> {
+    crate::tailnet::ping(&ip)
+}
+
+/// Sends files to a device with Taildrop.
+#[tauri::command]
+pub async fn taildrop(target: String, paths: Vec<String>) -> Res<()> {
+    crate::tailnet::send(&target, &paths)
+}
+
+/// Ends a terminal here only: a device's shell, or the local ssh of a tmux session that stays.
+#[tauri::command]
+pub async fn term_close(state: State<'_, AppState>, session: String) -> Res<()> {
+    state.terminals.close(&session);
     Ok(())
 }

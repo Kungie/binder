@@ -17,6 +17,9 @@ import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site
   Config,
   Conflict,
   Device,
+  PingResult,
+  PingSample,
+  TailnetStatus,
   DevicePatch,
   GithubSync,
   HiddenRepo,
@@ -189,6 +192,14 @@ export interface Api {
   /** Connects the pane's terminal, or hands a running one's output to `onData`. */
   termOpen(pane: Pane, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
   termWrite(session: string, data: string): Promise<void>;
+  /** Ends a terminal here only. */
+  termClose(session: string): Promise<void>;
+  tailnetStatus(): Promise<TailnetStatus>;
+  /** Each device's pings of the last day, by Tailscale id. */
+  tailnetHistory(): Promise<Record<string, PingSample[]>>;
+  tailnetPing(ip: string): Promise<PingResult | null>;
+  /** Sends files to a device with Taildrop. */
+  taildrop(target: string, paths: string[]): Promise<void>;
   termResize(session: string, cols: number, rows: number): Promise<void>;
   /** Ends the local ssh and connects again; the tmux session on the server stays. */
   termReconnect(pane: Pane, cols: number, rows: number, onData: (bytes: Uint8Array) => void): Promise<void>;
@@ -390,6 +401,11 @@ export const tauriApi: Api = {
   },
   termOpen: (pane, cols, rows, onData) => call("term_open", { pane, cols, rows, output: bytesChannel(onData) }),
   termWrite: (session, data) => call("term_write", { session, data }),
+  termClose: (session) => call("term_close", { session }),
+  tailnetStatus: () => call("tailnet_status"),
+  tailnetHistory: () => call("tailnet_history"),
+  tailnetPing: (ip) => call("tailnet_ping", { ip }),
+  taildrop: (target, paths) => call("taildrop", { target, paths }),
   termResize: (session, cols, rows) => call("term_resize", { session, cols, rows }),
   termReconnect: (pane, cols, rows, onData) => call("term_reconnect", { pane, cols, rows, output: bytesChannel(onData) }),
   agentSessions: () => call("agent_sessions"),
