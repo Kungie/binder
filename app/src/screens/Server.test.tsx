@@ -195,10 +195,10 @@ describe("Containers", () => {
 
   it("names the server in the header and switches between servers", async () => {
     const { api, user } = setup();
-    const pick = await screen.findByRole("button", { name: "Server: citadel" });
+    const pick = await screen.findByRole("button", { name: "Server: homelab" });
     await user.click(pick);
     const list = screen.getByRole("menu", { name: "Servers" });
-    expect(within(list).getByRole("menuitemradio", { name: /citadel/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(list).getByRole("menuitemradio", { name: /homelab/ })).toHaveAttribute("aria-checked", "true");
     await user.click(within(list).getByRole("button", { name: "Add server" }));
     await user.type(screen.getByRole("textbox", { name: "SSH target" }), "demo-dev@10.0.7.9{Enter}");
     expect(await screen.findByRole("button", { name: "Server: 10.0.7.9" })).toBeInTheDocument();
@@ -206,8 +206,8 @@ describe("Containers", () => {
     expect(c.server).toBe("demo-dev@10.0.7.9");
     expect(c.servers).toEqual(["lab", "demo-dev@10.0.7.9"]);
     await user.click(screen.getByRole("button", { name: "Server: 10.0.7.9" }));
-    await user.click(within(screen.getByRole("menu", { name: "Servers" })).getByRole("menuitemradio", { name: /citadel/ }));
-    expect(await screen.findByRole("button", { name: "Server: citadel" })).toBeInTheDocument();
+    await user.click(within(screen.getByRole("menu", { name: "Servers" })).getByRole("menuitemradio", { name: /homelab/ }));
+    expect(await screen.findByRole("button", { name: "Server: homelab" })).toBeInTheDocument();
     expect((await api.getConfig()).server).toBe("lab");
   });
 });

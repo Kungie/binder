@@ -752,7 +752,7 @@ export function memoryApi(
     async serverStatus() {
       if (!config.server) throw new Error("No server set.");
       if (!reachable || !seed.server) throw new Error(`Can't reach ${config.server}`);
-      return { ...seed.server, hostname: config.server === "lab" ? "citadel" : config.server.split("@").pop()!, at: now() };
+      return { ...seed.server, hostname: config.server === "lab" ? "homelab" : config.server.split("@").pop()!, at: now() };
     },
     async listDevices() {
       return [...devices].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map((d) => ({ ...d }));
