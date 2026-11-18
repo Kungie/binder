@@ -30,6 +30,11 @@ pub struct Peer {
     /// It offers itself as an exit node.
     #[serde(default)]
     pub exit_option: bool,
+    /// Bytes from it and to it since tailscaled started.
+    #[serde(default)]
+    pub rx_bytes: u64,
+    #[serde(default)]
+    pub tx_bytes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -59,6 +64,8 @@ struct RawPeer {
     taildrop_target: i64,
     exit_node: bool,
     exit_node_option: bool,
+    rx_bytes: u64,
+    tx_bytes: u64,
 }
 
 #[derive(Deserialize, Default)]
@@ -95,6 +102,8 @@ fn peer(r: RawPeer, this_mac: bool) -> Peer {
         this_mac,
         exit_node: r.exit_node,
         exit_option: r.exit_node_option,
+        rx_bytes: r.rx_bytes,
+        tx_bytes: r.tx_bytes,
     }
 }
 
@@ -160,4 +169,13 @@ pub fn expiring(peers: &[Peer], now: i64) -> Vec<(String, i64)> {
 /// A host for `ssh`: letters, digits and `._@:-`, not starting with a dash.
 pub fn valid_target(t: &str) -> bool {
     !t.is_empty() && t.len() <= 200 && !t.starts_with('-') && t.chars().all(|c| c.is_ascii_alphanumeric() || "._@:-".contains(c))
+}
+
+/// `tailscale` arguments that send this Mac's traffic through an exit node, by its Tailscale address, or stop it.
+pub fn exit_node_args(exit: Option<&str>) -> Result<Vec<String>> {
+    match exit {
+        Some(ip) if valid_target(ip) && !ip.contains('@') => Ok(vec!["set".into(), format!("--exit-node={ip}")]),
+        Some(_) => Err(Error::Invalid("That isn't an exit node.".into())),
+        None => Ok(vec!["set".into(), "--exit-node=".into()]),
+    }
 }

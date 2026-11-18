@@ -19,6 +19,7 @@ import { Sites } from "./screens/Sites";
 import { GitHub } from "./screens/GitHub";
 import { useEffect, useState } from "react";
 import { enableWindowDrag } from "./lib/drag";
+import { Vpn } from "./screens/Vpn";
 
 function Screens() {
   const { screen } = useStore();
@@ -31,6 +32,8 @@ function Screens() {
       return <Projects />;
     case "devices":
       return <Devices />;
+    case "vpn":
+      return <Vpn />;
     case "server":
       return <Server />;
     case "sites":

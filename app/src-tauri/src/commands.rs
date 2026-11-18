@@ -1311,3 +1311,15 @@ pub async fn claude_limits(state: State<'_, AppState>) -> Res<ClaudeLimits> {
 pub async fn install_claude_limits(state: State<'_, AppState>) -> Res<()> {
     binder_core::limits::install(&remote(&state)?).map_err(text)
 }
+
+/// Turns the VPN on through an exit node (remembered as the last one) or off.
+#[tauri::command]
+pub async fn vpn_set(state: State<'_, AppState>, exit: Option<String>) -> Res<()> {
+    crate::tailnet::set_exit_node(exit.as_deref())?;
+    if let Some(ip) = exit {
+        let mut c = state.config.lock().unwrap();
+        c.vpn_last = Some(ip);
+        c.save(&state.config_path).map_err(text)?;
+    }
+    Ok(())
+}

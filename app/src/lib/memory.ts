@@ -80,6 +80,8 @@ export function memoryApi(
   closedSessions: string[];
   /** Files sent with Taildrop. */
   dropped: { target: string; paths: string[] }[];
+  /** Exit nodes turned on (an address) or off (null), in order. */
+  vpnCalls: (string | null)[];
   /** Containers restarted, in order. */
   restarted: string[];
   /** Links opened in the browser. */
@@ -162,15 +164,17 @@ export function memoryApi(
   ];
   const closedSessions: string[] = [];
   const dropped: { target: string; paths: string[] }[] = [];
+  const vpnCalls: (string | null)[] = [];
   const limits: ClaudeLimits = options.limits ?? { installed: false, limits: null };
   const tailnet: TailnetStatus | null =
     options.tailnet === undefined
       ? {
           running: true,
           peers: [
-            { id: "n1", name: "demo-mac", dns: "demo-mac.tail0.ts.net", os: "macOS", ip: "100.64.0.1", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: false, this_mac: true },
+            { id: "n1", name: "demo-mac", dns: "demo-mac.tail0.ts.net", os: "macOS", ip: "100.64.0.1", online: true, last_seen: null, key_expiry: null, expired: false, relay: "ams", taildrop: false, this_mac: true },
             { id: "n2", name: "lab", dns: "lab.tail0.ts.net", os: "linux", ip: "100.64.0.2", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: true, this_mac: false },
-            { id: "n4", name: "vps", dns: "vps.tail0.ts.net", os: "linux", ip: "100.64.0.4", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: true, this_mac: false, exit_node: true, exit_option: true },
+            { id: "n4", name: "vps", dns: "vps.tail0.ts.net", os: "linux", ip: "100.64.0.4", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: true, this_mac: false, exit_node: true, exit_option: true, rx_bytes: 127_594_732, tx_bytes: 24_739_804 },
+            { id: "n5", name: "vps-sg", dns: "vps-sg.tail0.ts.net", os: "linux", ip: "100.64.0.5", online: true, last_seen: null, key_expiry: null, expired: false, relay: "sin", taildrop: true, this_mac: false, exit_option: true, rx_bytes: 0, tx_bytes: 0 },
             { id: "n3", name: "phone", dns: "phone.tail0.ts.net", os: "iOS", ip: "100.64.0.3", online: false, last_seen: Math.floor(Date.now() / 1000) - 3 * 86_400, key_expiry: null, expired: true, relay: "", taildrop: true, this_mac: false },
           ],
         }
@@ -313,7 +317,20 @@ export function memoryApi(
     },
     async tailnetStatus() {
       if (tailnet === null) throw new Error("Tailscale isn't installed on this Mac.");
+      // Traffic moves through the exit node in use.
+      for (const p of tailnet.peers.filter((x) => x.exit_node)) {
+        p.rx_bytes = (p.rx_bytes ?? 0) + 2_400_000;
+        p.tx_bytes = (p.tx_bytes ?? 0) + 310_000;
+      }
       return structuredClone(tailnet);
+    },
+    async vpnSet(exit) {
+      if (tailnet === null) throw new Error("Tailscale isn't installed on this Mac.");
+      const node = exit === null ? null : tailnet.peers.find((p) => p.ip === exit && p.exit_option);
+      if (exit !== null && !node) throw new Error("That isn't an exit node.");
+      for (const p of tailnet.peers) p.exit_node = p === node;
+      if (exit) config = { ...config, vpn_last: exit };
+      vpnCalls.push(exit);
     },
     async tailnetHistory() {
       const now = Math.floor(Date.now() / 1000);
@@ -428,6 +445,7 @@ export function memoryApi(
     cameraStops,
     closedSessions,
     dropped,
+    vpnCalls,
     restarted,
     openedLinks,
     ghActions,

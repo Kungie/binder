@@ -46,7 +46,8 @@ export function CommandPalette() {
               <Command.Item className={item} onSelect={go("tasks")}>Go to Tasks</Command.Item>
               <Command.Item className={item} onSelect={go("projects")}>Go to Projects</Command.Item>
               <Command.Item className={item} onSelect={go("devices")}>Go to Devices</Command.Item>
-              <Command.Item className={item} onSelect={go("server")}>Go to Server</Command.Item>
+              <Command.Item className={item} onSelect={go("vpn")}>Go to VPN</Command.Item>
+              <Command.Item className={item} onSelect={go("server")}>Go to Servers</Command.Item>
               <Command.Item className={item} onSelect={go("agents")}>Go to Agents</Command.Item>
               <Command.Item className={item} onSelect={go("cloud")}>Go to Cloud</Command.Item>
               <Command.Item className={item} onSelect={go("printer")}>Go to Printer</Command.Item>

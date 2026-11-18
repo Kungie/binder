@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import type { Api } from "./api";
 import type { AppInfo, GithubSync, InstallProgress, NewProject, UpdateInfo, NewTask, Project, ProjectPatch, Status, Task, TaskPatch, TaskView } from "./types";
 
-export type Screen = "overview" | "tasks" | "projects" | "devices" | "github" | "server" | "sites" | "agents" | "cloud" | "printer" | "settings";
+export type Screen = "overview" | "tasks" | "projects" | "devices" | "vpn" | "github" | "server" | "sites" | "agents" | "cloud" | "printer" | "settings";
 
 export type UpdateState = { kind: "idle" } | { kind: "checking" } | { kind: "current" } | { kind: "available"; info: UpdateInfo } | { kind: "failed" };
 

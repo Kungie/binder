@@ -193,6 +193,29 @@ textarea,
   }
 }
 
+/* The VPN globe: dashes run along the arc toward the exit node, which pulses. */
+.vpn-flow {
+  animation: vpn-flow 1.1s linear infinite;
+}
+@keyframes vpn-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+.vpn-pulse {
+  animation: vpn-pulse 2s ease-out infinite;
+}
+@keyframes vpn-pulse {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -282,6 +282,10 @@ export interface Config {
   servers?: string[];
   /** Each server's own name, by SSH target, as last read. */
   server_names?: Record<string, string>;
+  /** The VPN screen's region for each exit node, a region code by host name. */
+  vpn_regions?: Record<string, string>;
+  /** The Tailscale address of the exit node last turned on. */
+  vpn_last?: string | null;
 }
 
 export interface OverviewLayout {
@@ -638,6 +642,9 @@ export interface TailnetPeer {
   exit_node?: boolean;
   /** It offers itself as an exit node. */
   exit_option?: boolean;
+  /** Bytes from it and to it since tailscaled started. */
+  rx_bytes?: number;
+  tx_bytes?: number;
 }
 
 export interface TailnetStatus {

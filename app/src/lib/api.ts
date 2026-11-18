@@ -198,6 +198,8 @@ export interface Api {
   claudeLimits(): Promise<ClaudeLimits>;
   /** Adds Binder's status line to Claude Code on the server. */
   installClaudeLimits(): Promise<void>;
+  /** Sends this Mac's traffic through an exit node, by its Tailscale address, or stops it with null. */
+  vpnSet(exit: string | null): Promise<void>;
   tailnetStatus(): Promise<TailnetStatus>;
   /** Each device's pings of the last day, by Tailscale id. */
   tailnetHistory(): Promise<Record<string, PingSample[]>>;
@@ -408,6 +410,7 @@ export const tauriApi: Api = {
   termClose: (session) => call("term_close", { session }),
   claudeLimits: () => call("claude_limits"),
   installClaudeLimits: () => call("install_claude_limits"),
+  vpnSet: (exit) => call("vpn_set", { exit }),
   tailnetStatus: () => call("tailnet_status"),
   tailnetHistory: () => call("tailnet_history"),
   tailnetPing: (ip) => call("tailnet_ping", { ip }),

@@ -144,3 +144,15 @@ pub fn start(app: &AppHandle) {
         }
     });
 }
+
+/// Sends this Mac's traffic through an exit node, by its Tailscale address, or stops it.
+pub fn set_exit_node(exit: Option<&str>) -> Result<(), String> {
+    let args = tailscale::exit_node_args(exit).map_err(|e| e.to_string())?;
+    let out = command()?.args(&args).output().map_err(|e| format!("Couldn't run Tailscale: {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr).trim().lines().last().unwrap_or("").to_string();
+        Err(if err.is_empty() { "Tailscale didn't change the exit node.".into() } else { err })
+    }
+}

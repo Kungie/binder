@@ -114,7 +114,7 @@ describe("Devices", () => {
   it("marks the exit node in use", async () => {
     setup();
     const panel = await screen.findByRole("region", { name: "Tailscale" });
-    const vps = await within(panel).findByRole("row", { name: /vps/ });
+    const vps = await within(panel).findByRole("row", { name: /^vps / });
     expect(within(vps).getByText("Exit node")).toBeInTheDocument();
     expect(within(panel).getByRole("row", { name: /lab/ })).not.toHaveTextContent("Exit node");
   });

@@ -82,3 +82,19 @@ fn the_exit_node_in_use_is_marked() {
     assert!(!s.peers[2].exit_node);
     assert!(!s.peers[2].exit_option);
 }
+
+#[test]
+fn traffic_counts_come_with_each_device() {
+    let json = r#"{"BackendState":"Running","Self":{"ID":"n1","HostName":"mac","Relay":"ams"},"Peer":{"k":{"ID":"n2","HostName":"vps","RxBytes":127594732,"TxBytes":24739804,"ExitNodeOption":true}}}"#;
+    let s = parse_status(json).unwrap();
+    assert_eq!((s.peers[1].rx_bytes, s.peers[1].tx_bytes), (127_594_732, 24_739_804));
+    assert_eq!(s.peers[0].relay, "ams");
+}
+
+#[test]
+fn the_exit_node_is_set_by_address_or_cleared() {
+    assert_eq!(exit_node_args(Some("100.64.0.4")).unwrap(), ["set", "--exit-node=100.64.0.4"]);
+    assert_eq!(exit_node_args(None).unwrap(), ["set", "--exit-node="]);
+    assert!(exit_node_args(Some("--accept-routes")).is_err());
+    assert!(exit_node_args(Some("a b")).is_err());
+}
