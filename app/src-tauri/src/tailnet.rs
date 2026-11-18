@@ -28,9 +28,16 @@ fn cli() -> Option<&'static str> {
     ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale"].into_iter().find(|p| std::path::Path::new(p).exists())
 }
 
+/// The app's binary runs as the command line only when told to; started from another app it tries to open its
+/// window instead and prints nothing.
+fn command() -> Result<Command, String> {
+    let mut c = Command::new(cli().ok_or("Tailscale isn't installed on this Mac.")?);
+    c.env("TAILSCALE_BE_CLI", "1").stdin(std::process::Stdio::null());
+    Ok(c)
+}
+
 fn run(args: &[&str]) -> Result<String, String> {
-    let bin = cli().ok_or("Tailscale isn't installed on this Mac.")?;
-    let out = Command::new(bin).args(args).output().map_err(|e| format!("Couldn't run Tailscale: {e}"))?;
+    let out = command()?.args(args).output().map_err(|e| format!("Couldn't run Tailscale: {e}"))?;
     if !out.status.success() && out.stdout.is_empty() {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(if err.is_empty() { "Tailscale didn't answer.".into() } else { err });
@@ -46,8 +53,7 @@ pub fn ping(ip: &str) -> Result<Option<Ping>, String> {
     if !tailscale::valid_target(ip) {
         return Err("That isn't a device address.".into());
     }
-    let bin = cli().ok_or("Tailscale isn't installed on this Mac.")?;
-    let out = Command::new(bin).args(["ping", "-c", "1", "--timeout", "3s", "--until-direct=false", ip]).output().map_err(|e| e.to_string())?;
+    let out = command()?.args(["ping", "-c", "1", "--timeout", "3s", "--until-direct=false", ip]).output().map_err(|e| e.to_string())?;
     Ok(tailscale::parse_ping(&String::from_utf8_lossy(&out.stdout)))
 }
 
@@ -67,8 +73,7 @@ pub fn send(target: &str, paths: &[String]) -> Result<(), String> {
     let mut args: Vec<&str> = vec!["file", "cp", "--"];
     args.extend(paths.iter().map(String::as_str));
     args.push(&dest);
-    let bin = cli().ok_or("Tailscale isn't installed on this Mac.")?;
-    let out = Command::new(bin).args(&args).output().map_err(|e| e.to_string())?;
+    let out = command()?.args(&args).output().map_err(|e| e.to_string())?;
     if out.status.success() {
         Ok(())
     } else {

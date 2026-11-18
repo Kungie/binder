@@ -145,6 +145,23 @@ pub fn parse_health(out: &str) -> Result<Vec<Health>> {
     Ok(all)
 }
 
+/// A network failure that may pass on its own: worth one more try, and not the owner's to fix.
+pub fn transient(err: &str) -> bool {
+    let e = err.to_lowercase();
+    ["timeout", "timed out", "connection reset", "connection refused", "no such host", "network is unreachable", "unexpected eof", "eof", "502", "503", "504"].iter().any(|w| e.contains(w))
+}
+
+/// What `gh`'s error means for the owner, in one line.
+pub fn gh_error(err: &str) -> String {
+    if err.contains("auth login") || err.to_lowercase().contains("not logged") {
+        SIGN_IN.into()
+    } else if transient(err) {
+        "GitHub didn't answer in time. Binder tries again on the next refresh.".into()
+    } else {
+        err.trim().chars().take(300).collect()
+    }
+}
+
 pub struct GhCli {
     pub program: PathBuf,
 }
@@ -162,17 +179,21 @@ impl GhCli {
             .map(|program| GhCli { program })
     }
 
+    /// Runs `gh`, trying twice more after a network hiccup, a second apart and then three.
     pub(crate) fn run(&self, args: &[&str]) -> Result<String> {
-        let out = Command::new(&self.program).args(args).output().map_err(|e| Error::Invalid(format!("Couldn't run gh: {e}")))?;
-        if out.status.success() {
-            return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+        let mut err = String::new();
+        for wait in [0, 1, 3] {
+            std::thread::sleep(std::time::Duration::from_secs(wait));
+            let out = Command::new(&self.program).args(args).output().map_err(|e| Error::Invalid(format!("Couldn't run gh: {e}")))?;
+            if out.status.success() {
+                return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+            }
+            err = String::from_utf8_lossy(&out.stderr).into_owned();
+            if !transient(&err) {
+                break;
+            }
         }
-        let err = String::from_utf8_lossy(&out.stderr);
-        if err.contains("auth login") || err.to_lowercase().contains("not logged") {
-            Err(Error::Invalid(SIGN_IN.into()))
-        } else {
-            Err(Error::Invalid(err.trim().chars().take(300).collect()))
-        }
+        Err(Error::Invalid(gh_error(&err)))
     }
 }
 

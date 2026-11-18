@@ -439,7 +439,7 @@ function Usage() {
   const { api } = useStore();
   const [u, setU] = useState<ClaudeUsage | null>(null);
   const [l, setL] = useState<ClaudeLimits | null>(null);
-  const [busy, setBusy] = useState(false);
+  const tried = useRef(false);
   const read = useCallback(() => {
     void api.claudeUsage().then(setU, () => {});
     void api.claudeLimits().then(setL, () => {});
@@ -448,6 +448,12 @@ function Usage() {
     read();
     return whileVisible(read, 60_000);
   }, [read]);
+  // Binder's status line goes on the server by itself, once, the first time it's missing.
+  useEffect(() => {
+    if (!l || l.installed || tried.current) return;
+    tried.current = true;
+    void api.installClaudeLimits().then(read, () => {});
+  }, [api, l, read]);
   const sums = u ? `5 h ${tokens(u.five_hours)} · today ${tokens(u.today)} · 7 days ${tokens(u.week)} tokens` : "";
   const lim = l?.limits;
   return (
@@ -467,19 +473,6 @@ function Usage() {
             </span>
           )}
           {l?.installed && <span className="text-text-3">% after Claude's next reply</span>}
-          {l && !l.installed && (
-            <Button
-              variant="ghost"
-              disabled={busy}
-              title="Adds a status line to Claude Code on the server that keeps its plan limits for Binder"
-              onClick={() => {
-                setBusy(true);
-                void api.installClaudeLimits().then(read, () => {}).finally(() => setBusy(false));
-              }}
-            >
-              Show %
-            </Button>
-          )}
         </>
       )}
     </span>

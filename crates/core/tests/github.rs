@@ -230,3 +230,16 @@ fn deleting_a_hand_added_project_hides_nothing() {
     db.delete_project(p.id, NOW).unwrap();
     assert!(db.list_hidden_repos().unwrap().is_empty());
 }
+
+#[test]
+fn network_hiccups_read_plainly_and_are_retried() {
+    use binder_core::github::{gh_error, transient};
+    let tls = "Post \"https://api.github.com/graphql\": net/http: TLS handshake timeout";
+    assert!(transient(tls));
+    assert!(transient("dial tcp: lookup api.github.com: no such host"));
+    assert!(transient("read: connection reset by peer"));
+    assert!(!transient("GraphQL: Could not resolve to a Repository"));
+    assert_eq!(gh_error(tls), "GitHub didn't answer in time. Binder tries again on the next refresh.");
+    assert_eq!(gh_error("To get started with GitHub CLI, please run:  gh auth login"), "Sign in with gh auth login to bring in your GitHub repos.");
+    assert_eq!(gh_error("HTTP 404: Not Found"), "HTTP 404: Not Found");
+}

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -269,12 +269,12 @@ describe("Agents", () => {
     expect(within(usage).getByText("82%")).toHaveClass("text-bad");
   });
 
-  it("Show % adds the status line, then waits for Claude's next reply", async () => {
+  it("adds the status line by itself, then waits for Claude's next reply", async () => {
     const { api, user } = setup();
     const install = vi.spyOn(api, "installClaudeLimits");
     await openAgents(user);
-    await user.click(await screen.findByRole("button", { name: "Show %" }));
-    expect(install).toHaveBeenCalled();
+    await waitFor(() => expect(install).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Show %" })).toBeNull();
     expect(await screen.findByText("% after Claude's next reply")).toBeInTheDocument();
   });
 });
