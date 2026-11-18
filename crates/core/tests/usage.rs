@@ -57,9 +57,9 @@ fn summary_counts_each_message_once() {
 
 #[test]
 fn summaries_add_up() {
-    let a = Usage { five_hours: 1, today: 2, week: 3, sessions_today: 1 };
-    let b = Usage { five_hours: 10, today: 20, week: 30, sessions_today: 2 };
-    assert_eq!(a + b, Usage { five_hours: 11, today: 22, week: 33, sessions_today: 3 });
+    let a = Usage { five_hours: 1, today: 2, week: 3, sessions_today: 1, ..Default::default() };
+    let b = Usage { five_hours: 10, today: 20, week: 30, sessions_today: 2, ..Default::default() };
+    assert_eq!(a + b, Usage { five_hours: 11, today: 22, week: 33, sessions_today: 3, ..Default::default() });
 }
 
 #[test]
@@ -84,4 +84,14 @@ fn the_mac_reader_matches_the_script_and_caches() {
     std::fs::write(dir.join("a.jsonl"), format!("{LINE_A}\n{LINE_B}\n{}\n", LINE_B.replace("msg_02", "msg_09"))).unwrap();
     assert_eq!(cache.read(&home.path().join(".claude/projects")).len(), 3);
     assert!(cache.read(&home.path().join("nowhere")).is_empty());
+}
+
+#[test]
+fn days_split_the_week_by_local_midnight() {
+    let midnight = 1_000_000;
+    let at = |t: i64, id: &str| binder_core::usage::Use { at: t, id: id.into(), file: "f".into(), tokens: 10 };
+    let uses = vec![at(midnight + 5, "a"), at(midnight - 5, "b"), at(midnight - 86_400 - 1, "c"), at(midnight - 6 * 86_400 + 1, "d"), at(midnight - 7 * 86_400, "e")];
+    let u = binder_core::usage::summary(&uses, midnight + 10, midnight);
+    assert_eq!(u.days, [10, 0, 0, 0, 10, 10, 10]);
+    assert_eq!((u + u).days[6], 20);
 }

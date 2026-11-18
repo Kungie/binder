@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runState } from "../components/AgentRun";
 import { Terminal } from "../components/Terminal";
 import { Button, fieldClass } from "../components/ui";
-import { STATE_WORD, paneSession, projectPane, slug, tokens } from "../lib/agents";
+import { STATE_COLOR, STATE_WORD, paneSession, projectPane, slug, tokens } from "../lib/agents";
 import { loadPercent } from "../lib/load";
 import { useStore } from "../lib/store";
-import type { AgentSession, ClaudeUsage, Pane, PaneState, Project, RecentRun, ServerStatus } from "../lib/types";
+import type { AgentSession, ClaudeUsage, Config, Pane, PaneState, Project, RecentRun, ServerStatus } from "../lib/types";
 import { whileVisible } from "../lib/usePoll";
 import { gb } from "../lib/useServer";
 
@@ -14,33 +14,36 @@ interface Entry {
   pane: Pane;
   name: string;
   session: string;
-  /** A project's session, which Close can end. */
-  closable: boolean;
+  /** Claude Code and Ollama stay listed when ended; a project's session is listed while it runs or was opened;
+   *  a session made here is listed until closed; any other `binder-*` session while it runs. */
+  kind: "builtin" | "project" | "saved" | "other";
 }
 
-const DOT: Record<PaneState | "off", string> = {
-  working: "bg-ok",
-  waiting: "bg-st-progress",
-  idle: "border border-text-3",
-  exited: "border border-bad",
-  off: "border border-line-strong",
-};
+type Shown = PaneState | "off" | "error";
 
-function StateDot({ state }: { state: PaneState | "off" }) {
-  return <span aria-hidden className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT[state]}`} />;
+function StateDot({ state }: { state: Shown }) {
+  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATE_COLOR[state].dot}`} />;
 }
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** Sessions on the left, one terminal on the right, like a small herdr. Stays mounted once opened. */
 export function Agents({ shown }: { shown: boolean }) {
   const { api, setScreen } = useStore();
   const [target, setTarget] = useState<string | null | undefined>(undefined);
   const [model, setModel] = useState("qwen3:4b");
+  const [saved, setSaved] = useState<{ name: string; dir: string }[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [live, setLive] = useState<AgentSession[]>([]);
+  const [unreachable, setUnreachable] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
   const [selected, setSelected] = useState("binder-claude");
   // Terminals connect when first shown and stay connected while hidden.
   const [opened, setOpened] = useState<string[]>(["binder-claude"]);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [closing, setClosing] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const focus = useRef(new Map<string, () => void>());
   // One stable callback per session, so a terminal never registers twice.
@@ -60,15 +63,20 @@ export function Agents({ shown }: { shown: boolean }) {
     void api.getConfig().then((c) => {
       setTarget(c.server?.trim() ? c.server : null);
       if (c.ollama_model) setModel(c.ollama_model);
+      setSaved(c.agents ?? []);
+      setNames(c.agent_names ?? {});
     });
     void api.listProjects().then(setProjects, () => {});
   }, [api, shown]);
 
   useEffect(() => {
     if (!shown || !target) return;
-    const read = () => void api.agentSessions().then(setLive, () => {});
-    read();
-    const off = api.onAgentSessions(setLive);
+    const got = (l: AgentSession[]) => {
+      setLive(l);
+      setUnreachable(false);
+    };
+    void api.agentSessions().then(got, () => setUnreachable(true));
+    const off = api.onAgentSessions(got);
     return () => off();
   }, [api, shown, target]);
 
@@ -78,16 +86,25 @@ export function Agents({ shown }: { shown: boolean }) {
 
   const entries = useMemo<Entry[]>(() => {
     const list: Entry[] = [
-      { pane: { kind: "claude", project: null, dir: null }, name: "Claude Code", session: "binder-claude", closable: false },
-      { pane: { kind: "ollama", model }, name: "Ollama", session: "binder-ollama", closable: false },
+      { pane: { kind: "claude", project: null, dir: null }, name: "Claude Code", session: "binder-claude", kind: "builtin" },
+      { pane: { kind: "ollama", model }, name: "Ollama", session: "binder-ollama", kind: "builtin" },
     ];
+    const has = (session: string) => list.some((e) => e.session === session);
     for (const p of projects) {
       if (!p.agent_dir) continue;
       const session = paneSession(projectPane(p));
-      if (live.some((s) => s.session === session) || added.includes(session)) list.push({ pane: projectPane(p), name: p.name, session, closable: true });
+      if (!has(session) && (live.some((s) => s.session === session) || added.includes(session))) list.push({ pane: projectPane(p), name: p.name, session, kind: "project" });
     }
-    return list;
-  }, [projects, live, added, model]);
+    for (const a of saved) {
+      const pane: Pane = { kind: "claude", project: a.name, dir: a.dir };
+      const session = paneSession(pane);
+      if (!has(session)) list.push({ pane, name: a.name, session, kind: "saved" });
+    }
+    for (const s of live) {
+      if (!has(s.session)) list.push({ pane: { kind: "attach", session: s.session }, name: s.session.replace(/^binder-/, ""), session: s.session, kind: "other" });
+    }
+    return list.map((e) => ({ ...e, name: names[e.session] ?? e.name }));
+  }, [projects, live, added, model, saved, names]);
 
   const choose = useCallback((session: string) => {
     setSelected(session);
@@ -110,6 +127,14 @@ export function Agents({ shown }: { shown: boolean }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [shown, entries, choose]);
 
+  /** Reads the config again and changes only the Agents fields, so other screens' settings stay. */
+  const saveConfig = async (change: (c: Config) => Config) => {
+    const c = change(await api.getConfig());
+    await api.setConfig(c);
+    setSaved(c.agents ?? []);
+    setNames(c.agent_names ?? {});
+  };
+
   const startProject = (id: string) => {
     const p = projects.find((x) => String(x.id) === id);
     if (!p) return;
@@ -118,16 +143,62 @@ export function Agents({ shown }: { shown: boolean }) {
     choose(session);
   };
 
+  const make = async (name: string, dir: string, asProject: boolean) => {
+    setError(null);
+    const folder = dir.trim() || `~/code/${slug(name)}`;
+    const session = paneSession({ kind: "claude", project: name, dir: folder });
+    if (entries.some((e) => e.session === session)) {
+      choose(session);
+      setMaking(false);
+      return;
+    }
+    try {
+      if (asProject) {
+        const p = await api.createProject({ name });
+        await api.updateProject(p.id, { agent_dir: folder });
+        setProjects(await api.listProjects());
+        setAdded((a) => [...a, session]);
+      } else {
+        await saveConfig((c) => ({ ...c, agents: [...(c.agents ?? []), { name, dir: folder }] }));
+      }
+      setMaking(false);
+      choose(session);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  const rename = async (session: string, name: string) => {
+    setRenaming(null);
+    try {
+      await saveConfig((c) => {
+        const all = { ...(c.agent_names ?? {}) };
+        if (name.trim()) all[session] = name.trim();
+        else delete all[session];
+        return { ...c, agent_names: all };
+      });
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
   const close = async (e: Entry) => {
     setError(null);
+    setClosing(null);
     try {
-      await api.closeAgentSession(e.session);
+      if (live.some((s) => s.session === e.session) || opened.includes(e.session)) await api.closeAgentSession(e.session);
+      if (e.kind === "saved")
+        await saveConfig((c) => {
+          const all = { ...(c.agent_names ?? {}) };
+          delete all[e.session];
+          return { ...c, agents: (c.agents ?? []).filter((a) => paneSession({ kind: "claude", project: a.name, dir: a.dir }) !== e.session), agent_names: all };
+        });
       setAdded((a) => a.filter((s) => s !== e.session));
       setOpened((o) => o.filter((s) => s !== e.session));
       setLive((l) => l.filter((s) => s.session !== e.session));
-      if (selected === e.session) setSelected("binder-claude");
+      if (selected === e.session && e.kind !== "builtin") setSelected("binder-claude");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     }
   };
 
@@ -139,15 +210,16 @@ export function Agents({ shown }: { shown: boolean }) {
       setModel(m);
       choose("binder-ollama");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     }
   };
 
-  const startable = projects.filter((p) => p.agent_dir && !p.archived && !entries.some((e) => e.session === `binder-claude-${slug(p.name)}`));
+  const startable = projects.filter((p) => p.agent_dir && !p.archived && !entries.some((e) => e.session === paneSession(projectPane(p))));
+  const current = entries.find((e) => e.session === selected);
 
   return (
     <div hidden={!shown} className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 px-5" data-tauri-drag-region>
+      <header className="flex h-12 shrink-0 items-center gap-4 px-5" data-tauri-drag-region>
         <h1 className="text-[13px] font-medium">Agents</h1>
         {target && <span className="font-mono text-[11px] text-text-3">{target}</span>}
         <span className="flex-1" data-tauri-drag-region />
@@ -164,30 +236,39 @@ export function Agents({ shown }: { shown: boolean }) {
       )}
       {target && (
         <div className="flex min-h-0 flex-1 gap-3 px-5 pb-5">
-          <nav aria-label="Sessions" className="flex w-52 shrink-0 flex-col gap-0.5">
+          <nav aria-label="Sessions" className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto">
             {entries.map((e, i) => {
               const s = live.find((x) => x.session === e.session);
-              const state = s?.state ?? "off";
+              const state: Shown = unreachable ? "error" : (s?.state ?? "off");
               const on = selected === e.session;
+              if (renaming === e.session) return <RenameField key={e.session} name={e.name} onDone={(n) => (n === null ? setRenaming(null) : void rename(e.session, n))} />;
               return (
                 <button
                   key={e.session}
                   type="button"
                   aria-current={on ? "true" : undefined}
                   onClick={() => choose(e.session)}
-                  title={s?.line || undefined}
+                  onDoubleClick={() => setRenaming(e.session)}
+                  title={unreachable ? "Couldn't read the server." : s?.line || undefined}
                   className={`flex items-center gap-2 rounded-control px-2 py-1.5 text-left text-[12px] ${on ? "bg-raised text-text" : "text-text-2 hover:bg-card"}`}
                 >
                   <StateDot state={state} />
                   <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                  <span className={`text-[11px] ${state === "waiting" ? "text-st-progress" : "text-text-3"}`}>{STATE_WORD[state]}</span>
+                  <span className={`text-[11px] ${STATE_COLOR[state].text}`}>{STATE_WORD[state]}</span>
                   {i < 9 && <span className="font-mono text-[10px] text-text-3">⌘{i + 1}</span>}
                 </button>
               );
             })}
+            {making ? (
+              <NewSession onMake={(n, d, p) => void make(n, d, p)} onCancel={() => setMaking(false)} />
+            ) : (
+              <Button variant="ghost" className="mt-2 justify-start" onClick={() => setMaking(true)}>
+                New session
+              </Button>
+            )}
             {startable.length > 0 && (
-              <select aria-label="New session" className={`${fieldClass} mt-2`} value="" onChange={(e) => startProject(e.target.value)}>
-                <option value="">New session…</option>
+              <select aria-label="Open project" className={`${fieldClass} mt-1`} value="" onChange={(e) => startProject(e.target.value)}>
+                <option value="">Open a project…</option>
                 {startable.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -199,22 +280,45 @@ export function Agents({ shown }: { shown: boolean }) {
           </nav>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
             {shown && <Runs />}
+            {current && !opened.includes(current.session) && (
+              <div className="flex flex-1 items-center justify-center rounded-panel border border-line text-[12px] text-text-3">
+                <Button variant="ghost" onClick={() => choose(current.session)}>
+                  Open {current.name}
+                </Button>
+              </div>
+            )}
             {entries
               .filter((e) => opened.includes(e.session))
               .map((e) => (
                 <div key={e.session === "binder-ollama" ? `ollama-${model}` : e.session} hidden={selected !== e.session} className="flex min-h-0 flex-1 flex-col">
                   <Terminal
                     pane={e.pane}
-                    name={e.pane.kind === "ollama" ? `Ollama · ${model}` : e.closable ? `Claude Code · ${e.name}` : e.name}
+                    name={e.pane.kind === "ollama" ? `${e.name} · ${model}` : e.kind === "project" || e.kind === "saved" ? `Claude Code · ${e.name}` : e.name}
                     registerFocus={registrar(e.session)}
                     actions={
-                      e.pane.kind === "ollama" ? (
-                        <Models model={model} onPick={pickModel} />
-                      ) : e.closable ? (
-                        <Button variant="ghost" onClick={() => void close(e)}>
-                          Close
-                        </Button>
-                      ) : null
+                      <span className="flex items-center gap-1">
+                        {e.pane.kind === "ollama" && <Models model={model} onPick={pickModel} />}
+                        {closing === e.session ? (
+                          <>
+                            <span className="text-[12px] text-text-2">End this session?</span>
+                            <Button variant="ghost" onClick={() => void close(e)}>
+                              End
+                            </Button>
+                            <Button variant="ghost" onClick={() => setClosing(null)}>
+                              Keep
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button variant="ghost" onClick={() => setRenaming(e.session)}>
+                              Rename
+                            </Button>
+                            <Button variant="ghost" onClick={() => setClosing(e.session)}>
+                              Close
+                            </Button>
+                          </>
+                        )}
+                      </span>
                     }
                   />
                 </div>
@@ -223,6 +327,67 @@ export function Agents({ shown }: { shown: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** The sidebar row while it is renamed: Enter keeps the name, Escape drops it, blank goes back to the default. */
+function RenameField({ name, onDone }: { name: string; onDone(name: string | null): void }) {
+  const [text, setText] = useState(name);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onDone(text);
+      }}
+    >
+      <input
+        aria-label="Session name"
+        autoFocus
+        className={`${fieldClass} w-full`}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && onDone(null)}
+        onBlur={() => onDone(null)}
+      />
+    </form>
+  );
+}
+
+/** A new Claude Code session: a name, the server folder it starts in, and whether it is a new project too. */
+function NewSession({ onMake, onCancel }: { onMake(name: string, dir: string, asProject: boolean): void; onCancel(): void }) {
+  const [name, setName] = useState("");
+  const [dir, setDir] = useState("");
+  const [asProject, setAsProject] = useState(false);
+  return (
+    <form
+      aria-label="New session"
+      className="mt-2 flex flex-col gap-1.5 rounded-panel border border-line p-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim()) onMake(name.trim(), dir, asProject);
+      }}
+    >
+      <input aria-label="Name" autoFocus className={fieldClass} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Escape" && onCancel()} />
+      <input
+        aria-label="Folder"
+        className={`${fieldClass} font-mono`}
+        placeholder={`~/code/${name.trim() ? slug(name) : "name"}`}
+        value={dir}
+        onChange={(e) => setDir(e.target.value)}
+      />
+      <label className="flex items-center gap-2 text-[12px] text-text-2">
+        <input type="checkbox" checked={asProject} onChange={(e) => setAsProject(e.target.checked)} />
+        Add to Projects
+      </label>
+      <span className="flex gap-1">
+        <Button type="submit" disabled={!name.trim()}>
+          Start
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </span>
+    </form>
   );
 }
 
@@ -244,7 +409,10 @@ function Load() {
   );
 }
 
-/** Claude Code's tokens on the server and this Mac, once a minute while the screen shows. */
+const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Claude Code's tokens on the server and this Mac, once a minute while the screen shows: a bar per day of the
+ *  last week, today's brightest, then the 5 hour, today and 7 day sums. */
 function Usage() {
   const { api } = useStore();
   const [u, setU] = useState<ClaudeUsage | null>(null);
@@ -254,9 +422,28 @@ function Usage() {
     return whileVisible(read, 60_000);
   }, [api]);
   if (!u) return null;
+  const days = u.days ?? [];
+  const top = Math.max(1, ...days);
+  const today = new Date().getDay();
   return (
-    <span className="font-mono text-[11px] text-text-2" aria-label="Claude Code usage" title="Input, output and cache writes, on the server and this Mac">
-      Claude 5 h {tokens(u.five_hours)} · today {tokens(u.today)} · 7 days {tokens(u.week)}
+    <span className="flex items-center gap-3 font-mono text-[11px]" aria-label="Claude Code usage" title="Input, output and cache writes, on the server and this Mac">
+      <span className="text-text-2">Claude</span>
+      {days.length === 7 && (
+        <span aria-hidden className="flex h-4 items-end gap-[2px]">
+          {days.map((n, i) => (
+            <span
+              key={i}
+              title={`${DAY[(today + i + 1) % 7]} ${tokens(n)}`}
+              className={`w-[5px] rounded-[1px] ${i === 6 ? "bg-st-done" : "bg-st-done/40"}`}
+              style={{ height: `${Math.max(n > 0 ? 15 : 6, Math.round((n / top) * 100))}%` }}
+            />
+          ))}
+        </span>
+      )}
+      <span className="text-text-3">
+        5 h <span className="text-st-done">{tokens(u.five_hours)}</span> · today <span className="text-text">{tokens(u.today)}</span> · 7 days{" "}
+        <span className="text-text">{tokens(u.week)}</span>
+      </span>
     </span>
   );
 }

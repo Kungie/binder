@@ -47,12 +47,18 @@ pub struct Usage {
     pub week: u64,
     /// Transcripts with a message since midnight.
     pub sessions_today: usize,
+    /// Each of the last seven local days, oldest first; the last is today.
+    pub days: [u64; 7],
 }
 
 impl std::ops::Add for Usage {
     type Output = Usage;
     fn add(self, o: Usage) -> Usage {
-        Usage { five_hours: self.five_hours + o.five_hours, today: self.today + o.today, week: self.week + o.week, sessions_today: self.sessions_today + o.sessions_today }
+        let mut days = self.days;
+        for (d, x) in days.iter_mut().zip(o.days) {
+            *d += x;
+        }
+        Usage { five_hours: self.five_hours + o.five_hours, today: self.today + o.today, week: self.week + o.week, sessions_today: self.sessions_today + o.sessions_today, days }
     }
 }
 
@@ -67,6 +73,10 @@ pub fn summary(uses: &[Use], now: i64, midnight: i64) -> Usage {
         }
         if x.at > now - 7 * 86_400 {
             u.week += x.tokens;
+        }
+        let back = if x.at >= midnight { 0 } else { (midnight - x.at - 1) / 86_400 + 1 };
+        if back < 7 {
+            u.days[6 - back as usize] += x.tokens;
         }
         if x.at >= midnight {
             u.today += x.tokens;

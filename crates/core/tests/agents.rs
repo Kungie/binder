@@ -49,6 +49,17 @@ fn a_project_session_starts_in_its_folder() {
     assert!(c.contains("cd \"$HOME\"/"), "{c}");
     assert!(c.contains("code/binder"), "{c}");
     assert!(c.contains("&& claude; exec bash -l"), "{c}");
+    assert!(c.contains("mkdir -p \"$HOME\"/"), "{c}");
+}
+
+#[test]
+fn any_binder_session_can_be_attached() {
+    let p = Pane::Attach { session: "binder-qwen".into() };
+    assert_eq!(p.session(), "binder-qwen");
+    let c = remote_command(&p).unwrap();
+    assert!(c.contains("new-session -A -s binder-qwen "), "{c}");
+    assert!(remote_command(&Pane::Attach { session: "main".into() }).is_err());
+    assert!(remote_command(&Pane::Attach { session: "binder-x;reboot".into() }).is_err());
 }
 
 #[test]
@@ -134,6 +145,8 @@ fn sessions_parse_from_one_read() {
     assert_eq!(s[1].line, ">>> hi");
     assert_eq!(s[2].state, State::Exited);
     assert!(sessions_script().contains("grep '^binder-'"));
+    // tmux names the pane's shell; the program it runs is the shell's child.
+    assert!(sessions_script().contains("--ppid"));
 }
 
 #[test]

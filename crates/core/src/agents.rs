@@ -7,12 +7,14 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// One terminal on the Agents screen: Claude Code at home or in a project's folder, or Ollama with a model.
+/// One terminal on the Agents screen: Claude Code at home or in a folder, Ollama with a model, or any other
+/// `binder-*` session found running on the server.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Pane {
     Claude { project: Option<String>, dir: Option<String> },
     Ollama { model: String },
+    Attach { session: String },
 }
 
 /// The model Ollama runs until the owner picks another.
@@ -49,16 +51,23 @@ impl Pane {
             Pane::Claude { project: None, .. } => "binder-claude".into(),
             Pane::Claude { project: Some(p), .. } => format!("binder-claude-{}", slug(p)),
             Pane::Ollama { .. } => "binder-ollama".into(),
+            Pane::Attach { session } => session.clone(),
         }
     }
 
     /// What runs inside the session. A login shell stays after it exits, so the session survives.
     fn program(&self) -> Result<String> {
         match self {
-            Pane::Claude { dir: Some(d), .. } if !d.trim().is_empty() => Ok(format!("cd {} && claude; exec bash -l", shell_dir(d))),
+            // The folder is made if it isn't there yet, so a new project's session starts in it.
+            Pane::Claude { dir: Some(d), .. } if !d.trim().is_empty() => {
+                let d = shell_dir(d);
+                Ok(format!("mkdir -p {d} && cd {d} && claude; exec bash -l"))
+            }
             Pane::Claude { .. } => Ok("claude; exec bash -l".into()),
             Pane::Ollama { model } if valid_model(model) => Ok(format!("docker exec -it ollama ollama run {model}; exec bash -l")),
             Pane::Ollama { .. } => Err(Error::Invalid("That isn't a model name.".into())),
+            Pane::Attach { session } if valid_session(session) => Ok("exec bash -l".into()),
+            Pane::Attach { .. } => Err(Error::Invalid("That isn't one of Binder's sessions.".into())),
         }
     }
 }
@@ -67,8 +76,9 @@ impl Pane {
 /// (tmux applies `history-limit` only to new panes) and the session's own look set after. `-u` makes tmux send
 /// UTF-8 whatever locale the server gives a session from an app opened in Finder, which has no `LANG`.
 pub fn remote_command(pane: &Pane) -> Result<String> {
+    let program = pane.program()?;
     let session = pane.session();
-    let inner = format!("bash -lc {}", quote(&pane.program()?));
+    let inner = format!("bash -lc {}", quote(&program));
     Ok(format!(
         "tmux -u start-server \\; set -g history-limit 10000 \\; new-session -A -s {session} {} \\; set-option -t {session} status off \\; set-option -t {session} mouse on \\; set-option -t {session} set-clipboard on",
         quote(&inner)
@@ -136,10 +146,14 @@ pub fn classify(command: &str, screen: &str) -> (State, String) {
 
 const MARK: &str = "--binder:pane-- ";
 
-/// Every `binder-*` session's foreground command and visible screen, in one call.
+/// Every `binder-*` session's program and visible screen, in one call. tmux reports the pane's shell, which runs
+/// the program as its child, so the child's name is read first; without one, the shell is all that is left.
 pub fn sessions_script() -> &'static str {
     "tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^binder-' | while read -r s; do\n\
-     printf '\\n--binder:pane-- %s %s\\n' \"$s\" \"$(tmux display-message -p -t \"=$s:\" '#{pane_current_command}')\"\n\
+     p=$(tmux display-message -p -t \"=$s:\" '#{pane_pid}')\n\
+     c=$(ps -o comm= --ppid \"$p\" 2>/dev/null | head -n 1)\n\
+     [ -n \"$c\" ] || c=$(tmux display-message -p -t \"=$s:\" '#{pane_current_command}')\n\
+     printf '\\n--binder:pane-- %s %s\\n' \"$s\" \"$c\"\n\
      tmux capture-pane -p -t \"=$s:\"\n\
      done\n"
 }

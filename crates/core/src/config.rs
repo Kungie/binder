@@ -36,6 +36,18 @@ pub struct Config {
     pub overview: OverviewLayout,
     /// The model the Agents screen's Ollama session runs.
     pub ollama_model: String,
+    /// Claude Code sessions the owner made on the Agents screen, in their order.
+    pub agents: Vec<SavedAgent>,
+    /// Names the owner gave sessions, by tmux session.
+    pub agent_names: std::collections::BTreeMap<String, String>,
+}
+
+/// A Claude Code session of the owner's: what it is called and the server folder it starts in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SavedAgent {
+    pub name: String,
+    pub dir: String,
 }
 
 /// Overview's two columns, each a list of widget ids from top to bottom, how wide the left one is in percent,
@@ -68,7 +80,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into() }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into(), agents: vec![], agent_names: Default::default() }
     }
 }
 

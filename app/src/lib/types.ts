@@ -274,6 +274,10 @@ export interface Config {
   overview: OverviewLayout;
   /** The model the Agents screen's Ollama session runs. */
   ollama_model?: string;
+  /** Claude Code sessions made on the Agents screen: a name and the server folder each starts in. */
+  agents?: { name: string; dir: string }[];
+  /** Names given to sessions, by tmux session. */
+  agent_names?: Record<string, string>;
 }
 
 export interface OverviewLayout {
@@ -548,7 +552,7 @@ export interface Transfer {
 }
 
 /** One terminal on the Agents screen: Claude Code at home or in a project's folder, or Ollama with a model. */
-export type Pane = { kind: "claude"; project: string | null; dir: string | null } | { kind: "ollama"; model: string };
+export type Pane = { kind: "claude"; project: string | null; dir: string | null } | { kind: "ollama"; model: string } | { kind: "attach"; session: string };
 
 /** What a session is doing, as its screen shows it. */
 export type PaneState = "working" | "waiting" | "idle" | "exited";
@@ -567,6 +571,8 @@ export interface ClaudeUsage {
   today: number;
   week: number;
   sessions_today: number;
+  /** The last seven local days, oldest first; the last is today. */
+  days?: number[];
 }
 
 /** A run for the Agents screen's strip, with its task. */

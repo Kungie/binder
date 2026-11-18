@@ -310,7 +310,7 @@ export function memoryApi(
       terms.delete("binder-ollama");
     },
     async claudeUsage() {
-      return { five_hours: 182_000, today: 1_240_000, week: 8_900_000, sessions_today: 3 };
+      return { five_hours: 182_000, today: 1_240_000, week: 8_900_000, sessions_today: 3, days: [900_000, 2_100_000, 0, 1_500_000, 1_800_000, 1_360_000, 1_240_000] };
     },
     async recentRuns(): Promise<RecentRun[]> {
       return runs.filter((r) => r.ended === null || r.ended > now() - 86_400).map((r) => ({ run: { ...r }, key: task(r.task_id).key, title: task(r.task_id).title }));
