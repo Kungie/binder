@@ -18,6 +18,7 @@ import { Agents } from "./screens/Agents";
 import { Sites } from "./screens/Sites";
 import { GitHub } from "./screens/GitHub";
 import { useEffect, useState } from "react";
+import { enableWindowDrag } from "./lib/drag";
 
 function Screens() {
   const { screen } = useStore();
@@ -66,6 +67,7 @@ function useZoomKeys() {
 export function Shell() {
   const { creatingTask, creatingProject, screen } = useStore();
   useZoomKeys();
+  useEffect(() => enableWindowDrag(), []);
   // Agents stays mounted once opened, so its terminals keep their connection and screen.
   const [agentsSeen, setAgentsSeen] = useState(false);
   if (screen === "agents" && !agentsSeen) setAgentsSeen(true);
