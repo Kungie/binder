@@ -12,13 +12,14 @@ export function ServerSwitcher({ target, hostname, onSwitched }: { target: strin
   const [cfg, setCfg] = useState<Config | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
-  // Remember this server and its name, so the list can show it by name later.
+  // Remember this server, and its hostname as its name when it has none yet; a name already saved stays.
   useEffect(() => {
     if (!hostname) return;
     void api.getConfig().then(async (c) => {
       const servers = c.servers?.includes(target) ? c.servers : [...(c.servers ?? []), target];
-      if (c.server_names?.[target] === hostname && servers === c.servers) return setCfg(c);
-      const next = { ...c, servers, server_names: { ...(c.server_names ?? {}), [target]: hostname } };
+      const named = !!c.server_names?.[target];
+      if (named && servers === c.servers) return setCfg(c);
+      const next = { ...c, servers, server_names: { ...(c.server_names ?? {}), [target]: named ? c.server_names![target] : hostname } };
       await api.setConfig(next);
       setCfg(next);
     });
@@ -49,7 +50,7 @@ export function ServerSwitcher({ target, hostname, onSwitched }: { target: strin
 
   const names = cfg?.server_names ?? {};
   const list = cfg?.servers?.length ? cfg.servers : [target];
-  const name = hostname || names[target] || target;
+  const name = names[target] || hostname || target;
 
   return (
     <div ref={box} className="relative">

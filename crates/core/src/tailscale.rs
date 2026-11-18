@@ -24,6 +24,12 @@ pub struct Peer {
     /// Whether files can be sent to it with Taildrop.
     pub taildrop: bool,
     pub this_mac: bool,
+    /// This Mac's traffic goes out through it.
+    #[serde(default)]
+    pub exit_node: bool,
+    /// It offers itself as an exit node.
+    #[serde(default)]
+    pub exit_option: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -51,6 +57,8 @@ struct RawPeer {
     expired: bool,
     relay: String,
     taildrop_target: i64,
+    exit_node: bool,
+    exit_node_option: bool,
 }
 
 #[derive(Deserialize, Default)]
@@ -85,6 +93,8 @@ fn peer(r: RawPeer, this_mac: bool) -> Peer {
         // 5 and 9 are the values Tailscale reports for a device that accepts files.
         taildrop: !this_mac && r.taildrop_target != 0,
         this_mac,
+        exit_node: r.exit_node,
+        exit_option: r.exit_node_option,
     }
 }
 

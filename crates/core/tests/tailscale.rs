@@ -5,7 +5,7 @@ const STATUS: &str = r#"{
   "BackendState": "Running",
   "Self": {"ID": "n1", "HostName": "demo-mac", "DNSName": "demo-mac.tail0.ts.net.", "OS": "macOS", "TailscaleIPs": ["100.64.0.1", "fd7a::1"], "Online": true, "KeyExpiry": "2027-01-10T00:00:00Z", "LastSeen": "0001-01-01T00:00:00Z", "Relay": "fra", "CurAddr": ""},
   "Peer": {
-    "k2": {"ID": "n2", "HostName": "lab", "DNSName": "lab.tail0.ts.net.", "OS": "linux", "TailscaleIPs": ["100.64.0.2"], "Online": true, "Active": true, "Relay": "fra", "CurAddr": "", "LastSeen": "0001-01-01T00:00:00Z", "TaildropTarget": 9},
+    "k2": {"ID": "n2", "HostName": "lab", "DNSName": "lab.tail0.ts.net.", "OS": "linux", "TailscaleIPs": ["100.64.0.2"], "Online": true, "Active": true, "Relay": "fra", "CurAddr": "", "LastSeen": "0001-01-01T00:00:00Z", "TaildropTarget": 9, "ExitNode": true, "ExitNodeOption": true},
     "k3": {"ID": "n3", "HostName": "phone", "DNSName": "phone.tail0.ts.net.", "OS": "iOS", "TailscaleIPs": ["100.64.0.3"], "Online": false, "Relay": "", "CurAddr": "", "LastSeen": "2026-11-10T08:00:00Z", "KeyExpiry": "2026-10-27T12:00:00Z", "Expired": true, "TaildropTarget": 5}
   }
 }"#;
@@ -73,3 +73,12 @@ fn ssh_targets_are_plain() {
     assert!(!valid_target(""));
 }
 
+
+#[test]
+fn the_exit_node_in_use_is_marked() {
+    let s = parse_status(STATUS).unwrap();
+    assert!(s.peers[1].exit_node);
+    assert!(s.peers[1].exit_option);
+    assert!(!s.peers[2].exit_node);
+    assert!(!s.peers[2].exit_option);
+}

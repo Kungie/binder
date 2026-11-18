@@ -634,6 +634,10 @@ export interface TailnetPeer {
   relay: string;
   taildrop: boolean;
   this_mac: boolean;
+  /** This Mac's traffic goes out through it. */
+  exit_node?: boolean;
+  /** It offers itself as an exit node. */
+  exit_option?: boolean;
 }
 
 export interface TailnetStatus {

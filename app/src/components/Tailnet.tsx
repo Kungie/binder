@@ -125,6 +125,7 @@ export function Tailnet() {
                         {!p.online && p.last_seen !== null && <span className="text-text-3">{ago(p.last_seen, now)}</span>}
                         {ping && <span className={`font-mono text-[11px] ${ping.via === "direct" ? "text-ok" : "text-st-progress"}`}>{`${Math.round(ping.ms)} ms · ${ping.via}`}</span>}
                         <Spark samples={history[p.id] ?? []} />
+                        {p.exit_node && <span className="rounded-full border border-line-strong px-1.5 text-[11px] text-text">Exit node</span>}
                         <KeyNote peer={p} now={now} />
                       </span>
                     </td>

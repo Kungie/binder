@@ -170,6 +170,7 @@ export function memoryApi(
           peers: [
             { id: "n1", name: "demo-mac", dns: "demo-mac.tail0.ts.net", os: "macOS", ip: "100.64.0.1", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: false, this_mac: true },
             { id: "n2", name: "lab", dns: "lab.tail0.ts.net", os: "linux", ip: "100.64.0.2", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: true, this_mac: false },
+            { id: "n4", name: "vps", dns: "vps.tail0.ts.net", os: "linux", ip: "100.64.0.4", online: true, last_seen: null, key_expiry: null, expired: false, relay: "fra", taildrop: true, this_mac: false, exit_node: true, exit_option: true },
             { id: "n3", name: "phone", dns: "phone.tail0.ts.net", os: "iOS", ip: "100.64.0.3", online: false, last_seen: Math.floor(Date.now() / 1000) - 3 * 86_400, key_expiry: null, expired: true, relay: "", taildrop: true, this_mac: false },
           ],
         }

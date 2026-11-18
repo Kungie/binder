@@ -210,4 +210,14 @@ describe("Containers", () => {
     expect(await screen.findByRole("button", { name: "Server: homelab" })).toBeInTheDocument();
     expect((await api.getConfig()).server).toBe("lab");
   });
+
+  it("a name already saved for a server wins over its hostname", async () => {
+    const { api, user } = setup();
+    const c = await api.getConfig();
+    await api.setConfig({ ...c, servers: ["lab"], server_names: { lab: "home" } });
+    await user.click(screen.getByRole("button", { name: "Devices" }));
+    await user.click(screen.getByRole("button", { name: "Servers" }));
+    expect(await screen.findByRole("button", { name: "Server: home" })).toBeInTheDocument();
+    expect((await api.getConfig()).server_names).toEqual({ lab: "home" });
+  });
 });

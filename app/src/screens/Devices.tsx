@@ -3,7 +3,7 @@ import { Dot } from "../components/Metric";
 import { NewDevice } from "../components/NewDevice";
 import { Button, Field, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
-import { DEVICE_KIND_LABEL, type Device, type DevicePatch } from "../lib/types";
+import { DEVICE_KIND_LABEL, type Device, type DevicePatch, type TailnetPeer } from "../lib/types";
 import { usePoll } from "../lib/usePoll";
 import { Empty } from "../components/Mascot";
 import { Tailnet } from "../components/Tailnet";
@@ -15,10 +15,19 @@ export function Devices() {
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
 
+  const [tailnet, setTailnet] = useState<TailnetPeer[]>([]);
   const load = useCallback(async () => {
     setDevices(await api.listDevices());
     setOnline(Object.fromEntries(await api.probeDevices()));
+    setTailnet(await api.tailnetStatus().then((s) => (s.running ? s.peers : []), () => []));
   }, [api]);
+
+  /** The tailnet device a saved one names by its Tailscale address, MagicDNS name or host name. Tailscale knows
+   *  whether a phone is there; a TCP probe never would. */
+  const onTailnet = (d: Device) => {
+    const a = d.address.trim().toLowerCase();
+    return tailnet.find((p) => [p.ip, p.dns, p.dns.split(".")[0], p.name].some((x) => x && x.toLowerCase() === a));
+  };
   usePoll(load, 30_000);
 
   const current = devices.find((d) => d.id === open);
@@ -62,12 +71,18 @@ export function Devices() {
                     <span className="text-text-3">:{d.port}</span>
                   </td>
                   <td className="pr-3">
-                    {d.id in online && (
-                      <span className="flex items-center gap-2 text-text-2">
-                        <Dot on={online[d.id]} />
-                        {online[d.id] ? "Online" : "Offline"}
-                      </span>
-                    )}
+                    {(() => {
+                      const peer = onTailnet(d);
+                      const up = peer ? peer.online : online[d.id];
+                      if (up === undefined) return null;
+                      return (
+                        <span className="flex items-center gap-2 text-text-2">
+                          <Dot on={up} />
+                          {up ? "Online" : "Offline"}
+                          {peer && <span className="text-[11px] text-text-3">Tailscale</span>}
+                        </span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

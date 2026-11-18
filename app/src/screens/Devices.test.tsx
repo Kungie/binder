@@ -110,4 +110,23 @@ describe("Devices", () => {
     expect(close).toHaveBeenCalledWith("ssh-demo-dev-lab-tail0-ts-net");
     expect(screen.queryByRole("region", { name: "SSH · lab" })).toBeNull();
   });
+
+  it("marks the exit node in use", async () => {
+    setup();
+    const panel = await screen.findByRole("region", { name: "Tailscale" });
+    const vps = await within(panel).findByRole("row", { name: /vps/ });
+    expect(within(vps).getByText("Exit node")).toBeInTheDocument();
+    expect(within(panel).getByRole("row", { name: /lab/ })).not.toHaveTextContent("Exit node");
+  });
+
+  it("a device on the tailnet takes its state from Tailscale", async () => {
+    const { api, user } = setup();
+    await api.createDevice({ name: "iPhone", kind: "other", address: "phone" });
+    await user.click(await screen.findByRole("button", { name: /^Tasks/ }));
+    await user.click(screen.getByRole("button", { name: "Devices" }));
+    const table = await screen.findByRole("table", { name: "Devices" });
+    const row = await within(table).findByRole("row", { name: /iPhone/ });
+    await waitFor(() => expect(row).toHaveTextContent("Offline"));
+    expect(row).toHaveTextContent("Tailscale");
+  });
 });
