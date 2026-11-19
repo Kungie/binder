@@ -76,8 +76,6 @@ make release  # Binder.dmg and the signed update files in build/, for a GitHub r
 make preview  # the interface alone in a browser, with demo data
 ```
 
-The 1.x app, a Swift menu bar app that gave AI agents a memory, lives on the `legacy-swift` branch and in the 1.x releases.
-
 ## License
 
 AGPL-3.0.
