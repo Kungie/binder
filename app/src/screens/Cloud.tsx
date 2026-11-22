@@ -12,6 +12,7 @@ import { useStore } from "../lib/store";
 import { ago } from "../lib/time";
 import type { AppChoice, CloudEntry, CloudStatus, Conflict, Space, TrashEntry } from "../lib/types";
 import { Empty, Mascot } from "../components/Mascot";
+import { ScreenTip } from "../components/ScreenTip";
 
 type SortKey = "name" | "size" | "modified";
 const UNDO_MS = 6000;
@@ -419,6 +420,7 @@ export function Cloud() {
         </nav>
         <DiskBars ssd={status?.space ?? space} sd={sd} row />
       </header>
+      <ScreenTip id="cloud" />
       <div className="flex h-10 shrink-0 items-center gap-2 px-5">
         <div className="flex h-7 items-center rounded-control border border-line bg-card p-0.5">
           {(["files", "trash"] as const).map((m) => (

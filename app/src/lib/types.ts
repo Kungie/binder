@@ -286,6 +286,14 @@ export interface Config {
   vpn_regions?: Record<string, string>;
   /** The Tailscale address of the exit node last turned on. */
   vpn_last?: string | null;
+  /** The first-run setup was finished or skipped. */
+  onboarded?: boolean;
+  /** Screens whose tip was closed. */
+  tips_hidden?: string[];
+  /** Binder VPN's service: its compose folder on the server, under the home folder. */
+  vpn_dir?: string;
+  /** The service's public https address, which friends sign in at. */
+  vpn_address?: string | null;
 }
 
 export interface OverviewLayout {
@@ -671,6 +679,12 @@ export interface LimitWindow {
 }
 
 /** Claude Code's plan limits in percent, as last handed to Binder's status line on the server. */
+export interface SetupChecks {
+  gh: boolean;
+  gh_signed_in: boolean;
+  tailscale: boolean;
+}
+
 export interface Friend {
   name: string;
   created: number;

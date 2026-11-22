@@ -24,6 +24,10 @@ static HISTORY: Mutex<Option<HashMap<String, VecDeque<Sample>>>> = Mutex::new(No
 const DAY: i64 = 86_400;
 
 /// The Tailscale command line: the app's own binary, or one on the usual paths.
+pub fn installed() -> bool {
+    cli().is_some()
+}
+
 fn cli() -> Option<&'static str> {
     ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale"].into_iter().find(|p| std::path::Path::new(p).exists())
 }

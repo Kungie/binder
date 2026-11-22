@@ -9,6 +9,7 @@ import { useStore } from "../lib/store";
 import { loadPercent } from "../lib/load";
 import type { ServerStatus, Service } from "../lib/types";
 import { clock, gb, percent, useServer } from "../lib/useServer";
+import { ScreenTip } from "../components/ScreenTip";
 
 export function Server() {
   const { target, status, error, refresh } = useServer(30_000);
@@ -27,6 +28,7 @@ export function Server() {
           </Button>
         )}
       </header>
+      <ScreenTip id="server" />
       {target === null && (
         <div className="flex max-w-[960px] flex-col gap-3 px-5">
           <Panel title="Connect the home server">

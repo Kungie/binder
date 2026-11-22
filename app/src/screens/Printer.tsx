@@ -9,6 +9,7 @@ import type { PrintRecord, PrinterCommand, PrinterView } from "../lib/types";
 import { ago } from "../lib/time";
 import { STATE_LABEL, minutes, temp, usePrinters } from "../lib/usePrinters";
 import { Empty } from "../components/Mascot";
+import { ScreenTip } from "../components/ScreenTip";
 
 export function Printer() {
   const { printers, reload } = usePrinters();
@@ -21,6 +22,7 @@ export function Printer() {
           Add printer
         </Button>
       </header>
+      <ScreenTip id="printer" />
       <div className="flex max-w-[960px] flex-col gap-3 px-5 pb-5">
         {printers.map((p) => (
           <PrinterPanel key={p.config.serial} view={p} onRemoved={() => void reload()} />

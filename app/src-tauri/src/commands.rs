@@ -163,7 +163,13 @@ pub async fn get_config(state: State<'_, AppState>) -> Res<Config> {
 }
 
 #[tauri::command]
-pub async fn set_config(state: State<'_, AppState>, config: Config) -> Res<()> {
+pub async fn set_config(state: State<'_, AppState>, mut config: Config) -> Res<()> {
+    binder_core::friends::check_dir(&config.vpn_dir).map_err(text)?;
+    if let Some(a) = config.vpn_address.as_deref().filter(|a| !a.trim().is_empty()) {
+        config.vpn_address = Some(binder_core::friends::address(a).map_err(text)?);
+    } else {
+        config.vpn_address = None;
+    }
     config.save(&state.config_path).map_err(text)?;
     *state.config.lock().unwrap() = config;
     Ok(())
@@ -1333,35 +1339,71 @@ pub async fn server_reachable(target: String) -> Res<bool> {
     Ok(SshRemote::new(target).run("true\n", None).is_ok())
 }
 
+fn vpn_dir(state: &State<AppState>) -> String {
+    state.config.lock().unwrap().vpn_dir.clone()
+}
+
 /// Binder VPN's sign-in service on the server: whether it runs and is set up.
 #[tauri::command]
 pub async fn friends_status(state: State<'_, AppState>) -> Res<binder_core::friends::Service> {
-    binder_core::friends::status(&remote(&state)?).map_err(text)
+    binder_core::friends::status(&remote(&state)?, &vpn_dir(&state)).map_err(text)
 }
 
 #[tauri::command]
 pub async fn friends_list(state: State<'_, AppState>) -> Res<Vec<binder_core::friends::Friend>> {
-    binder_core::friends::list(&remote(&state)?).map_err(text)
+    binder_core::friends::list(&remote(&state)?, &vpn_dir(&state)).map_err(text)
 }
 
 #[tauri::command]
 pub async fn friend_add(state: State<'_, AppState>, name: String, password: String) -> Res<()> {
-    binder_core::friends::add(&remote(&state)?, &name, &password).map_err(text)
+    binder_core::friends::add(&remote(&state)?, &vpn_dir(&state), &name, &password).map_err(text)
 }
 
 #[tauri::command]
 pub async fn friend_password(state: State<'_, AppState>, name: String, password: String) -> Res<()> {
-    binder_core::friends::set_password(&remote(&state)?, &name, &password).map_err(text)
+    binder_core::friends::set_password(&remote(&state)?, &vpn_dir(&state), &name, &password).map_err(text)
 }
 
 /// Removes a friend and their devices from the tailnet.
 #[tauri::command]
 pub async fn friend_remove(state: State<'_, AppState>, name: String) -> Res<()> {
-    binder_core::friends::remove(&remote(&state)?, &name).map_err(text)
+    binder_core::friends::remove(&remote(&state)?, &vpn_dir(&state), &name).map_err(text)
 }
 
 /// The Tailscale OAuth client the service makes keys with.
 #[tauri::command]
 pub async fn friends_oauth(state: State<'_, AppState>, id: String, secret: String) -> Res<()> {
-    binder_core::friends::set_oauth(&remote(&state)?, &id, &secret).map_err(text)
+    binder_core::friends::set_oauth(&remote(&state)?, &vpn_dir(&state), &id, &secret).map_err(text)
+}
+
+/// Writes the service to its folder on the server and starts it, or updates it to this version.
+#[tauri::command]
+pub async fn friends_install(state: State<'_, AppState>) -> Res<()> {
+    binder_core::friends::install(&remote(&state)?, &vpn_dir(&state)).map_err(text)
+}
+
+/// Whether the service answers at its public address, asked from this Mac over https.
+#[tauri::command]
+pub async fn friends_reachable(address: String) -> Res<bool> {
+    let base = binder_core::friends::address(&address).map_err(text)?;
+    let out = std::process::Command::new("/usr/bin/curl")
+        .args(["-sS", "--max-time", "10", "--proto", "=https", "--max-filesize", "4096", "--", &format!("{base}/vpn/api/health")])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(out.status.success() && String::from_utf8_lossy(&out.stdout).contains("\"ok\": true"))
+}
+
+/// What the first-run setup and the screens' guides check on this Mac.
+#[derive(serde::Serialize)]
+pub struct SetupChecks {
+    pub gh: bool,
+    pub gh_signed_in: bool,
+    pub tailscale: bool,
+}
+
+#[tauri::command]
+pub async fn setup_checks() -> Res<SetupChecks> {
+    let gh = GhCli::find();
+    Ok(SetupChecks { gh: gh.is_some(), gh_signed_in: gh.is_some_and(|g| g.signed_in()), tailscale: crate::tailnet::installed() })
 }

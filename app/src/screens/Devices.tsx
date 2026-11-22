@@ -7,6 +7,7 @@ import { DEVICE_KIND_LABEL, type Device, type DevicePatch, type TailnetPeer } fr
 import { usePoll } from "../lib/usePoll";
 import { Empty } from "../components/Mascot";
 import { Tailnet } from "../components/Tailnet";
+import { ScreenTip } from "../components/ScreenTip";
 
 export function Devices() {
   const { api } = useStore();
@@ -41,6 +42,7 @@ export function Devices() {
           New device
         </Button>
       </header>
+      <ScreenTip id="devices" />
       <div className="flex flex-col gap-3 px-5 pb-5">
         <Tailnet />
         <div className="rounded-panel border border-line bg-panel">

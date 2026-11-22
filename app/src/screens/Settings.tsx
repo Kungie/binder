@@ -8,6 +8,7 @@ import { pickFolder } from "../lib/pick";
 import { useStore } from "../lib/store";
 import { useVault } from "../lib/useVault";
 import { ago } from "../lib/time";
+import { SETUP_EVENT } from "../components/Welcome";
 
 /** The agent on the server: picking up its tasks by day, and the crontab line that runs night tasks. */
 function AgentWork() {
@@ -282,7 +283,31 @@ export function Settings() {
             <PrintSwitch />
           </div>
         </Panel>
+        <SetupPanel />
       </div>
     </div>
+  );
+}
+
+function SetupPanel() {
+  const { api } = useStore();
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <Panel title="Setup">
+      <div className="flex flex-wrap items-center gap-2 border-t border-line p-3">
+        <Button onClick={() => window.dispatchEvent(new Event(SETUP_EVENT))}>Run setup again</Button>
+        <Button
+          onClick={() =>
+            void api.getConfig().then(async (c) => {
+              await api.setConfig({ ...c, tips_hidden: [] });
+              setNote("Each screen shows its tip again.");
+            })
+          }
+        >
+          Show tips again
+        </Button>
+        {note && <span className="text-[12px] text-text-3">{note}</span>}
+      </div>
+    </Panel>
   );
 }

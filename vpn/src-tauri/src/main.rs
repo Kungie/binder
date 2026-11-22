@@ -20,6 +20,8 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 /// What the app keeps between launches: who signed in, the Tailscale profile it made, the regions last seen.
 #[derive(Serialize, Deserialize, Default, Clone)]
 struct Saved {
+    #[serde(default)]
+    server: String,
     user: String,
     hostname: String,
     profile: String,
@@ -263,17 +265,20 @@ fn sign_out(app: &AppHandle) -> Result<(), String> {
 
 /// Asks the service for a key with the user name and password, then signs Tailscale in with it as a new profile.
 #[tauri::command]
-async fn sign_in(app: AppHandle, user: String, password: String) -> Result<(), String> {
+async fn sign_in(app: AppHandle, server: String, user: String, password: String) -> Result<(), String> {
     if cli().is_none() {
         return Err("Tailscale isn't installed. Get it from tailscale.com/download, open it once, then try again.".into());
     }
+    let url = vpn_client::login_url(&server).map_err(|_| "The server is the https address you were given.".to_string())?;
+    let server = server.trim().trim_end_matches('/').to_string();
     let user = user.trim().to_lowercase();
     if user.is_empty() || password.is_empty() {
         return Err("Enter your user name and password.".into());
     }
+    let _ = std::fs::write(data_dir(&app).join("server"), &server);
     // The password goes to curl on stdin, never in its arguments.
     let mut child = Command::new("/usr/bin/curl")
-        .args(["-sS", "--max-time", "25", "--proto", "=https", "-H", "Content-Type: application/json", "--data-binary", "@-", "-w", "\n%{http_code}", vpn_client::SERVICE])
+        .args(["-sS", "--max-time", "25", "--proto", "=https", "-H", "Content-Type: application/json", "--data-binary", "@-", "--max-filesize", "65536", "-w", "\n%{http_code}", "--", &url])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -304,7 +309,7 @@ async fn sign_in(app: AppHandle, user: String, password: String) -> Result<(), S
     let _ = std::fs::remove_file(&key_path);
     result?;
     let profile = current_profile().ok_or("Tailscale signed in, but its profile couldn't be read.")?;
-    let saved = Saved { user, hostname: login.hostname, profile, regions: vec![], last_exit: None };
+    let saved = Saved { server, user, hostname: login.hostname, profile, regions: vec![], last_exit: None };
     store(&app, Some(&saved));
     with(|s| {
         s.saved = Some(saved);
@@ -318,6 +323,12 @@ async fn sign_in(app: AppHandle, user: String, password: String) -> Result<(), S
     Ok(())
 }
 
+/// The server last signed in to, for the sign-in window.
+#[tauri::command]
+fn last_server(app: AppHandle) -> String {
+    std::fs::read_to_string(data_dir(&app).join("server")).unwrap_or_default().trim().to_string()
+}
+
 fn show_sign_in(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("signin") {
         let _ = w.set_focus();
@@ -325,7 +336,7 @@ fn show_sign_in(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "signin", WebviewUrl::App("index.html".into()))
         .title("Binder VPN")
-        .inner_size(340.0, 440.0)
+        .inner_size(340.0, 480.0)
         .resizable(false)
         .maximizable(false)
         .minimizable(false)
@@ -336,7 +347,7 @@ fn show_sign_in(app: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![sign_in])
+        .invoke_handler(tauri::generate_handler![sign_in, last_server])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);

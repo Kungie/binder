@@ -52,3 +52,11 @@ fn regions_are_exit_nodes_named_by_city() {
     assert!(!r[1].online);
     assert_eq!(city("zzz"), None);
 }
+
+#[test]
+fn the_sign_in_address_is_the_servers_https_address() {
+    assert_eq!(login_url("https://vpn.example.com/").unwrap(), "https://vpn.example.com/vpn/api/login");
+    assert!(login_url("http://vpn.example.com").is_err());
+    assert!(login_url("-K /etc/passwd").is_err());
+    assert!(login_url("").is_err());
+}

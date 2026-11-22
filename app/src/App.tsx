@@ -20,6 +20,7 @@ import { GitHub } from "./screens/GitHub";
 import { useEffect, useState } from "react";
 import { enableWindowDrag } from "./lib/drag";
 import { Vpn } from "./screens/Vpn";
+import { Welcome } from "./components/Welcome";
 
 function Screens() {
   const { screen } = useStore();
@@ -92,6 +93,7 @@ export function Shell() {
       {creatingTask && <NewTask />}
       {creatingProject && <NewProject />}
       <CommandPalette />
+      <Welcome />
     </div>
   );
 }

@@ -6,6 +6,8 @@ import { Button, Notice, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
 import { ago } from "../lib/time";
 import type { AgentReady, GhAction, GhDetail, GhFilter, GhLists, IssueRow, Project, PullRow, Review } from "../lib/types";
+import { ScreenTip } from "../components/ScreenTip";
+import { Code, NeedsSetup } from "../components/NeedsSetup";
 
 const EVERY = 120_000;
 /** The field look, sized to its content. */
@@ -100,9 +102,25 @@ export function GitHub() {
           <Button onClick={() => setCreating(true)}>New issue</Button>
         </span>
       </header>
+      <ScreenTip id="github" />
       {error && (
         <div className="px-5 pb-3">
-          <Notice>{error}</Notice>
+          {error.startsWith("Install gh") ? (
+            <NeedsSetup
+              title="Connect GitHub"
+              steps={[
+                <>
+                  Install GitHub's command line: <Code>brew install gh</Code>.
+                </>,
+                <>
+                  Sign in with <Code>gh auth login</Code>. Binder uses that login and never sees a token.
+                </>,
+                "Add your repos on Projects with Sync. The GitHub screen shows pull requests and issues of those projects.",
+              ]}
+            />
+          ) : (
+            <Notice>{error}</Notice>
+          )}
         </div>
       )}
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,380px)_minmax(0,1fr)] gap-3 px-5 pb-5">

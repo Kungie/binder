@@ -179,6 +179,11 @@ impl GhCli {
             .map(|program| GhCli { program })
     }
 
+    /// Whether `gh` has a GitHub login.
+    pub fn signed_in(&self) -> bool {
+        std::process::Command::new(&self.program).args(["auth", "status"]).stdin(std::process::Stdio::null()).output().is_ok_and(|o| o.status.success())
+    }
+
     /// Runs `gh`, trying twice more after a network hiccup, a second apart and then three.
     pub(crate) fn run(&self, args: &[&str]) -> Result<String> {
         let mut err = String::new();

@@ -4,8 +4,10 @@
 use crate::tailscale::Status;
 use serde::{Deserialize, Serialize};
 
-/// The sign-in service, behind the Binder website's tunnel.
-pub const SERVICE: &str = "https://binder.erenkahraman.dev/vpn/api/login";
+/// Where the sign-in service takes a user name and password, at the address the owner gave their friends.
+pub fn login_url(server: &str) -> Result<String, String> {
+    crate::friends::address(server).map(|base| format!("{base}/vpn/api/login")).map_err(|e| e.to_string())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Profile {

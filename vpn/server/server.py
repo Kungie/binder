@@ -30,7 +30,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 TAG = "tag:friend"
 WINDOW = 15 * 60
+# Wrong answers in a window before sign-ins are refused: from one address, for one user, and from everyone.
 TRIES = 5
+USER_TRIES = 20
+ALL_TRIES = 200
+BODY = 4096
+CONNECTIONS = 32
 WRONG = "Wrong user name or password."
 API = "https://api.tailscale.com/api/v2"
 
@@ -195,23 +200,26 @@ class App:
 
     # Sign-in
 
-    def locked(self, key, now):
+    def locked(self, key, now, limit):
         recent = [t for t in self.failures.get(key, []) if now - t < WINDOW]
-        self.failures[key] = recent
-        return len(recent) >= TRIES
+        if recent:
+            self.failures[key] = recent
+        else:
+            self.failures.pop(key, None)
+        return len(recent) >= limit
 
     def login(self, name, password, address):
         now = self.clock()
-        keys = [f"ip:{address}", f"user:{name}"]
+        keys = [(f"ip:{address}", TRIES), (f"user:{name}", USER_TRIES), ("all", ALL_TRIES)]
         with self.lock:
-            if any(self.locked(k, now) for k in keys):
+            if any(self.locked(k, now, limit) for k, limit in keys):
                 raise Refused("Too many tries. Wait 15 minutes.")
             user = self.all().get(name) if NAME.match(name or "") else None
             # Hash even for an unknown name, so the answer takes as long either way.
             salt = bytes.fromhex(user["salt"]) if user else b"\0" * 16
             digest = hash_password(password or "", salt)[1]
             if not user or not hmac.compare_digest(digest, user["hash"]):
-                for k in keys:
+                for k, _ in keys:
                     self.failures.setdefault(k, []).append(now)
                 raise Refused(WRONG)
         key = self.tailscale.create_key(name)
@@ -225,15 +233,46 @@ class App:
 
 class Handler(BaseHTTPRequestHandler):
     app = None
+    # A client that sends nothing for this long is dropped, so slow clients can't hold threads.
+    timeout = 10
+    server_version = "binder-vpn"
+    sys_version = ""
+    slots = threading.BoundedSemaphore(CONNECTIONS)
+
+    def handle(self):
+        if not Handler.slots.acquire(blocking=False):
+            try:
+                self.answer_raw(503, {"error": "Busy. Try again in a minute."})
+            except OSError:
+                pass
+            return
+        try:
+            super().handle()
+        finally:
+            Handler.slots.release()
+
+    def answer_raw(self, code, body):
+        data = json.dumps(body).encode()
+        self.wfile.write(f"HTTP/1.1 {code} Busy\r\nContent-Type: application/json\r\nContent-Length: {len(data)}\r\nConnection: close\r\n\r\n".encode() + data)
 
     def answer(self, code, body):
         data = json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def address(self):
+        """The client's address, as the proxy in front of the service gives it: Cloudflare's header, else the last
+        X-Forwarded-For entry (the one the proxy added), else the connection's own."""
+        cf = (self.headers.get("Cf-Connecting-Ip") or "").strip()
+        if cf:
+            return cf[:64]
+        forwarded = [a.strip() for a in (self.headers.get("X-Forwarded-For") or "").split(",") if a.strip()]
+        return forwarded[-1][:64] if forwarded else self.client_address[0]
 
     def do_GET(self):
         if self.path == "/vpn/api/health":
@@ -244,25 +283,51 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/vpn/api/login":
             return self.answer(404, {"error": "Not found."})
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length > 4096:
-                raise ValueError
-            body = json.loads(self.rfile.read(length) or b"{}")
-            user, password = str(body.get("user", "")), str(body.get("password", ""))
-        except (ValueError, AttributeError):
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
             return self.answer(400, {"error": "That isn't a sign-in."})
-        address = self.headers.get("Cf-Connecting-Ip") or self.client_address[0]
+        if length < 0:
+            return self.answer(400, {"error": "That isn't a sign-in."})
+        if length > BODY:
+            self.close_connection = True
+            return self.answer(413, {"error": "That isn't a sign-in."})
         try:
-            self.answer(200, self.app.login(user.strip().lower(), password, address))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError
+            user, password = body.get("user", ""), body.get("password", "")
+            if not isinstance(user, str) or not isinstance(password, str) or len(user) > 64 or len(password) > 256:
+                raise ValueError
+        except (ValueError, UnicodeDecodeError):
+            return self.answer(400, {"error": "That isn't a sign-in."})
+        try:
+            self.answer(200, self.app.login(user.strip().lower(), password, self.address()))
         except Refused as e:
             self.answer(401 if str(e) == WRONG else 429 if "Too many" in str(e) else 503, {"error": str(e)})
         except Exception as e:  # Tailscale's API failed.
-            sys.stderr.write(f"login {user}: {e}\n")
+            sys.stderr.write(f"login failed at Tailscale: {type(e).__name__}\n")
             self.answer(502, {"error": "Tailscale didn't give a key. Try again in a minute."})
 
     def log_message(self, format, *args):
-        # Paths only: no bodies, no passwords.
-        sys.stderr.write(f"{self.command} {self.path} {args[1] if len(args) > 1 else ''}\n")
+        # The request line and status only: no bodies, no passwords, no keys.
+        sys.stderr.write(f"{self.address()} {self.command} {self.path[:80]} {args[1] if len(args) > 1 else ''}\n")
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    block_on_close = False
+    request_queue_size = 64
+
+    def server_bind(self):
+        # HTTPServer looks up its own host name here, which can stall for half a minute; nothing uses it.
+        import socketserver
+
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
+def make_server(address):
+    return Server(address, Handler)
 
 
 def cli(app, args, stdin, out):
@@ -294,7 +359,7 @@ def main():
     app = App(os.environ.get("BINDER_VPN_DATA", "/data"))
     if sys.argv[1:] == ["serve"]:
         Handler.app = app
-        ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+        make_server(("0.0.0.0", 8080)).serve_forever()
     import io
 
     out = io.StringIO()

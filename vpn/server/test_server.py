@@ -1,4 +1,7 @@
 import io
+import socket
+import threading
+import time
 import json
 import os
 import tempfile
@@ -53,7 +56,8 @@ class Users(Base):
 
     def test_hash_is_stored_not_the_password(self):
         self.app.add("ali", "long enough")
-        text = open(os.path.join(self.dir, "users.json")).read()
+        with open(os.path.join(self.dir, "users.json")) as f:
+            text = f.read()
         self.assertNotIn("long enough", text)
         self.assertEqual(os.stat(os.path.join(self.dir, "users.json")).st_mode & 0o777, 0o600)
 
@@ -100,13 +104,77 @@ class Limits(Base):
         self.now += 15 * 60 + 1
         self.assertEqual(self.app.login("ali", "long enough", "1.2.3.4")["hostname"], "friend-ali")
 
-    def test_five_failures_for_a_user_lock_the_user(self):
+    def test_twenty_failures_for_a_user_lock_the_user(self):
         self.app.add("ali", "long enough")
-        for i in range(5):
+        for i in range(20):
             with self.assertRaises(server.Refused):
                 self.app.login("ali", "wrong pass", f"10.0.0.{i}")
         with self.assertRaisesRegex(server.Refused, "Too many tries"):
             self.app.login("ali", "long enough", "10.0.0.9")
+
+
+    def test_many_failures_everywhere_lock_every_sign_in(self):
+        self.app.add("ali", "long enough")
+        self.addCleanup(setattr, server, "ALL_TRIES", server.ALL_TRIES)
+        server.ALL_TRIES = 30
+        for i in range(30):
+            with self.assertRaises(server.Refused):
+                self.app.login(f"u{i}", "wrong pass", f"10.1.0.{i}")
+        with self.assertRaisesRegex(server.Refused, "Too many tries"):
+            self.app.login("ali", "long enough", "10.9.9.9")
+
+
+class Http(Base):
+    def setUp(self):
+        super().setUp()
+        self.now = time.time()
+        self.app.clock = time.time
+        self.app.add("ali", "long enough")
+        server.Handler.app = self.app
+        self.addCleanup(setattr, server.Handler, "log_message", server.Handler.log_message)
+        server.Handler.log_message = lambda *a: None
+        self.httpd = server.make_server(("127.0.0.1", 0))
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.port = self.httpd.server_address[1]
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+    def raw(self, request):
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as c:
+            c.sendall(request)
+            data = b""
+            while chunk := c.recv(4096):
+                data += chunk
+        head, _, body = data.partition(b"\r\n\r\n")
+        return int(head.split()[1]), head.decode(), body.decode()
+
+    def post(self, body, extra=b""):
+        return self.raw(b"POST /vpn/api/login HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Type: application/json\r\n" + extra + b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+
+    def test_sign_in_over_http(self):
+        code, head, body = self.post(b'{"user":"ali","password":"long enough"}')
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(body)["hostname"], "friend-ali")
+        self.assertIn("no-store", head)
+        self.assertNotIn("Python", head)
+
+    def test_wrong_and_odd_requests(self):
+        self.assertEqual(self.post(b'{"user":"ali","password":"nope nope"}')[0], 401)
+        self.assertEqual(self.post(b"not json")[0], 400)
+        self.assertEqual(self.post(b'["a"]')[0], 400)
+        self.assertEqual(self.post(b"x" * 5000)[0], 413)
+        code, _, _ = self.raw(b"POST /vpn/api/login HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Length: -1\r\n\r\n")
+        self.assertEqual(code, 400)
+        self.assertEqual(self.raw(b"GET /vpn/api/users HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")[0], 404)
+        self.assertEqual(self.raw(b"GET /vpn/api/health HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")[0], 200)
+
+    def test_the_forwarded_address_is_the_one_locked(self):
+        for _ in range(5):
+            self.post(b'{"user":"ali","password":"nope nope"}', b"X-Forwarded-For: 1.1.1.1, 7.7.7.7\r\n")
+        self.assertEqual(self.post(b'{"user":"ali","password":"long enough"}', b"X-Forwarded-For: 7.7.7.7\r\n")[0], 429)
+        self.assertEqual(self.post(b'{"user":"ali","password":"long enough"}', b"X-Forwarded-For: 8.8.8.8\r\n")[0], 200)
 
 
 class Cli(Base):

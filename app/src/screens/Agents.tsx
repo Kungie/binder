@@ -8,6 +8,8 @@ import { useStore } from "../lib/store";
 import type { AgentSession, ClaudeLimits, ClaudeUsage, Config, LimitWindow, Pane, PaneState, Project, RecentRun, ServerStatus } from "../lib/types";
 import { whileVisible } from "../lib/usePoll";
 import { gb } from "../lib/useServer";
+import { ScreenTip } from "../components/ScreenTip";
+import { Code, NeedsSetup } from "../components/NeedsSetup";
 
 /** One row of the sidebar: a pane and what people call it. */
 interface Entry {
@@ -226,12 +228,20 @@ export function Agents({ shown }: { shown: boolean }) {
         {target && shown && <Load />}
         {target && shown && <Usage />}
       </header>
+      <ScreenTip id="agents" />
       {target === null && (
-        <div className="flex items-center gap-2 px-5 text-[12px] text-text-2">
-          Set the home server in Settings to use Agents.
-          <Button variant="ghost" onClick={() => setScreen("settings")}>
-            Settings
-          </Button>
+        <div className="px-5">
+          <NeedsSetup
+            title="Set up Agents"
+            steps={[
+              "Set your home server's SSH target in Settings.",
+              <>
+                Install <Code>tmux</Code> on the server, and <Code>claude</Code> (Claude Code) for the agent. Ollama is optional, in a container named <Code>ollama</Code>.
+              </>,
+              "Open Agents again. Each session runs in tmux, so it keeps running when Binder closes.",
+            ]}
+            action={{ label: "Open Settings", run: () => setScreen("settings") }}
+          />
         </div>
       )}
       {target && (

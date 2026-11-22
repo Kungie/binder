@@ -56,7 +56,9 @@ describe("Agents", () => {
   it("asks for a server when none is set", async () => {
     const { user } = setup({ server: null });
     await openAgents(user);
-    expect(await screen.findByText("Set the home server in Settings to use Agents.")).toBeInTheDocument();
+    const setup_ = await screen.findByRole("region", { name: "Set up Agents" });
+    expect(within(setup_).getByText("Set your home server's SSH target in Settings.")).toBeInTheDocument();
+    expect(within(setup_).getByRole("button", { name: "Open Settings" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Claude Code" })).toBeNull();
   });
 

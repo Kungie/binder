@@ -25,9 +25,10 @@
 <main>
   <img src="logo.svg" alt="">
   <h1>Binder VPN</h1>
-  <p>Sign in with the user name and password you were given.</p>
+  <p>Sign in with the server, user name and password you were given.</p>
   <form id="form">
-    <input id="user" placeholder="User name" autocomplete="username" autocapitalize="off" spellcheck="false" autofocus>
+    <input id="server" placeholder="Server, https://…" autocomplete="url" autocapitalize="off" spellcheck="false">
+    <input id="user" placeholder="User name" autocomplete="username" autocapitalize="off" spellcheck="false">
     <input id="password" type="password" placeholder="Password" autocomplete="current-password">
     <button id="go" type="submit">Sign In</button>
   </form>
@@ -36,6 +37,10 @@
 </main>
 <script>
   const form = document.getElementById("form");
+  window.__TAURI__.core.invoke("last_server").then((s) => {
+    document.getElementById("server").value = s;
+    document.getElementById(s ? "user" : "server").focus();
+  });
   const go = document.getElementById("go");
   const error = document.getElementById("error");
   form.addEventListener("submit", async (e) => {
@@ -44,7 +49,7 @@
     go.disabled = true;
     go.textContent = "Signing in…";
     try {
-      await window.__TAURI__.core.invoke("sign_in", { user: document.getElementById("user").value, password: document.getElementById("password").value });
+      await window.__TAURI__.core.invoke("sign_in", { server: document.getElementById("server").value, user: document.getElementById("user").value, password: document.getElementById("password").value });
     } catch (err) {
       error.textContent = String(err);
       go.disabled = false;

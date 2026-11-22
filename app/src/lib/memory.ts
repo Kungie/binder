@@ -1,10 +1,11 @@
 import { paneSession } from "./agents";
 import { nextDue } from "./repeat";
 import type { Api } from "./api";
-import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, ClaudeLimits, Friend, FriendsService, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, ClaudeLimits, Friend, FriendsService, SetupChecks, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
+import { ALL_TIPS } from "./tips";
 
 export interface Seed {
   projects: Project[];
@@ -27,6 +28,11 @@ export interface MemoryOptions {
   limits?: ClaudeLimits;
   friendsService?: FriendsService;
   friends?: Friend[];
+  setupChecks?: SetupChecks;
+  /** Whether the first-run setup was done; true unless a test says otherwise. */
+  onboarded?: boolean;
+  /** Show the screens' tips; tests see them only when they ask. */
+  tips?: boolean;
   /** The tailnet; null when Tailscale isn't installed. A demo tailnet when unset. */
   tailnet?: TailnetStatus | null;
   /** Whether the Cloud share is mounted. Defaults to true. */
@@ -214,7 +220,7 @@ export function memoryApi(
     terms.set(agent, onData);
     onData(encoder.encode("Connected to demo-dev@10.0.7.2 (demo)\r\n"));
   }
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} }, ollama_model: "qwen3:4b" };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} }, ollama_model: "qwen3:4b", onboarded: options.onboarded ?? true, tips_hidden: options.tips ? [] : ALL_TIPS };
   let lastDone: number | null = seed.lastDone ?? null;
   let briefDismissed = false;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
@@ -353,6 +359,15 @@ export function memoryApi(
     },
     async friendRemove(name) {
       friends = friends.filter((f) => f.name !== name);
+    },
+    async setupChecks() {
+      return options.setupChecks ?? { gh: true, gh_signed_in: true, tailscale: tailnet !== null };
+    },
+    async friendsInstall() {
+      friendsService.installed = true;
+    },
+    async friendsReachable(address) {
+      return !address.includes("down");
     },
     async friendsOauth(id, secret) {
       if (!id.trim() || !secret.trim()) throw new Error("Both the client id and the secret are needed.");

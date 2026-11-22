@@ -3,6 +3,8 @@ import { whileVisible } from "../lib/usePoll";
 import { Button, Notice, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
 import type { Site, SiteCheck, Uptime } from "../lib/types";
+import { ScreenTip } from "../components/ScreenTip";
+import { Code, NeedsSetup } from "../components/NeedsSetup";
 
 const EVERY = 30_000;
 const PAGE_W = 1280;
@@ -24,7 +26,7 @@ export function downReason(s: Site, check: SiteCheck | undefined): string | null
 
 /** The websites on the home server, watched: a live preview, whether each answers, and what it uses. */
 export function Sites() {
-  const { api } = useStore();
+  const { api, setScreen } = useStore();
   const [sites, setSites] = useState<Site[] | null>(null);
   const [checks, setChecks] = useState<Record<string, SiteCheck>>({});
   const [error, setError] = useState<string | null>(null);
@@ -70,9 +72,31 @@ export function Sites() {
           Refresh
         </Button>
       </header>
+      <ScreenTip id="sites" />
       <div className="px-5 pb-5">
-        {error && <Notice>{error}</Notice>}
-        {sites && sites.length === 0 && <Notice>No sites in ~/sites on the server.</Notice>}
+        {error === "No server set." ? (
+          <NeedsSetup
+            title="Connect your home server"
+            steps={["Sites lists the websites on your server over SSH.", "Set the server's SSH target in Settings, or run the setup again from there."]}
+            action={{ label: "Open Settings", run: () => setScreen("settings") }}
+          />
+        ) : (
+          error && <Notice>{error}</Notice>
+        )}
+        {sites && sites.length === 0 && (
+          <NeedsSetup
+            title="No sites yet"
+            steps={[
+              <>
+                Put each site in its own folder under <Code>~/sites</Code> on the server, with a <Code>docker-compose.yml</Code>.
+              </>,
+              <>
+                For a public address, add a <Code>cloudflared</Code> container with <Code>hostname:</Code> lines in <Code>cloudflared/config.yml</Code>, or give the address on the site's card.
+              </>,
+              "Press Refresh. Each site with an address is checked every 5 minutes.",
+            ]}
+          />
+        )}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {sites?.map((s) => (
             <SiteCard key={s.name} site={s} check={s.address ? checks[s.address] : undefined} round={round} onSaved={load} />

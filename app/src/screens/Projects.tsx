@@ -11,6 +11,7 @@ import { useStore } from "../lib/store";
 import { viewTasks } from "../lib/tasks";
 import { type DoneLine, type HiddenRepo, type Project, type ProjectState, type RepoStatus, isClosed } from "../lib/types";
 import { useVault, vaultNotice } from "../lib/useVault";
+import { ScreenTip } from "../components/ScreenTip";
 
 function DoneLog({ project }: { project: Project }) {
   const { api, logDone, doneVersion } = useStore();
@@ -355,6 +356,7 @@ export function Projects() {
             New project
           </Button>
         </header>
+        <ScreenTip id="projects" className="mx-2 mb-2" />
         <SyncLine />
         <ul aria-label="Projects" className="flex flex-col gap-px overflow-y-auto px-2 pb-2">
           {live.map((p) => (
