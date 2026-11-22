@@ -297,6 +297,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "binder-vpn"
+version = "3.11.1"
+dependencies = [
+ "binder-core",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
