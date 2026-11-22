@@ -142,3 +142,19 @@ pub fn regions(status: &Status) -> Vec<Region> {
         })
         .collect()
 }
+
+/// How much of an update's download is done, when its size is known.
+pub fn percent(done: u64, total: Option<u64>) -> Option<u8> {
+    match total {
+        Some(t) if t > 0 => Some((done.saturating_mul(100) / t).min(100) as u8),
+        _ => None,
+    }
+}
+
+/// The menu's state line while an update downloads.
+pub fn update_word(percent: Option<u8>) -> String {
+    match percent {
+        Some(p) => format!("Updating {p}%"),
+        None => "Updating".into(),
+    }
+}

@@ -47,7 +47,7 @@ Share your exit nodes with friends. They get a small menu bar app and sign in wi
 1. On the VPN screen, Friends › Install service runs the sign-in service in Docker on your server (`127.0.0.1:8787`).
 2. Add the policy it shows to your tailnet, and give it a Tailscale OAuth client with Auth Keys and Devices Core write access.
 3. Make it public over https (`tailscale funnel --bg 8787`, or a tunnel) and save the address.
-4. Add a friend and send the invite. They need Tailscale and [Binder VPN](https://github.com/Kungie/binder/releases/latest/download/Binder-VPN.dmg).
+4. Add a friend and send the invite. They need Tailscale and [Binder VPN](https://github.com/Kungie/binder/releases/latest/download/Binder-VPN.dmg), which updates itself from its menu.
 
 ## Install
 

@@ -68,7 +68,8 @@ release: release-check build
 	node app/scripts/latest-json.ts $(VERSION) build/notes.md build/Binder.app.tar.gz.sig > build/latest.json
 	$(MAKE) vpn-release
 
-# Binder VPN, the friends' menu bar app (vpn/): its own bundle, signed the same way, in a plain DMG.
+# Binder VPN, the friends' menu bar app (vpn/): its own bundle, signed the same way, in a plain DMG, and its update:
+# a signed tarball and latest-vpn.json, which the app checks on the latest release.
 vpn:
 	cd vpn && ../app/node_modules/.bin/tauri build --bundles app
 
@@ -79,6 +80,12 @@ vpn-release: vpn
 	codesign --force --deep --sign "$(SIGN)" "$(CARGO_TARGET_DIR)/vpn-dmg/Binder VPN.app"
 	ln -s /Applications $(CARGO_TARGET_DIR)/vpn-dmg/Applications
 	hdiutil create -volname "Binder VPN" -srcfolder $(CARGO_TARGET_DIR)/vpn-dmg -ov -format UDZO build/Binder-VPN.dmg
+	rm -f build/Binder-VPN.app.tar.gz build/Binder-VPN.app.tar.gz.sig build/latest-vpn.json
+	COPYFILE_DISABLE=1 tar -czf build/Binder-VPN.app.tar.gz -C $(CARGO_TARGET_DIR)/vpn-dmg "Binder VPN.app"
+	@echo "Signing build/Binder-VPN.app.tar.gz"
+	@TAURI_SIGNING_PRIVATE_KEY="$$(security find-generic-password $(UPDATER_KEY) -w)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
+		npm --prefix app exec -- tauri signer sign "$(CURDIR)/build/Binder-VPN.app.tar.gz" >/dev/null
+	node app/scripts/latest-json.ts $(VERSION) build/notes.md build/Binder-VPN.app.tar.gz.sig Binder-VPN.app.tar.gz > build/latest-vpn.json
 
 preview:
 	npm --prefix app run dev

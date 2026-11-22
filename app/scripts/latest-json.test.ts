@@ -12,4 +12,9 @@ describe("latestJson", () => {
       },
     });
   });
+
+  it("points Binder VPN's updates at its own tarball", () => {
+    const json = latestJson("4.0.1", "Fixes", "c2ln", new Date("2026-11-22T12:00:00Z"), "Binder-VPN.app.tar.gz");
+    expect(json.platforms["darwin-aarch64"].url).toBe("https://github.com/Kungie/binder/releases/download/v4.0.1/Binder-VPN.app.tar.gz");
+  });
 });

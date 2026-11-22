@@ -60,3 +60,13 @@ fn the_sign_in_address_is_the_servers_https_address() {
     assert!(login_url("-K /etc/passwd").is_err());
     assert!(login_url("").is_err());
 }
+
+#[test]
+fn the_menu_says_how_far_an_update_is() {
+    assert_eq!(update_word(None), "Updating");
+    assert_eq!(update_word(Some(42)), "Updating 42%");
+    assert_eq!(percent(421, Some(1000)), Some(42));
+    assert_eq!(percent(1200, Some(1000)), Some(100));
+    assert_eq!(percent(5, None), None);
+    assert_eq!(percent(5, Some(0)), None);
+}

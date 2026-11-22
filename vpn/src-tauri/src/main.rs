@@ -16,6 +16,11 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_updater::UpdaterExt;
+
+async fn tokio_sleep(d: Duration) {
+    tokio::time::sleep(d).await
+}
 
 /// What the app keeps between launches: who signed in, the Tailscale profile it made, the regions last seen.
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -34,7 +39,11 @@ struct Saved {
 #[derive(Default)]
 struct State {
     saved: Option<Saved>,
-    busy: Option<&'static str>,
+    busy: Option<String>,
+    /// A newer version on GitHub, found by the last check.
+    update: Option<String>,
+    /// What the last check by hand found, shown once in the menu.
+    note: Option<String>,
     error: Option<String>,
 }
 
@@ -159,11 +168,11 @@ fn read(app: &AppHandle) -> View {
 }
 
 fn menu(app: &AppHandle, view: &View) -> tauri::Result<Menu<tauri::Wry>> {
-    let (busy, error) = with(|s| (s.busy, s.error.clone()));
+    let (busy, error, update, note) = with(|s| (s.busy.clone(), s.error.clone(), s.update.clone(), s.note.take()));
     let m = Menu::new(app)?;
     let line = |text: &str| MenuItem::with_id(app, format!("info:{text}"), text, false, None::<&str>);
-    let state = match (busy, &view.on) {
-        (Some(word), _) => word.to_string(),
+    let state = match (&busy, &view.on) {
+        (Some(word), _) => word.clone(),
         (None, Some(r)) => format!("On · {}", r.city),
         (None, None) if view.signed_in.is_some() => "Off".into(),
         _ => "Not signed in".into(),
@@ -171,6 +180,9 @@ fn menu(app: &AppHandle, view: &View) -> tauri::Result<Menu<tauri::Wry>> {
     m.append(&line(&format!("Binder VPN: {state}"))?)?;
     if let Some(e) = &error {
         m.append(&line(e)?)?;
+    }
+    if let Some(n) = &note {
+        m.append(&line(n)?)?;
     }
     m.append(&PredefinedMenuItem::separator(app)?)?;
     if !view.tailscale {
@@ -195,6 +207,13 @@ fn menu(app: &AppHandle, view: &View) -> tauri::Result<Menu<tauri::Wry>> {
         m.append(&MenuItem::with_id(app, "signin", "Sign In…", true, None::<&str>)?)?;
     }
     m.append(&PredefinedMenuItem::separator(app)?)?;
+    if !cfg!(debug_assertions) {
+        match &update {
+            Some(v) => m.append(&MenuItem::with_id(app, "update-install", format!("Install Update {v}"), busy.is_none(), None::<&str>)?)?,
+            None => m.append(&MenuItem::with_id(app, "update-check", "Check for Updates…", busy.is_none(), None::<&str>)?)?,
+        }
+    }
+    m.append(&line(&format!("Version {}", app.package_info().version))?)?;
     m.append(&MenuItem::with_id(app, "quit", "Quit Binder VPN", true, Some("CmdOrCtrl+Q"))?)?;
     Ok(m)
 }
@@ -222,7 +241,7 @@ fn icon(on: bool) -> Image<'static> {
 /// Runs a slow action off the main thread, with a word for the menu while it runs.
 fn act(app: &AppHandle, word: &'static str, work: impl FnOnce(&AppHandle) -> Result<(), String> + Send + 'static) {
     with(|s| {
-        s.busy = Some(word);
+        s.busy = Some(word.to_string());
         s.error = None;
     });
     refresh(app);
@@ -329,6 +348,61 @@ fn last_server(app: AppHandle) -> String {
     std::fs::read_to_string(data_dir(&app).join("server")).unwrap_or_default().trim().to_string()
 }
 
+/// Asks GitHub's latest release for a newer Binder VPN. Development builds never update.
+async fn check_update(app: &AppHandle) -> Result<Option<String>, String> {
+    if cfg!(debug_assertions) {
+        return Ok(None);
+    }
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    let version = update.map(|u| u.version);
+    with(|s| s.update = version.clone());
+    Ok(version)
+}
+
+/// Downloads the update, checks its signature against the key in `tauri.conf.json`, replaces the app and restarts
+/// into it. The tunnel is Tailscale's, so the VPN stays on through the restart.
+async fn install_update(app: AppHandle) {
+    let result: Result<(), String> = async {
+        let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?.ok_or("No update.")?;
+        let mut done = 0u64;
+        let mut last = None;
+        let bytes = update
+            .download(
+                |chunk, total| {
+                    done += chunk as u64;
+                    let p = vpn_client::percent(done, total);
+                    if last != Some(p) {
+                        last = Some(p);
+                        with(|s| s.busy = Some(vpn_client::update_word(p)));
+                        refresh_menu(&app);
+                    }
+                },
+                || {},
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        update.install(bytes).map_err(|e| e.to_string())
+    }
+    .await;
+    match result {
+        Ok(()) => app.restart(),
+        Err(e) => {
+            with(|s| {
+                s.busy = None;
+                s.error = Some(format!("Update failed: {e}"));
+            });
+            let app2 = app.clone();
+            std::thread::spawn(move || refresh(&app2));
+        }
+    }
+}
+
+/// Rebuilds the menu from the last view, without asking Tailscale again; for progress.
+fn refresh_menu(app: &AppHandle) {
+    let app2 = app.clone();
+    std::thread::spawn(move || refresh(&app2));
+}
+
 fn show_sign_in(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("signin") {
         let _ = w.set_focus();
@@ -347,6 +421,7 @@ fn show_sign_in(app: &AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![sign_in, last_server])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -370,6 +445,25 @@ fn main() {
                             let _ = Command::new("/usr/bin/open").arg("https://tailscale.com/download/mac").spawn();
                         }
                         "signout" => act(app, "Signing out", sign_out),
+                        "update-check" => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let note = match check_update(&app).await {
+                                    Ok(Some(v)) => format!("Binder VPN {v} is out"),
+                                    Ok(None) => "Binder VPN is up to date".to_string(),
+                                    Err(e) => format!("Couldn't check for updates: {e}"),
+                                };
+                                with(|s| s.note = Some(note));
+                                refresh(&app);
+                            });
+                        }
+                        "update-install" => {
+                            with(|s| {
+                                s.busy = Some(vpn_client::update_word(None));
+                                s.error = None;
+                            });
+                            tauri::async_runtime::spawn(install_update(app.clone()));
+                        }
                         "toggle" => {
                             let view = read(app);
                             if view.on.is_some() {
@@ -398,6 +492,17 @@ fn main() {
                     }
                 })
                 .build(app)?;
+            let checker = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                // 5 s after start, then every 6 hours, as Binder does.
+                tokio_sleep(Duration::from_secs(5)).await;
+                loop {
+                    if check_update(&checker).await.is_ok_and(|v| v.is_some()) {
+                        refresh(&checker);
+                    }
+                    tokio_sleep(Duration::from_secs(6 * 3600)).await;
+                }
+            });
             std::thread::spawn(move || loop {
                 refresh(&handle);
                 std::thread::sleep(Duration::from_secs(10));
