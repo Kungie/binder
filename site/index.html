@@ -38,6 +38,7 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 <nav aria-label="Main" style="display: flex; gap: 20px; font-size: 13px; margin-left: auto; flex-wrap: wrap; align-items: center;">
 <a href="#features" class="hide-sm" style="color: #a1a1a1;">Features</a>
 <a href="#principles" class="hide-sm" style="color: #a1a1a1;">How it works</a>
+<a href="#binder-vpn" class="hide-sm" style="color: #a1a1a1;">Binder VPN</a>
 <a href="https://github.com/Kungie/binder" style="color: #a1a1a1;">GitHub</a>
 <a href="https://github.com/Kungie/binder/releases/latest/download/Binder.dmg" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; background: #ededed; color: #0b0b0c; font-weight: 500; font-size: 12px;">Download</a>
 </nav>
@@ -192,7 +193,14 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px;">
 <p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #8a8a8a;">Binder VPN</p>
 <h2 class="big-h" style="margin: 0; font-size: 36px; line-height: 40px; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance;">Share it with friends.</h2>
-<p style="margin: 0; font-size: 15px; line-height: 24px; color: #a1a1a1;">Binder VPN is a small menu bar app. Your friends sign in with a user name and a password you give them on Binder's VPN screen, pick a region and turn it on. They reach the internet through your exit nodes and nothing else on your tailnet. It runs on the free Tailscale app.</p>
+<p style="margin: 0; font-size: 15px; line-height: 24px; color: #a1a1a1;">Binder VPN is a small menu bar app for the people you trust. They sign in with a user name and a password you make in Binder, pick a region and turn it on. Their devices reach the internet through your exit nodes and nothing else on your tailnet.</p>
+<ol style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 24px; color: #a1a1a1;">
+<li>Binder installs the sign-in service on your server in one click.</li>
+<li>Add the policy it shows and a Tailscale OAuth client.</li>
+<li>Publish it over https, with Tailscale Funnel or a tunnel.</li>
+<li>Add a friend; Binder makes the password and the invite.</li>
+</ol>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #6b6b6b;">Passwords are hashed with scrypt, repeated failures lock out, every sign-in gets a one-time key, and the service runs read-only without root.</p>
 <p style="margin: 0;"><a href="https://github.com/Kungie/binder/releases/latest/download/Binder-VPN.dmg" style="display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid #34343a; color: #ededed; font-size: 13px;">Download Binder VPN</a></p>
 </div>
 <figure style="flex: 1 1 280px; min-width: 0; margin: 0; display: flex; justify-content: center;">
@@ -220,6 +228,14 @@ a:focus-visible{outline:1px solid #a1a1a1;outline-offset:3px;border-radius:8px}
 <h3 style="margin: 0; font-size: 15px; font-weight: 500;">Small and fast</h3>
 <p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">A Rust core in a Tauri window, using the system's own web view. The whole app is 14 MB, and it updates itself from Settings. A menu bar icon shows only while a task is in progress, with a pomodoro beside it.</p>
 <p style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8a8a8a;">Binder.dmg · 8.1 MB</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #26262a; padding-top: 24px;">
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Set up in a few minutes</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">The first launch asks for your server, your vault and gh, each one skippable. Every screen says what it still needs, with the steps to get there.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #26262a; padding-top: 24px;">
+<h3 style="margin: 0; font-size: 15px; font-weight: 500;">Safe by default</h3>
+<p style="margin: 0; font-size: 13px; line-height: 20px; color: #a1a1a1;">No stored passwords: SSH keys, gh's login and the Keychain. Server commands quote every value, site previews run no scripts, and updates are signed.</p>
 </div>
 </section>
 

@@ -809,7 +809,7 @@ fn unpack(zip: &mut zip::ZipArchive<fs::File>, into: &Path, cancel: &AtomicBool,
     for i in 0..zip.len() {
         cancelled(cancel)?;
         let mut file = zip.by_index(i).map_err(bad)?;
-        let name = file.name().to_string();
+        let name = file.name().map_err(bad)?.to_string();
         let path = into.join(name.trim_end_matches('/'));
         if through_link(into, &path) {
             return Err(escapes());
@@ -854,7 +854,7 @@ pub fn extract_local(root: &Path, rel: &str, cancel: &AtomicBool, progress: &mut
     let dir = path.parent().ok_or_else(outside)?.to_path_buf();
     let stem = path.file_stem().ok_or_else(|| Error::Invalid("Nothing to extract.".into()))?.to_string_lossy().into_owned();
     let mut zip = zip::ZipArchive::new(fs::File::open(&path)?).map_err(|e| Error::Invalid(format!("Couldn't read the zip: {e}")))?;
-    if zip.file_names().any(leaves) {
+    if zip.file_names().any(|n| n.as_ref().map_or(true, |n| leaves(n))) {
         return Err(escapes());
     }
     let partial = dir.join(partial_name(&stem));

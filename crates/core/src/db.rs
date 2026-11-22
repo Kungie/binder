@@ -140,7 +140,8 @@ impl Db {
 
     fn setup(conn: Connection) -> Result<Db> {
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        let version: usize = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        let version = usize::try_from(version).unwrap_or(0);
         for (i, sql) in MIGRATIONS.iter().enumerate().skip(version) {
             conn.execute_batch(&format!("BEGIN; {sql}; PRAGMA user_version = {}; COMMIT;", i + 1))?;
         }

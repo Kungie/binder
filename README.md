@@ -4,7 +4,7 @@
 
 <h1 align="center">Binder</h1>
 
-<p align="center">A small desktop app for running one developer's workshop: tasks for you and a Claude Code agent, your GitHub projects, the home server, Github PRs and Issues, file manager over it and a 3D printer.</p>
+<p align="center">One Mac window for a developer's workshop: tasks for you and a Claude Code agent, GitHub projects, your home server and what runs on it, devices, a VPN of your own and a 3D printer.</p>
 
 <p align="center">
   <a href="https://github.com/Kungie/binder/releases/latest"><img src="https://img.shields.io/github/v/release/Kungie/binder?label=release&color=1c1c1f&labelColor=0b0b0c" alt="Latest release"></a>
@@ -20,61 +20,46 @@
   <img src="docs/screenshots/overview1.png" alt="Overview: today's done lines, open tasks, the server, Cloud and the printer">
 </p>
 
-Binder is mostly black and white, with a few colours that each mean something, and built for one person. The core is Rust, the window is Tauri with a React interface, and the data stays on your own machines.
+## What's inside
 
-## What it does
+| Screen | What it does | Needs |
+|---|---|---|
+| Tasks | A board and a table for you and a Claude Code agent that runs on your server, by day or at night | Nothing; the agent needs the server |
+| Projects, GitHub | Repos, pull requests and issues through `gh`, a note per project in Obsidian | `gh auth login`, a vault folder |
+| Servers, Sites, Agents | Containers, services, disks and websites on your server; terminals into tmux sessions there | SSH with your keys |
+| Cloud | A file manager over a folder on the server shared over SMB | An SMB share |
+| Devices, VPN | Your computers through Tailscale, Taildrop, and your exit nodes as VPN regions | Tailscale |
+| Printer | A Bambu printer in LAN mode: progress, camera, alerts | The printer's access code |
 
-- **Tasks:** a board with Backlog, Todo, In progress and Done columns, or the same tasks as a keyboard-first table. Cards show two lines of notes and chips for status, priority, due date, project and the agent. Drag a card to change its status or its place. A task assigned to the agent gets a **Run** button that starts `claude -p` on the home server over SSH, in the background, and follows it until it ends; an orange dot marks it when the run ends. Binder also picks up the agent's tasks on its own every 10 minutes, one run at a time. A task marked as a night task, with a purple moon, waits in a queue on the server and runs there from 03:00, whether the Mac is awake or not.
-- **Projects:** your GitHub repos come in on their own through the `gh` CLI and its login, at start and with **Sync**. Your own edits stay, and nothing is deleted: a repo that's archived or gone moves to Archived, and a project you delete stays gone until you bring it back. Projects that aren't on GitHub can be added by hand. A project can have a local folder (branch, changes, ahead and behind, last commit) and an Obsidian folder with its note and a daily file of decisions.
-- **Claude Code:** Settings › Claude Code adds three hooks. Sessions are matched to a project by folder or by the repo's GitHub remote. When a session has enough new talk, Haiku picks out up to three key decisions, after secrets are masked, and writes them to the project's daily file. Overview shows today's lines.
-- **Cloud:** a file manager over a folder on the home server, shared over SMB. Right-click menu, multi-select, Quick Look, Open with, zip and unzip on the server, and a transfer tray with progress. With SSH set up, folders move as one stream, so a `node_modules` takes seconds. More than one disk works, each with its own trash, and the SSD and SD card each get a space bar. Your phone reaches the same folder from the Files app.
-- **Server:** containers, running services, load, memory, disk (the SSD and the SD card together), temperature and the Pi board's power draw, read over SSH every 30 seconds. Press Load, Memory or Disk for the biggest processes or folders. Read only. Binder keeps watching the containers after its window closes and sends a Mac notification when one stops, keeps restarting or turns unhealthy, and when it is back.
-- **Agents:** two terminals side by side, Claude Code on the left and a small local model (Qwen3 4B in Ollama) on the right, each a tmux session on the home server reached with the system `ssh`. They stay connected while Binder runs, and the sessions keep going after it quits.
-- **Devices:** your machines and whether each one answers.
-- **Printer:** a Bambu Lab printer in LAN mode over MQTT: job, progress, temperatures, pause, resume and stop.
+The first launch walks you through the server, the vault and `gh`, and each screen says what it still needs. Everything stays on your machines.
 
 <p align="center">
   <img src="docs/screenshots/tasks.png" width="49%" alt="The task board">
-  <img src="docs/screenshots/project.png" width="49%" alt="A project from GitHub with its tasks and done log">
-</p>
-<p align="center">
-  <img src="docs/screenshots/cloud.png" width="49%" alt="Cloud, a file manager over the home server">
   <img src="docs/screenshots/server.png" width="49%" alt="The home server: load, memory, disk, containers and services">
 </p>
 
+## Binder VPN
+
+<img src="docs/vpn.png" width="64" height="64" align="right" alt="Binder VPN">
+
+Share your exit nodes with friends. They get a small menu bar app and sign in with a user name and a password you make on Binder's VPN screen, then pick a region. Tailscale makes the tunnel; their devices are tagged `tag:friend` and reach the internet and nothing else on your tailnet.
+
+1. On the VPN screen, Friends › Install service runs the sign-in service in Docker on your server (`127.0.0.1:8787`).
+2. Add the policy it shows to your tailnet, and give it a Tailscale OAuth client with Auth Keys and Devices Core write access.
+3. Make it public over https (`tailscale funnel --bg 8787`, or a tunnel) and save the address.
+4. Add a friend and send the invite. They need Tailscale and [Binder VPN](https://github.com/Kungie/binder/releases/latest/download/Binder-VPN.dmg).
+
 ## Install
 
-Download `Binder.dmg` from the [latest release](https://github.com/Kungie/binder/releases/latest) and drag Binder into Applications. It runs on Apple silicon Macs. Binder isn't notarized, so the first launch needs System Settings › Privacy & Security › Open Anyway.
+Download [Binder.dmg](https://github.com/Kungie/binder/releases/latest/download/Binder.dmg), drag it into Applications and open it once with System Settings › Privacy & Security › Open Anyway (it isn't notarized). Apple silicon only. Updates are signed and install from Settings › Binder.
 
-After that, Binder looks for a new release when it opens and puts a dot beside Settings when there is one. Settings › Binder installs it and restarts, with no download or Open Anyway. Updates are signed, and Binder checks the signature before it replaces itself.
+## Security
 
-## Setup
-
-- **Server:** Settings › Home server takes an SSH target, `user@host` or a `Host` from `~/.ssh/config`. Binder uses your keys through the system `ssh` and never stores a password.
-- **Night tasks:** Settings › Claude Code › Night tasks › Set up writes `~/.binder-agent/night.sh` on the server and adds one line to your crontab; Remove takes it out again.
-- **Agents:** the server needs `tmux`, Claude Code signed in, and Ollama in a Docker container named `ollama` with `qwen3:4b` pulled.
-- **Vault:** the Obsidian vault can live anywhere that mounts as a folder, such as an SMB share. Each project gets a folder with its note and daily files. Binder writes only when the vault is mounted; done lines wait otherwise.
-- **GitHub:** install the GitHub CLI and run `gh auth login` once. Binder never reads or stores a token.
-- **Cloud:** on the server, run `sudo scripts/cloud-share.sh <user>` once. It creates `/srv/cloud` and shares it as `[cloud]`. On the Mac, connect to `smb://<server>/cloud` in Finder, save the password in the Keychain, add the share to Login Items and put the same address in Settings › Cloud. On a phone, use Files › Connect to Server with the server's Tailscale address.
-- **Printer:** the access code goes to the login Keychain, never to a file. Printers that send an older (version 1) certificate connect too.
-- macOS asks once for Local Network access. Allow it, or Binder can't reach addresses on your LAN.
-
-Settings › Display sets the interface size (100 to 150%, or ⌘+ ⌘- ⌘0) for large displays. Closing the window keeps Binder running in the Dock; ⌘Q quits.
-
-Settings live in `~/Library/Application Support/io.github.kungie.binder/config.toml`, data in `binder.db` beside it.
+Binder never stores a password: SSH uses your keys, GitHub uses `gh`'s login, the printer code sits in the Keychain. Every server command quotes its values, previews of websites run no scripts, and session text is masked before a model sees it. The VPN service hashes passwords with scrypt, locks out after repeated failures, hands out one-time keys and runs read-only without root.
 
 ## Build
 
-You need Rust, Node with npm, and the Xcode Command Line Tools.
-
-```sh
-make dev      # run the app with hot reload
-make test     # Rust and interface tests
-make build    # build Binder.app, with binder-cli inside
-make install  # build, then replace /Applications/Binder.app
-make release  # Binder.dmg and the signed update files in build/, for a GitHub release
-make preview  # the interface alone in a browser, with demo data
-```
+Rust, Node and the Xcode Command Line Tools. `make dev` runs it, `make test` tests it, `make build` builds `Binder.app`, `make vpn` builds Binder VPN, `make preview` shows the interface in a browser with demo data.
 
 ## License
 
