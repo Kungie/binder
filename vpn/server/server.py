@@ -22,6 +22,7 @@ import secrets
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -58,12 +59,24 @@ class Tailscale:
     def __init__(self, load_oauth):
         self.load_oauth = load_oauth
 
+    def grant(self, id, secret):
+        body = urllib.parse.urlencode({"client_id": id, "client_secret": secret}).encode()
+        return self.request("POST", f"{API}/oauth/token", body, None, form=True)
+
     def token(self):
         oauth = self.load_oauth()
         if not oauth:
             raise Refused("Binder VPN isn't set up yet.")
-        body = urllib.parse.urlencode({"client_id": oauth["id"], "client_secret": oauth["secret"]}).encode()
-        return self.request("POST", "https://api.tailscale.com/api/v2/oauth/token", body, None, form=True)["access_token"]
+        return self.grant(oauth["id"], oauth["secret"])["access_token"]
+
+    def scopes(self, id, secret):
+        """The scopes a client was given, read by asking for a token with it."""
+        try:
+            return self.grant(id, secret).get("scope", "")
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 401, 403):
+                raise Invalid("Tailscale didn't accept that client id and secret.") from e
+            raise
 
     def request(self, method, url, body, token, form=False):
         req = urllib.request.Request(url, data=body, method=method)
@@ -122,6 +135,12 @@ class App:
     def set_oauth(self, id, secret):
         if not id or not secret:
             raise Invalid("Both the client id and the secret are needed.")
+        scopes = set(self.tailscale.scopes(id, secret).split())
+        if "all" not in scopes:
+            if "auth_keys" not in scopes:
+                raise Invalid("This client can't make sign-in keys. Make one with Keys, Auth Keys (write, tag:friend).")
+            if "devices:core" not in scopes:
+                raise Invalid("This client can't remove devices. Make one with Devices, Core (write, tag:friend).")
         self.write("oauth.json", {"id": id, "secret": secret})
 
     # Users

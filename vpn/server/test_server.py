@@ -18,6 +18,13 @@ class FakeTailscale:
             {"id": "4", "hostname": "friend-ali", "tags": []},
         ]
 
+    scope = "auth_keys devices:core"
+
+    def scopes(self, id, secret):
+        if secret == "bad":
+            raise server.Invalid("Tailscale didn't accept that client id and secret.")
+        return self.scope
+
     def create_key(self, user):
         self.keys.append(user)
         return "tskey-auth-test"
@@ -120,6 +127,18 @@ class Cli(Base):
         self.assertEqual(self.run_cli(["oauth"], "id1\nsecret1\n")[0], 0)
         self.assertEqual(json.loads(self.run_cli(["status"])[1]), {"configured": True, "users": 0})
         self.assertNotIn("secret1", self.run_cli(["status"])[1])
+
+    def test_a_client_without_auth_keys_is_refused_and_not_saved(self):
+        self.ts.scope = "devices:core oauth_keys"
+        code, out = self.run_cli(["oauth"], "id1\nsecret1\n")
+        self.assertEqual(code, 1)
+        self.assertIn("Auth Keys", out)
+        self.assertEqual(json.loads(self.run_cli(["status"])[1])["configured"], False)
+        self.ts.scope = "auth_keys"
+        self.assertIn("Devices", self.run_cli(["oauth"], "id1\nsecret1\n")[1])
+        self.assertEqual(self.run_cli(["oauth"], "id1\nbad\n")[0], 1)
+        self.ts.scope = "all"
+        self.assertEqual(self.run_cli(["oauth"], "id1\nsecret1\n")[0], 0)
 
     def test_errors_go_out_with_code_1(self):
         code, out = self.run_cli(["add", "Bad"], "long enough\n")

@@ -115,4 +115,19 @@ describe("VPN", () => {
     const panel = await screen.findByRole("region", { name: "Friends" });
     expect(await within(panel).findByText(/sign-in service isn't running/)).toBeInTheDocument();
   });
+
+  it("changes the OAuth client, or keeps it on Cancel", async () => {
+    const { user } = setup();
+    const panel = await screen.findByRole("region", { name: "Friends" });
+    await user.click(await within(panel).findByRole("button", { name: "Change client" }));
+    expect(within(panel).getByRole("textbox", { name: "Client id" })).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Cancel" }));
+    expect(within(panel).queryByRole("textbox", { name: "Client id" })).not.toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Change client" }));
+    await user.type(within(panel).getByRole("textbox", { name: "Client id" }), "kid2");
+    await user.type(within(panel).getByLabelText("Client secret"), "tskey-client-y");
+    await user.click(within(panel).getByRole("button", { name: "Save client" }));
+    expect(await within(panel).findByText("Client saved.")).toBeInTheDocument();
+    expect(within(panel).queryByRole("textbox", { name: "Client id" })).not.toBeInTheDocument();
+  });
 });

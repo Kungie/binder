@@ -230,7 +230,7 @@ export function Vpn() {
                 })}
               </div>
             </Panel>
-            <Panel title="Statistics" label="Statistics">
+            <Panel title="Statistics" label="Statistics" className="flex flex-1 flex-col">
               <div className="grid grid-cols-2 gap-px border-t border-line bg-line">
                 <Stat label="Ping" value={on ? (ping ? `${Math.round(ping.ms)} ms` : "…") : "Off"} note={on && ping ? (ping.via === "direct" ? "Direct" : `Through ${ping.via}`) : undefined} tone={ping?.via === "direct" ? "ok" : undefined} />
                 <Stat label="On for" value={on && since ? duration(nowS - since) : on ? "On" : "Off"} />
@@ -239,9 +239,9 @@ export function Vpn() {
                 <Stat label="Downloaded" value={bytes(inUse?.rx_bytes ?? chosen?.rx_bytes ?? 0)} stat="down" note="Since Tailscale started" />
                 <Stat label="Uploaded" value={bytes(inUse?.tx_bytes ?? chosen?.tx_bytes ?? 0)} stat="up" />
               </div>
-              <div className="border-t border-line px-3 py-3">
+              <div className="flex flex-1 flex-col border-t border-line px-3 py-3">
                 <span className="text-[11px] text-text-3">Speed, last minute</span>
-                <div role="img" aria-label="Speed over the last minute" className="mt-2 flex h-12 items-end gap-[3px]">
+                <div role="img" aria-label="Speed over the last minute" className="mt-2 flex min-h-12 flex-1 items-end gap-[3px]">
                   {Array.from({ length: 30 }, (_, i) => speed[speed.length - 30 + i]).map((s, i) => (
                     <span key={i} className="flex h-full flex-1 flex-col justify-end gap-px">
                       <span className="rounded-[1px] bg-ok/70" style={{ height: s ? `${Math.max(2, (s.down / top) * 100)}%` : "2%" }} />
@@ -253,7 +253,7 @@ export function Vpn() {
           </div>
         </div>
       )}
-      <div className="max-w-[960px] px-5 pb-5">
+      <div className="px-5 pb-5">
         <Friends />
       </div>
     </div>

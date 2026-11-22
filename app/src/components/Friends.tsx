@@ -7,7 +7,7 @@ import { Button, fieldClass } from "./ui";
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const day = (t: number) => new Date(t * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-type Open = { kind: "add" } | { kind: "password"; name: string } | { kind: "remove"; name: string } | null;
+type Open = { kind: "add" } | { kind: "oauth" } | { kind: "password"; name: string } | { kind: "remove"; name: string } | null;
 
 /** Friends who sign in to Binder VPN with a user name and a password, kept by the service on the server. */
 export function Friends() {
@@ -42,9 +42,14 @@ export function Friends() {
       label="Friends"
       action={
         service?.configured && (
-          <Button variant="ghost" onClick={() => setOpen(open?.kind === "add" ? null : { kind: "add" })}>
-            Add friend
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" onClick={() => setOpen(open?.kind === "oauth" ? null : { kind: "oauth" })}>
+              Change client
+            </Button>
+            <Button variant="ghost" onClick={() => setOpen(open?.kind === "add" ? null : { kind: "add" })}>
+              Add friend
+            </Button>
+          </div>
         )
       }
     >
@@ -57,6 +62,7 @@ export function Friends() {
           </p>
         )}
         {service?.installed && !service.configured && <OauthForm onSaved={() => void done(null)} />}
+        {service?.configured && open?.kind === "oauth" && <OauthForm onSaved={() => void done("Client saved.")} onCancel={() => setOpen(null)} />}
         {note && <p className="px-3 pb-2 text-[12px] text-ok">{note}</p>}
         {open?.kind === "add" && <FriendForm onDone={() => void done(null)} />}
         {list.map((f) => (
@@ -167,7 +173,7 @@ function RemoveForm({ name, onDone }: { name: string; onDone(): void }) {
   );
 }
 
-function OauthForm({ onSaved }: { onSaved(): void }) {
+function OauthForm({ onSaved, onCancel }: { onSaved(): void; onCancel?(): void }) {
   const { api } = useStore();
   const [id, setId] = useState("");
   const [secret, setSecret] = useState("");
@@ -181,7 +187,7 @@ function OauthForm({ onSaved }: { onSaved(): void }) {
       }}
     >
       <p className="text-[12px] leading-5 text-text-2">
-        The service needs a Tailscale OAuth client to make sign-in keys. In Tailscale's admin console, under Settings, OAuth clients, make one with write access to Auth Keys and Devices Core and the tag{" "}
+        The service needs a Tailscale OAuth client to make sign-in keys. In Tailscale's admin console, under Settings, Trust credentials, make one with write access to Keys, Auth Keys (not OAuth Keys) and Devices, Core, both with the tag{" "}
         <span className="font-mono text-text">tag:friend</span>.
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -190,6 +196,11 @@ function OauthForm({ onSaved }: { onSaved(): void }) {
         <Button type="submit" variant="primary" disabled={busy || !id.trim() || !secret.trim()}>
           Save client
         </Button>
+        {onCancel && (
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
       {error && <p className="text-[12px] text-bad">{error}</p>}
     </form>
