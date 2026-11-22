@@ -6,3 +6,5 @@ app/dist/
 app/src-tauri/gen/
 app/src-tauri/binaries/
 build/
+vpn/src-tauri/gen/
+__pycache__/

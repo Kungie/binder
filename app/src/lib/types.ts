@@ -671,6 +671,18 @@ export interface LimitWindow {
 }
 
 /** Claude Code's plan limits in percent, as last handed to Binder's status line on the server. */
+export interface Friend {
+  name: string;
+  created: number;
+  last_login: number | null;
+}
+
+export interface FriendsService {
+  installed: boolean;
+  configured: boolean;
+  users: number;
+}
+
 export interface ClaudeLimits {
   installed: boolean;
   limits: { five_hour: LimitWindow | null; seven_day: LimitWindow | null; read_at: number } | null;

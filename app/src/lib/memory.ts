@@ -1,7 +1,7 @@
 import { paneSession } from "./agents";
 import { nextDue } from "./repeat";
 import type { Api } from "./api";
-import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, ClaudeLimits, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
+import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, UpdateInfo, TopFolder, TopProcess, HiddenRepo, AgentRun, PrinterCommand, PrinterView, Config, Pane, AgentSession, RecentRun, ClaudeLimits, Friend, FriendsService, TailnetStatus, PingSample, Device, DoneItem, DoneLine, NewProject, Project, Repo, RepoStatus, ServerStatus, SyncReport, Task } from "./types";
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
@@ -25,6 +25,8 @@ export interface Seed {
 export interface MemoryOptions {
   /** Claude Code's limits; not installed when unset. */
   limits?: ClaudeLimits;
+  friendsService?: FriendsService;
+  friends?: Friend[];
   /** The tailnet; null when Tailscale isn't installed. A demo tailnet when unset. */
   tailnet?: TailnetStatus | null;
   /** Whether the Cloud share is mounted. Defaults to true. */
@@ -166,6 +168,15 @@ export function memoryApi(
   const dropped: { target: string; paths: string[] }[] = [];
   const vpnCalls: (string | null)[] = [];
   const limits: ClaudeLimits = options.limits ?? { installed: false, limits: null };
+  const friendsService: FriendsService = options.friendsService ?? { installed: true, configured: true, users: 0 };
+  let friends: Friend[] = options.friends ?? [
+    { name: "ada", created: 1_790_000_000, last_login: 1_790_500_000 },
+    { name: "linus", created: 1_790_100_000, last_login: null },
+  ];
+  const checkFriend = (name: string, password?: string) => {
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name)) throw new Error("A name is 1 to 32 lowercase letters, digits or dashes.");
+    if (password !== undefined && password.length < 8) throw new Error("A password is at least 8 characters.");
+  };
   const tailnet: TailnetStatus | null =
     options.tailnet === undefined
       ? {
@@ -323,6 +334,29 @@ export function memoryApi(
         p.tx_bytes = (p.tx_bytes ?? 0) + 310_000;
       }
       return structuredClone(tailnet);
+    },
+    async friendsStatus() {
+      return { ...friendsService, users: friends.length };
+    },
+    async friendsList() {
+      if (!friendsService.installed) throw new Error("Binder VPN's service isn't running on the server.");
+      return structuredClone(friends);
+    },
+    async friendAdd(name, password) {
+      checkFriend(name, password);
+      if (friends.some((f) => f.name === name)) throw new Error(`There is already a user named ${name}.`);
+      friends = [...friends, { name, created: Math.floor(Date.now() / 1000), last_login: null }].sort((a, b) => a.name.localeCompare(b.name));
+    },
+    async friendPassword(name, password) {
+      checkFriend(name, password);
+      if (!friends.some((f) => f.name === name)) throw new Error(`There is no user named ${name}.`);
+    },
+    async friendRemove(name) {
+      friends = friends.filter((f) => f.name !== name);
+    },
+    async friendsOauth(id, secret) {
+      if (!id.trim() || !secret.trim()) throw new Error("Both the client id and the secret are needed.");
+      friendsService.configured = true;
     },
     async serverReachable(target) {
       return !target.includes("10.0.7.99");

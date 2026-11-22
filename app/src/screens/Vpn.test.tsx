@@ -64,4 +64,55 @@ describe("VPN", () => {
     setup({ tailnet: { running: true, peers: [] } });
     expect(await screen.findByText(/No exit nodes on your tailnet/)).toBeInTheDocument();
   });
+
+  it("lists friends and adds one with a password", async () => {
+    const { api, user } = setup();
+    const panel = await screen.findByRole("region", { name: "Friends" });
+    expect(await within(panel).findByText("ada")).toBeInTheDocument();
+    expect(within(panel).getByText("linus")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Add friend" }));
+    await user.type(within(panel).getByRole("textbox", { name: "User name" }), "grace");
+    await user.type(within(panel).getByLabelText("Password"), "short");
+    await user.click(within(panel).getByRole("button", { name: "Add" }));
+    expect(await within(panel).findByText("A password is at least 8 characters.")).toBeInTheDocument();
+    await user.type(within(panel).getByLabelText("Password"), " but longer");
+    await user.click(within(panel).getByRole("button", { name: "Add" }));
+    expect(await within(panel).findByText("grace")).toBeInTheDocument();
+    expect((await api.friendsList()).map((f) => f.name)).toEqual(["ada", "grace", "linus"]);
+  });
+
+  it("removes a friend only after asking", async () => {
+    const { api, user } = setup();
+    const panel = await screen.findByRole("region", { name: "Friends" });
+    await user.click(await within(panel).findByRole("button", { name: "Remove linus" }));
+    expect(within(panel).getByText(/Remove linus and their devices/)).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(within(panel).queryByText("linus")).not.toBeInTheDocument());
+    expect((await api.friendsList()).map((f) => f.name)).toEqual(["ada"]);
+  });
+
+  it("resets a friend's password", async () => {
+    const { user } = setup();
+    const panel = await screen.findByRole("region", { name: "Friends" });
+    await user.click(await within(panel).findByRole("button", { name: "Reset password of ada" }));
+    await user.type(within(panel).getByLabelText("New password"), "fresh password");
+    await user.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(await within(panel).findByText("Password changed for ada.")).toBeInTheDocument();
+  });
+
+  it("asks for the OAuth client before friends can sign in", async () => {
+    const { user } = setup({ friendsService: { installed: true, configured: false, users: 0 }, friends: [] });
+    const panel = await screen.findByRole("region", { name: "Friends" });
+    expect(await within(panel).findByText(/needs a Tailscale OAuth client/)).toBeInTheDocument();
+    await user.type(within(panel).getByRole("textbox", { name: "Client id" }), "kid");
+    await user.type(within(panel).getByLabelText("Client secret"), "tskey-client-x");
+    await user.click(within(panel).getByRole("button", { name: "Save client" }));
+    await waitFor(() => expect(within(panel).queryByText(/needs a Tailscale OAuth client/)).not.toBeInTheDocument());
+  });
+
+  it("says when the service isn't on the server", async () => {
+    setup({ friendsService: { installed: false, configured: false, users: 0 } });
+    const panel = await screen.findByRole("region", { name: "Friends" });
+    expect(await within(panel).findByText(/sign-in service isn't running/)).toBeInTheDocument();
+  });
 });

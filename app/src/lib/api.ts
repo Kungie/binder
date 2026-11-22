@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime, PrintRecord,
+import type { Friend, FriendsService, GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime, PrintRecord,
   Access,
   Pane,
   AgentSession,
@@ -202,6 +202,14 @@ export interface Api {
   vpnSet(exit: string | null): Promise<void>;
   /** Whether a server answers over SSH now. */
   serverReachable(target: string): Promise<boolean>;
+  /** Binder VPN's sign-in service on the server. */
+  friendsStatus(): Promise<FriendsService>;
+  friendsList(): Promise<Friend[]>;
+  friendAdd(name: string, password: string): Promise<void>;
+  friendPassword(name: string, password: string): Promise<void>;
+  /** Removes a friend and their devices from the tailnet. */
+  friendRemove(name: string): Promise<void>;
+  friendsOauth(id: string, secret: string): Promise<void>;
   tailnetStatus(): Promise<TailnetStatus>;
   /** Each device's pings of the last day, by Tailscale id. */
   tailnetHistory(): Promise<Record<string, PingSample[]>>;
@@ -414,6 +422,12 @@ export const tauriApi: Api = {
   installClaudeLimits: () => call("install_claude_limits"),
   vpnSet: (exit) => call("vpn_set", { exit }),
   serverReachable: (target) => call("server_reachable", { target }),
+  friendsStatus: () => call("friends_status"),
+  friendsList: () => call("friends_list"),
+  friendAdd: (name, password) => call("friend_add", { name, password }),
+  friendPassword: (name, password) => call("friend_password", { name, password }),
+  friendRemove: (name) => call("friend_remove", { name }),
+  friendsOauth: (id, secret) => call("friends_oauth", { id, secret }),
   tailnetStatus: () => call("tailnet_status"),
   tailnetHistory: () => call("tailnet_history"),
   tailnetPing: (ip) => call("tailnet_ping", { ip }),

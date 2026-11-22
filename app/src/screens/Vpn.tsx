@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Friends } from "../components/Friends";
 import { Globe } from "../components/Globe";
 import { Panel } from "../components/Panel";
 import { fieldClass } from "../components/ui";
@@ -252,6 +253,9 @@ export function Vpn() {
           </div>
         </div>
       )}
+      <div className="max-w-[960px] px-5 pb-5">
+        <Friends />
+      </div>
     </div>
   );
 }

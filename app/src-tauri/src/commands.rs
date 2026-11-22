@@ -1332,3 +1332,36 @@ pub async fn server_reachable(target: String) -> Res<bool> {
     }
     Ok(SshRemote::new(target).run("true\n", None).is_ok())
 }
+
+/// Binder VPN's sign-in service on the server: whether it runs and is set up.
+#[tauri::command]
+pub async fn friends_status(state: State<'_, AppState>) -> Res<binder_core::friends::Service> {
+    binder_core::friends::status(&remote(&state)?).map_err(text)
+}
+
+#[tauri::command]
+pub async fn friends_list(state: State<'_, AppState>) -> Res<Vec<binder_core::friends::Friend>> {
+    binder_core::friends::list(&remote(&state)?).map_err(text)
+}
+
+#[tauri::command]
+pub async fn friend_add(state: State<'_, AppState>, name: String, password: String) -> Res<()> {
+    binder_core::friends::add(&remote(&state)?, &name, &password).map_err(text)
+}
+
+#[tauri::command]
+pub async fn friend_password(state: State<'_, AppState>, name: String, password: String) -> Res<()> {
+    binder_core::friends::set_password(&remote(&state)?, &name, &password).map_err(text)
+}
+
+/// Removes a friend and their devices from the tailnet.
+#[tauri::command]
+pub async fn friend_remove(state: State<'_, AppState>, name: String) -> Res<()> {
+    binder_core::friends::remove(&remote(&state)?, &name).map_err(text)
+}
+
+/// The Tailscale OAuth client the service makes keys with.
+#[tauri::command]
+pub async fn friends_oauth(state: State<'_, AppState>, id: String, secret: String) -> Res<()> {
+    binder_core::friends::set_oauth(&remote(&state)?, &id, &secret).map_err(text)
+}
