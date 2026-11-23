@@ -9,6 +9,20 @@ pub fn login_url(server: &str) -> Result<String, String> {
     crate::friends::address(server).map(|base| format!("{base}/vpn/api/login")).map_err(|e| e.to_string())
 }
 
+/// Where signing out removes this device from the owner's tailnet.
+pub fn logout_url(server: &str) -> Result<String, String> {
+    crate::friends::address(server).map(|base| format!("{base}/vpn/api/logout")).map_err(|e| e.to_string())
+}
+
+pub fn logout_body(user: &str, token: &str, node: &str) -> String {
+    serde_json::json!({ "user": user, "token": token, "node": node }).to_string()
+}
+
+/// This device's id on the tailnet, which the service deletes on sign-out.
+pub fn self_id(status: &Status) -> Option<String> {
+    status.peers.iter().find(|p| p.this_mac).map(|p| p.id.clone()).filter(|id| !id.is_empty())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Profile {
     pub id: String,
@@ -45,6 +59,8 @@ pub fn current_profile(out: &str) -> Option<String> {
 pub struct Login {
     pub key: String,
     pub hostname: String,
+    /// Signs this device out at the service; a service from before 4.0.2 gives none.
+    pub token: Option<String>,
 }
 
 pub fn login_body(user: &str, password: &str) -> String {
@@ -61,6 +77,7 @@ pub fn parse_login(body: &str, code: u16) -> Result<Login, String> {
     struct Raw {
         key: Option<String>,
         hostname: Option<String>,
+        token: Option<String>,
         error: Option<String>,
     }
     let down = || "Binder VPN's service didn't answer. Try again later.".to_string();
@@ -69,7 +86,10 @@ pub fn parse_login(body: &str, code: u16) -> Result<Login, String> {
         return Err(raw.error.unwrap_or_else(down));
     }
     match (raw.key, raw.hostname) {
-        (Some(key), Some(hostname)) if valid_host(&hostname) && !key.is_empty() && key.bytes().all(|b| b.is_ascii_graphic()) => Ok(Login { key, hostname }),
+        (Some(key), Some(hostname)) if valid_host(&hostname) && !key.is_empty() && key.bytes().all(|b| b.is_ascii_graphic()) => {
+            let token = raw.token.filter(|t| (1..=128).contains(&t.len()) && t.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'));
+            Ok(Login { key, hostname, token })
+        }
         _ => Err(down()),
     }
 }

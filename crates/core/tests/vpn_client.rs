@@ -15,7 +15,11 @@ fn reads_profiles_and_the_current_one() {
 #[test]
 fn a_sign_in_answer_gives_the_key_or_the_services_words() {
     let ok = parse_login(r#"{"key":"tskey-auth-abc","hostname":"friend-ali"}"#, 200).unwrap();
-    assert_eq!(ok, Login { key: "tskey-auth-abc".into(), hostname: "friend-ali".into() });
+    assert_eq!(ok, Login { key: "tskey-auth-abc".into(), hostname: "friend-ali".into(), token: None });
+    let with_token = parse_login(r#"{"key":"tskey-auth-abc","hostname":"friend-ali","token":"t0k-en_1"}"#, 200).unwrap();
+    assert_eq!(with_token.token.as_deref(), Some("t0k-en_1"));
+    // A token the app would keep has to look like one.
+    assert_eq!(parse_login(r#"{"key":"tskey-auth-abc","hostname":"friend-ali","token":"a b"}"#, 200).unwrap().token, None);
     assert_eq!(parse_login(r#"{"error":"Wrong user name or password."}"#, 401).unwrap_err(), "Wrong user name or password.");
     assert_eq!(parse_login("<html>", 502).unwrap_err(), "Binder VPN's service didn't answer. Try again later.");
     // A host name the app will pass to Tailscale is checked, whatever the service says.
@@ -69,4 +73,13 @@ fn the_menu_says_how_far_an_update_is() {
     assert_eq!(percent(1200, Some(1000)), Some(100));
     assert_eq!(percent(5, None), None);
     assert_eq!(percent(5, Some(0)), None);
+}
+
+#[test]
+fn signing_out_sends_the_token_and_this_devices_id() {
+    assert_eq!(logout_url("https://vpn.example.com").unwrap(), "https://vpn.example.com/vpn/api/logout");
+    let v: serde_json::Value = serde_json::from_str(&logout_body("ali", "tok", "nABC")).unwrap();
+    assert_eq!((v["user"].as_str(), v["token"].as_str(), v["node"].as_str()), (Some("ali"), Some("tok"), Some("nABC")));
+    let json = r#"{"BackendState":"Running","Self":{"ID":"nSELF","HostName":"mac","TailscaleIPs":["100.64.0.9"]},"Peer":{"a":{"ID":"nPEER","HostName":"x"}}}"#;
+    assert_eq!(self_id(&parse_status(json).unwrap()).as_deref(), Some("nSELF"));
 }

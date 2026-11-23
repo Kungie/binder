@@ -34,6 +34,9 @@ struct Saved {
     regions: Vec<Region>,
     #[serde(default)]
     last_exit: Option<String>,
+    /// Given at sign-in; signing out sends it so the service removes this device from the tailnet.
+    #[serde(default)]
+    token: Option<String>,
 }
 
 #[derive(Default)]
@@ -68,7 +71,12 @@ fn store(app: &AppHandle, saved: Option<&Saved>) {
     let path = data_dir(app).join("state.json");
     match saved {
         Some(s) => {
-            let _ = std::fs::write(&path, serde_json::to_string_pretty(s).unwrap_or_default());
+            // It holds the sign-out token, so only this user can read it.
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            if let Ok(mut f) = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&path) {
+                let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
+                let _ = f.write_all(serde_json::to_string_pretty(s).unwrap_or_default().as_bytes());
+            }
         }
         None => {
             let _ = std::fs::remove_file(&path);
@@ -271,15 +279,51 @@ fn turn_off() -> Result<(), String> {
     ts(&["set", "--exit-node="], Duration::from_secs(20)).map(drop)
 }
 
+/// Removes this device from the owner's tailnet at the service, then signs Tailscale's profile out. Signing out
+/// here always happens; when the service can't be reached the error says the device is still listed.
 fn sign_out(app: &AppHandle) -> Result<(), String> {
+    let mut removed = Ok(());
     if let Some(saved) = with(|s| s.saved.clone()) {
         if cli().is_some() && use_profile(&saved).is_ok() {
+            if let Some(token) = &saved.token {
+                let node = ts(&["status", "--json"], Duration::from_secs(10))
+                    .ok()
+                    .and_then(|o| tailscale::parse_status(&o).ok())
+                    .and_then(|s| vpn_client::self_id(&s))
+                    .unwrap_or_default();
+                removed = vpn_client::logout_url(&saved.server)
+                    .and_then(|url| post(&url, &vpn_client::logout_body(&saved.user, token, &node)))
+                    .and_then(|(body, code)| if code == 200 { Ok(()) } else { Err(body) })
+                    .map_err(|_| "Signed out. The server couldn't remove this device; whoever runs it can.".to_string());
+            }
             let _ = ts(&["logout"], Duration::from_secs(20));
         }
     }
     store(app, None);
     with(|s| s.saved = None);
-    Ok(())
+    removed
+}
+
+/// A POST to the service through curl, https only, the body on stdin so nothing secret is in the arguments.
+/// Gives the answer's body and status code.
+fn post(url: &str, body: &str) -> Result<(String, u16), String> {
+    let mut child = Command::new("/usr/bin/curl")
+        .args(["-sS", "--max-time", "25", "--proto", "=https", "-H", "Content-Type: application/json", "--data-binary", "@-", "--max-filesize", "65536", "-w", "\n%{http_code}", "--", url])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Couldn't reach Binder VPN: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(body.as_bytes());
+    }
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err("Couldn't reach Binder VPN. Check the internet connection.".into());
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let (body, code) = text.rsplit_once('\n').unwrap_or(("", "0"));
+    Ok((body.to_string(), code.trim().parse().unwrap_or(0)))
 }
 
 /// Asks the service for a key with the user name and password, then signs Tailscale in with it as a new profile.
@@ -295,24 +339,8 @@ async fn sign_in(app: AppHandle, server: String, user: String, password: String)
         return Err("Enter your user name and password.".into());
     }
     let _ = std::fs::write(data_dir(&app).join("server"), &server);
-    // The password goes to curl on stdin, never in its arguments.
-    let mut child = Command::new("/usr/bin/curl")
-        .args(["-sS", "--max-time", "25", "--proto", "=https", "-H", "Content-Type: application/json", "--data-binary", "@-", "--max-filesize", "65536", "-w", "\n%{http_code}", "--", &url])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Couldn't reach Binder VPN: {e}"))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(vpn_client::login_body(&user, &password).as_bytes());
-    }
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err("Couldn't reach Binder VPN. Check the internet connection.".into());
-    }
-    let text = String::from_utf8_lossy(&out.stdout);
-    let (body, code) = text.rsplit_once('\n').unwrap_or(("", "0"));
-    let login = vpn_client::parse_login(body, code.trim().parse().unwrap_or(0))?;
+    let (body, code) = post(&url, &vpn_client::login_body(&user, &password))?;
+    let login = vpn_client::parse_login(&body, code)?;
 
     // The key lands in a file only this user can read, for as long as Tailscale needs it.
     let key_path = data_dir(&app).join("key");
@@ -328,7 +356,7 @@ async fn sign_in(app: AppHandle, server: String, user: String, password: String)
     let _ = std::fs::remove_file(&key_path);
     result?;
     let profile = current_profile().ok_or("Tailscale signed in, but its profile couldn't be read.")?;
-    let saved = Saved { server, user, hostname: login.hostname, profile, regions: vec![], last_exit: None };
+    let saved = Saved { server, user, hostname: login.hostname, profile, regions: vec![], last_exit: None, token: login.token };
     store(&app, Some(&saved));
     with(|s| {
         s.saved = Some(saved);

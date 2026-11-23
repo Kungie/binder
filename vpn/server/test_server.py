@@ -15,10 +15,10 @@ class FakeTailscale:
         self.keys = []
         self.deleted = []
         self.devices = [
-            {"id": "1", "hostname": "friend-ali", "tags": ["tag:friend"]},
-            {"id": "2", "hostname": "friend-ali-1", "tags": ["tag:friend"]},
-            {"id": "3", "hostname": "friend-ali-b", "tags": ["tag:friend"]},
-            {"id": "4", "hostname": "friend-ali", "tags": []},
+            {"id": "1", "nodeId": "n1", "hostname": "friend-ali", "tags": ["tag:friend"]},
+            {"id": "2", "nodeId": "n2", "hostname": "friend-ali-1", "tags": ["tag:friend"]},
+            {"id": "3", "nodeId": "n3", "hostname": "friend-ali-b", "tags": ["tag:friend"]},
+            {"id": "4", "nodeId": "n4", "hostname": "friend-ali", "tags": []},
         ]
 
     scope = "auth_keys devices:core"
@@ -49,20 +49,22 @@ class Base(unittest.TestCase):
 
 class Users(Base):
     def test_add_then_sign_in(self):
-        self.app.add("ali", "long enough")
-        self.assertEqual(self.app.login("ali", "long enough", "1.2.3.4"), {"key": "tskey-auth-test", "hostname": "friend-ali"})
+        self.app.add("ali", "long enough pw")
+        answer = self.app.login("ali", "long enough pw", "1.2.3.4")
+        self.assertEqual((answer["key"], answer["hostname"]), ("tskey-auth-test", "friend-ali"))
+        self.assertGreaterEqual(len(answer["token"]), 40)
         self.assertEqual(self.ts.keys, ["ali"])
         self.assertEqual(self.app.users()[0]["last_login"], 1000)
 
     def test_hash_is_stored_not_the_password(self):
-        self.app.add("ali", "long enough")
+        self.app.add("ali", "long enough pw")
         with open(os.path.join(self.dir, "users.json")) as f:
             text = f.read()
-        self.assertNotIn("long enough", text)
+        self.assertNotIn("long enough pw", text)
         self.assertEqual(os.stat(os.path.join(self.dir, "users.json")).st_mode & 0o777, 0o600)
 
     def test_wrong_password_is_one_message(self):
-        self.app.add("ali", "long enough")
+        self.app.add("ali", "long enough pw")
         with self.assertRaisesRegex(server.Refused, "^Wrong user name or password.$"):
             self.app.login("ali", "nope nope", "1.2.3.4")
         with self.assertRaisesRegex(server.Refused, "^Wrong user name or password.$"):
@@ -72,22 +74,23 @@ class Users(Base):
     def test_names_and_passwords_are_checked(self):
         for bad in ["", "Ali", "-ali", "a" * 33, "ali b", "ali/../x"]:
             with self.assertRaises(server.Invalid):
-                self.app.add(bad, "long enough")
+                self.app.add(bad, "long enough pw")
+        for short in ["short", "eleven char"]:
+            with self.assertRaises(server.Invalid):
+                self.app.add("ali", short)
+        self.app.add("ali", "long enough pw")
         with self.assertRaises(server.Invalid):
-            self.app.add("ali", "short")
-        self.app.add("ali", "long enough")
-        with self.assertRaises(server.Invalid):
-            self.app.add("ali", "long enough")
+            self.app.add("ali", "long enough pw")
 
     def test_password_change(self):
-        self.app.add("ali", "long enough")
-        self.app.password("ali", "another one")
-        self.assertEqual(self.app.login("ali", "another one", "x")["hostname"], "friend-ali")
+        self.app.add("ali", "long enough pw")
+        self.app.password("ali", "another one pw")
+        self.assertEqual(self.app.login("ali", "another one pw", "x")["hostname"], "friend-ali")
         with self.assertRaises(server.Invalid):
-            self.app.password("nobody", "another one")
+            self.app.password("nobody", "another one pw")
 
     def test_remove_deletes_only_that_users_tagged_devices(self):
-        self.app.add("ali", "long enough")
+        self.app.add("ali", "long enough pw")
         self.app.remove("ali")
         self.assertEqual(self.ts.deleted, ["1", "2"])
         self.assertEqual(self.app.users(), [])
@@ -95,33 +98,77 @@ class Users(Base):
 
 class Limits(Base):
     def test_five_failures_from_an_address_lock_it_for_the_window(self):
-        self.app.add("ali", "long enough")
+        self.app.add("ali", "long enough pw")
         for _ in range(5):
             with self.assertRaises(server.Refused):
                 self.app.login("ali", "wrong pass", "1.2.3.4")
         with self.assertRaisesRegex(server.Refused, "Too many tries"):
-            self.app.login("ali", "long enough", "1.2.3.4")
+            self.app.login("ali", "long enough pw", "1.2.3.4")
         self.now += 15 * 60 + 1
-        self.assertEqual(self.app.login("ali", "long enough", "1.2.3.4")["hostname"], "friend-ali")
+        self.assertEqual(self.app.login("ali", "long enough pw", "1.2.3.4")["hostname"], "friend-ali")
 
-    def test_twenty_failures_for_a_user_lock_the_user(self):
-        self.app.add("ali", "long enough")
-        for i in range(20):
+    def test_failures_from_other_addresses_never_lock_a_friend_out(self):
+        self.app.add("ali", "long enough pw")
+        for i in range(60):
             with self.assertRaises(server.Refused):
-                self.app.login("ali", "wrong pass", f"10.0.0.{i}")
-        with self.assertRaisesRegex(server.Refused, "Too many tries"):
-            self.app.login("ali", "long enough", "10.0.0.9")
+                self.app.login("ali" if i % 2 else f"u{i}", "wrong pass", f"10.0.{i // 250}.{i % 250}")
+        self.assertEqual(self.app.login("ali", "long enough pw", "10.9.9.9")["hostname"], "friend-ali")
 
-
-    def test_many_failures_everywhere_lock_every_sign_in(self):
-        self.app.add("ali", "long enough")
-        self.addCleanup(setattr, server, "ALL_TRIES", server.ALL_TRIES)
-        server.ALL_TRIES = 30
-        for i in range(30):
+    def test_ipv6_addresses_lock_by_their_64_prefix(self):
+        self.app.add("ali", "long enough pw")
+        for i in range(5):
             with self.assertRaises(server.Refused):
-                self.app.login(f"u{i}", "wrong pass", f"10.1.0.{i}")
+                self.app.login("ali", "wrong pass", f"2001:db8:1:2::{i + 1}")
         with self.assertRaisesRegex(server.Refused, "Too many tries"):
-            self.app.login("ali", "long enough", "10.9.9.9")
+            self.app.login("ali", "long enough pw", "2001:db8:1:2:ffff::9")
+        self.assertEqual(self.app.login("ali", "long enough pw", "2001:db8:1:3::1")["hostname"], "friend-ali")
+
+
+class Logout(Base):
+    def setUp(self):
+        super().setUp()
+        self.app.add("ali", "long enough pw")
+        self.app.add("bob", "long enough pw")
+        self.token = self.app.login("ali", "long enough pw", "1.2.3.4")["token"]
+
+    def test_sign_out_deletes_that_device_only(self):
+        self.app.logout("ali", self.token, "n2", "1.2.3.4")
+        self.assertEqual(self.ts.deleted, ["2"])
+
+    def test_the_token_works_once(self):
+        self.app.logout("ali", self.token, "n1", "1.2.3.4")
+        with self.assertRaisesRegex(server.Refused, "^Wrong user name or password.$"):
+            self.app.logout("ali", self.token, "n1", "1.2.3.4")
+        self.assertEqual(self.ts.deleted, ["1"])
+
+    def test_the_token_is_stored_hashed(self):
+        with open(os.path.join(self.dir, "users.json")) as f:
+            self.assertNotIn(self.token, f.read())
+
+    def test_a_wrong_token_or_another_users_device_deletes_nothing(self):
+        with self.assertRaises(server.Refused):
+            self.app.logout("ali", "x" * 43, "n1", "1.2.3.4")
+        with self.assertRaises(server.Refused):
+            self.app.logout("bob", self.token, "n1", "1.2.3.4")
+        # Untagged, or not this user's name: the token is spent, nothing is deleted.
+        self.app.logout("ali", self.token, "n4", "1.2.3.4")
+        token = self.app.login("ali", "long enough pw", "1.2.3.4")["token"]
+        self.app.logout("ali", token, "n3", "1.2.3.4")
+        self.assertEqual(self.ts.deleted, [])
+
+    def test_wrong_tokens_count_toward_the_lock(self):
+        for _ in range(5):
+            with self.assertRaises(server.Refused):
+                self.app.logout("ali", "x" * 43, "n1", "6.6.6.6")
+        with self.assertRaisesRegex(server.Refused, "Too many tries"):
+            self.app.login("ali", "long enough pw", "6.6.6.6")
+
+    def test_only_the_last_ten_sign_ins_keep_a_token(self):
+        tokens = [self.app.login("ali", "long enough pw", "1.2.3.4")["token"] for _ in range(10)]
+        with self.assertRaises(server.Refused):
+            self.app.logout("ali", self.token, "n1", "1.2.3.4")
+        self.app.logout("ali", tokens[0], "n1", "1.2.3.4")
+        self.assertEqual(self.ts.deleted, ["1"])
 
 
 class Http(Base):
@@ -129,7 +176,7 @@ class Http(Base):
         super().setUp()
         self.now = time.time()
         self.app.clock = time.time
-        self.app.add("ali", "long enough")
+        self.app.add("ali", "long enough pw")
         server.Handler.app = self.app
         self.addCleanup(setattr, server.Handler, "log_message", server.Handler.log_message)
         server.Handler.log_message = lambda *a: None
@@ -150,11 +197,11 @@ class Http(Base):
         head, _, body = data.partition(b"\r\n\r\n")
         return int(head.split()[1]), head.decode(), body.decode()
 
-    def post(self, body, extra=b""):
-        return self.raw(b"POST /vpn/api/login HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Type: application/json\r\n" + extra + b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+    def post(self, body, extra=b"", path=b"/vpn/api/login"):
+        return self.raw(b"POST " + path + b" HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Type: application/json\r\n" + extra + b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
 
     def test_sign_in_over_http(self):
-        code, head, body = self.post(b'{"user":"ali","password":"long enough"}')
+        code, head, body = self.post(b'{"user":"ali","password":"long enough pw"}')
         self.assertEqual(code, 200)
         self.assertEqual(json.loads(body)["hostname"], "friend-ali")
         self.assertIn("no-store", head)
@@ -170,11 +217,19 @@ class Http(Base):
         self.assertEqual(self.raw(b"GET /vpn/api/users HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")[0], 404)
         self.assertEqual(self.raw(b"GET /vpn/api/health HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")[0], 200)
 
+    def test_sign_out_over_http(self):
+        token = json.loads(self.post(b'{"user":"ali","password":"long enough pw"}')[2])["token"]
+        body = json.dumps({"user": "ali", "token": token, "node": "n1"}).encode()
+        self.assertEqual(self.post(body, path=b"/vpn/api/logout")[0], 200)
+        self.assertEqual(self.ts.deleted, ["1"])
+        self.assertEqual(self.post(body, path=b"/vpn/api/logout")[0], 401)
+        self.assertEqual(self.post(b'{"user":"ali","token":1,"node":"n1"}', path=b"/vpn/api/logout")[0], 400)
+
     def test_the_forwarded_address_is_the_one_locked(self):
         for _ in range(5):
             self.post(b'{"user":"ali","password":"nope nope"}', b"X-Forwarded-For: 1.1.1.1, 7.7.7.7\r\n")
-        self.assertEqual(self.post(b'{"user":"ali","password":"long enough"}', b"X-Forwarded-For: 7.7.7.7\r\n")[0], 429)
-        self.assertEqual(self.post(b'{"user":"ali","password":"long enough"}', b"X-Forwarded-For: 8.8.8.8\r\n")[0], 200)
+        self.assertEqual(self.post(b'{"user":"ali","password":"long enough pw"}', b"X-Forwarded-For: 7.7.7.7\r\n")[0], 429)
+        self.assertEqual(self.post(b'{"user":"ali","password":"long enough pw"}', b"X-Forwarded-For: 8.8.8.8\r\n")[0], 200)
 
 
 class Cli(Base):
@@ -184,7 +239,7 @@ class Cli(Base):
         return code, out.getvalue()
 
     def test_add_list_remove(self):
-        self.assertEqual(self.run_cli(["add", "ali"], "long enough\n")[0], 0)
+        self.assertEqual(self.run_cli(["add", "ali"], "long enough pw\n")[0], 0)
         code, out = self.run_cli(["users"])
         self.assertEqual([u["name"] for u in json.loads(out)], ["ali"])
         self.assertNotIn("hash", out)
@@ -209,7 +264,7 @@ class Cli(Base):
         self.assertEqual(self.run_cli(["oauth"], "id1\nsecret1\n")[0], 0)
 
     def test_errors_go_out_with_code_1(self):
-        code, out = self.run_cli(["add", "Bad"], "long enough\n")
+        code, out = self.run_cli(["add", "Bad"], "long enough pw\n")
         self.assertEqual(code, 1)
         self.assertIn("name", out)
 

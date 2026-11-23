@@ -16,6 +16,9 @@ export const POLICY = `"tagOwners": {
   "tag:friend": ["autogroup:admin"],
 },
 "grants": [
+  // Your own devices reach each other and the internet, never friends' devices.
+  {"src": ["autogroup:member"], "dst": ["autogroup:member", "autogroup:internet"], "ip": ["*"]},
+  // Friends reach the internet through your exit nodes and nothing else.
   {"src": ["tag:friend"], "dst": ["autogroup:internet"], "ip": ["*"]},
 ],`;
 
@@ -172,7 +175,7 @@ function InstallStep({ dir, onInstalled }: { dir: string; onInstalled(): void })
 function PolicyStep() {
   return (
     <Step n={2} title="Keep friends to the internet">
-      <span>In Tailscale's admin console, Access controls, add these to your policy. Friends' devices then reach the internet through your exit nodes and nothing else.</span>
+      <span>In Tailscale's admin console, Access controls, put these in your policy. Change any grant with "dst": ["*"] to name what it reaches: a grant that reaches friends' devices also shows them yours.</span>
       <pre className="overflow-x-auto rounded-control border border-line bg-card p-2 font-mono text-[11px] text-text">{POLICY}</pre>
       <div>
         <Button onClick={() => copy(POLICY)}>Copy policy</Button>
@@ -305,7 +308,7 @@ function FriendForm({ address, onDone }: { address: string | null; onDone(ok: bo
       }}
     >
       <input aria-label="User name" placeholder="User name" autoFocus className={`${fieldClass} !w-40`} value={name} onChange={(e) => setName(e.target.value.toLowerCase())} />
-      <input aria-label="Password" placeholder="Password, 8 or more" autoComplete="off" spellCheck={false} className={`${fieldClass} !w-48 font-mono`} value={password} onChange={(e) => setPassword(e.target.value)} />
+      <input aria-label="Password" placeholder="Password, 12 or more" autoComplete="off" spellCheck={false} className={`${fieldClass} !w-48 font-mono`} value={password} onChange={(e) => setPassword(e.target.value)} />
       <Button variant="ghost" onClick={() => setPassword(newPassword())}>
         New password
       </Button>

@@ -4,7 +4,8 @@ Friends sign in with a user name and a password. A right answer gets a one-time 
 tag:friend, which the friend's Tailscale app signs in to the owner's tailnet with. The owner's policy lets that tag
 reach the internet through exit nodes and nothing else.
 
-    server.py serve                      HTTP on port 8080: POST /vpn/api/login, GET /vpn/api/health
+    server.py serve                      HTTP on port 8080: POST /vpn/api/login and /vpn/api/logout,
+                                         GET /vpn/api/health
     server.py users | status             JSON
     server.py add NAME | password NAME   the password on stdin
     server.py remove NAME                also deletes the user's devices from the tailnet
@@ -15,6 +16,7 @@ Standard library only. Data lives in $BINDER_VPN_DATA (default /data), files mod
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -30,10 +32,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 TAG = "tag:friend"
 WINDOW = 15 * 60
-# Wrong answers in a window before sign-ins are refused: from one address, for one user, and from everyone.
+# Wrong answers from one address (an IPv6 /64) in a window before it is refused. Only the address that got them
+# wrong is locked, so nobody can lock a friend out; guessing from many addresses is what the long passwords are for.
 TRIES = 5
-USER_TRIES = 20
-ALL_TRIES = 200
+# Binder makes 16 character passwords; one set by hand is at least this long.
+MIN_PASSWORD = 12
+# Sign-ins that keep a sign-out token, per user.
+TOKENS = 10
 BODY = 4096
 CONNECTIONS = 32
 WRONG = "Wrong user name or password."
@@ -56,6 +61,33 @@ def hash_password(password, salt=None):
 
 def hostname(user):
     return f"friend-{user}"
+
+
+def token_hash(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def lock_key(address):
+    """What a wrong answer is counted against: the address, or its /64 for IPv6, where one client holds many."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return f"ip:{address}"
+    if ip.version == 6:
+        if ip.ipv4_mapped:
+            return f"ip:{ip.ipv4_mapped}"
+        return f"ip:{ipaddress.ip_network(f'{ip}/64', strict=False)}"
+    return f"ip:{ip}"
+
+
+def mine(user):
+    """Matches the host names a user's devices get: friend-NAME, or friend-NAME-2 when Tailscale numbers one."""
+    return re.compile(rf"^{re.escape(hostname(user))}(-\d+)?$")
+
+
+def owned(device, user):
+    host = device.get("hostname") or device.get("name", "").split(".")[0]
+    return TAG in (device.get("tags") or []) and bool(mine(user).match(host))
 
 
 class Tailscale:
@@ -160,8 +192,8 @@ class App:
     def check(name, password=None):
         if not NAME.match(name or ""):
             raise Invalid("A name is 1 to 32 lowercase letters, digits or dashes.")
-        if password is not None and len(password) < 8:
-            raise Invalid("A password is at least 8 characters.")
+        if password is not None and len(password) < MIN_PASSWORD:
+            raise Invalid(f"A password is at least {MIN_PASSWORD} characters.")
 
     def add(self, name, password):
         self.check(name, password)
@@ -184,14 +216,12 @@ class App:
 
     def remove(self, name):
         self.check(name)
-        mine = re.compile(rf"^{re.escape(hostname(name))}(-\d+)?$")
         try:
             devices = self.tailscale.list_devices()
         except Refused:  # Not set up, so nothing of theirs can be on the tailnet.
             devices = []
         for d in devices:
-            host = d.get("hostname") or d.get("name", "").split(".")[0]
-            if TAG in (d.get("tags") or []) and mine.match(host):
+            if owned(d, name):
                 self.tailscale.delete_device(d["id"])
         with self.lock:
             users = self.all()
@@ -208,27 +238,53 @@ class App:
             self.failures.pop(key, None)
         return len(recent) >= limit
 
+    def refuse_locked(self, address, now):
+        if self.locked(lock_key(address), now, TRIES):
+            raise Refused("Too many tries. Wait 15 minutes.")
+
+    def wrong(self, address, now):
+        self.failures.setdefault(lock_key(address), []).append(now)
+        raise Refused(WRONG)
+
     def login(self, name, password, address):
+        """A right answer gets a one-time key, the host name to sign in as, and a token the app signs out with."""
         now = self.clock()
-        keys = [(f"ip:{address}", TRIES), (f"user:{name}", USER_TRIES), ("all", ALL_TRIES)]
         with self.lock:
-            if any(self.locked(k, now, limit) for k, limit in keys):
-                raise Refused("Too many tries. Wait 15 minutes.")
+            self.refuse_locked(address, now)
             user = self.all().get(name) if NAME.match(name or "") else None
             # Hash even for an unknown name, so the answer takes as long either way.
             salt = bytes.fromhex(user["salt"]) if user else b"\0" * 16
             digest = hash_password(password or "", salt)[1]
             if not user or not hmac.compare_digest(digest, user["hash"]):
-                for k, _ in keys:
-                    self.failures.setdefault(k, []).append(now)
-                raise Refused(WRONG)
+                self.wrong(address, now)
         key = self.tailscale.create_key(name)
+        token = secrets.token_urlsafe(32)
         with self.lock:
             users = self.all()
             if name in users:
                 users[name]["last_login"] = int(now)
+                users[name]["tokens"] = (users[name].get("tokens", []) + [token_hash(token)])[-TOKENS:]
                 self.write("users.json", users)
-        return {"key": key, "hostname": hostname(name)}
+        return {"key": key, "hostname": hostname(name), "token": token}
+
+    def logout(self, name, token, node, address):
+        """Signing out removes the device from the tailnet. The token from its sign-in works once, and only on a
+        device tagged for this user."""
+        now = self.clock()
+        with self.lock:
+            self.refuse_locked(address, now)
+            users = self.all()
+            user = users.get(name) if NAME.match(name or "") else None
+            want = token_hash(token or "")
+            tokens = (user or {}).get("tokens", [])
+            if not any(hmac.compare_digest(want, t) for t in tokens):
+                self.wrong(address, now)
+            user["tokens"] = [t for t in tokens if not hmac.compare_digest(want, t)]
+            self.write("users.json", users)
+        if node:
+            for d in self.tailscale.list_devices():
+                if node in (d.get("nodeId"), d.get("id")) and owned(d, name):
+                    self.tailscale.delete_device(d["id"])
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -280,7 +336,7 @@ class Handler(BaseHTTPRequestHandler):
         self.answer(404, {"error": "Not found."})
 
     def do_POST(self):
-        if self.path != "/vpn/api/login":
+        if self.path not in ("/vpn/api/login", "/vpn/api/logout"):
             return self.answer(404, {"error": "Not found."})
         try:
             length = int(self.headers.get("Content-Length", ""))
@@ -291,22 +347,28 @@ class Handler(BaseHTTPRequestHandler):
         if length > BODY:
             self.close_connection = True
             return self.answer(413, {"error": "That isn't a sign-in."})
+        fields = {"user": 64, "password": 256} if self.path == "/vpn/api/login" else {"user": 64, "token": 128, "node": 64}
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(body, dict):
                 raise ValueError
-            user, password = body.get("user", ""), body.get("password", "")
-            if not isinstance(user, str) or not isinstance(password, str) or len(user) > 64 or len(password) > 256:
+            values = {k: body.get(k, "") for k in fields}
+            if any(not isinstance(v, str) or len(v) > fields[k] for k, v in values.items()):
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             return self.answer(400, {"error": "That isn't a sign-in."})
+        user = values["user"].strip().lower()
         try:
-            self.answer(200, self.app.login(user.strip().lower(), password, self.address()))
+            if self.path == "/vpn/api/login":
+                self.answer(200, self.app.login(user, values["password"], self.address()))
+            else:
+                self.app.logout(user, values["token"], values["node"], self.address())
+                self.answer(200, {"ok": True})
         except Refused as e:
             self.answer(401 if str(e) == WRONG else 429 if "Too many" in str(e) else 503, {"error": str(e)})
         except Exception as e:  # Tailscale's API failed.
-            sys.stderr.write(f"login failed at Tailscale: {type(e).__name__}\n")
-            self.answer(502, {"error": "Tailscale didn't give a key. Try again in a minute."})
+            sys.stderr.write(f"{self.path[8:]} failed at Tailscale: {type(e).__name__}\n")
+            self.answer(502, {"error": "Tailscale didn't answer. Try again in a minute."})
 
     def log_message(self, format, *args):
         # The request line and status only: no bodies, no passwords, no keys.
