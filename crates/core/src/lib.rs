@@ -35,7 +35,6 @@ pub mod config;
 pub mod db;
 pub mod devices;
 pub mod events;
-pub mod friends;
 pub mod gh_work;
 pub mod github;
 pub mod hooks;
@@ -58,7 +57,6 @@ pub mod tasks;
 pub mod uptime;
 pub mod tailscale;
 pub mod usage;
-pub mod vpn_client;
 pub mod watch;
 pub mod weekly;
 

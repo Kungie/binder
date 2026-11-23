@@ -4,7 +4,7 @@
 
 <h1 align="center">Binder</h1>
 
-<p align="center">One Mac window for a developer's workshop: tasks for you and a Claude Code agent, GitHub projects, your home server and what runs on it, devices, a VPN of your own and a 3D printer.</p>
+<p align="center">One Mac window for a developer's workshop: tasks for you and a Claude Code agent, GitHub projects, your home server and what runs on it, devices, your exit nodes as a VPN and a 3D printer.</p>
 
 <p align="center">
   <a href="https://github.com/Kungie/binder/releases/latest"><img src="https://img.shields.io/github/v/release/Kungie/binder?label=release&color=1c1c1f&labelColor=0b0b0c" alt="Latest release"></a>
@@ -38,28 +38,17 @@ The first launch walks you through the server, the vault and `gh`, and each scre
   <img src="docs/screenshots/server.png" width="49%" alt="The home server: load, memory, disk, containers and services">
 </p>
 
-## Binder VPN
-
-<img src="docs/vpn.png" width="64" height="64" align="right" alt="Binder VPN">
-
-Share your exit nodes with friends. They get a small menu bar app and sign in with a user name and a password you make on Binder's VPN screen, then pick a region. Tailscale makes the tunnel; their devices are tagged `tag:friend` and reach the internet and nothing else on your tailnet.
-
-1. On the VPN screen, Friends › Install service runs the sign-in service in Docker on your server (`127.0.0.1:8787`).
-2. Add the policy it shows to your tailnet, and give it a Tailscale OAuth client with Auth Keys and Devices Core write access.
-3. Make it public over https (`tailscale funnel --bg 8787`, or a tunnel) and save the address.
-4. Add a friend and send the invite. They need Tailscale and [Binder VPN](https://github.com/Kungie/binder/releases/latest/download/Binder-VPN.dmg), which updates itself from its menu.
-
 ## Install
 
 Download [Binder.dmg](https://github.com/Kungie/binder/releases/latest/download/Binder.dmg), drag it into Applications and open it once with System Settings › Privacy & Security › Open Anyway (it isn't notarized). Apple silicon only. Updates are signed and install from Settings › Binder.
 
 ## Security
 
-Binder never stores a password: SSH uses your keys, GitHub uses `gh`'s login, the printer code sits in the Keychain. Every server command quotes its values, previews of websites run no scripts, and session text is masked before a model sees it. The VPN service hashes passwords with scrypt, locks out after repeated failures, hands out one-time keys and runs read-only without root.
+Binder never stores a password: SSH uses your keys, GitHub uses `gh`'s login, the printer code sits in the Keychain. Every server command quotes its values, previews of websites run no scripts, and session text is masked before a model sees it.
 
 ## Build
 
-Rust, Node and the Xcode Command Line Tools. `make dev` runs it, `make test` tests it, `make build` builds `Binder.app`, `make vpn` builds Binder VPN, `make preview` shows the interface in a browser with demo data.
+Rust, Node and the Xcode Command Line Tools. `make dev` runs it, `make test` tests it, `make build` builds `Binder.app`, `make preview` shows the interface in a browser with demo data.
 
 ## License
 

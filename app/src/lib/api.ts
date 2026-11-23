@@ -1,6 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Friend, FriendsService, SetupChecks, GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime, PrintRecord,
+import type { SetupChecks, GhFilter, GhLists, GhDetail, GhAction, AgentReady, SiteCheck, Site, Brief, Uptime, PrintRecord,
   Access,
   Pane,
   AgentSession,
@@ -202,18 +202,6 @@ export interface Api {
   vpnSet(exit: string | null): Promise<void>;
   /** Whether a server answers over SSH now. */
   serverReachable(target: string): Promise<boolean>;
-  /** Binder VPN's sign-in service on the server. */
-  friendsStatus(): Promise<FriendsService>;
-  friendsList(): Promise<Friend[]>;
-  friendAdd(name: string, password: string): Promise<void>;
-  friendPassword(name: string, password: string): Promise<void>;
-  /** Removes a friend and their devices from the tailnet. */
-  friendRemove(name: string): Promise<void>;
-  friendsOauth(id: string, secret: string): Promise<void>;
-  /** Writes the sign-in service to the server and starts it, or updates it. */
-  friendsInstall(): Promise<void>;
-  /** Whether the service answers at a public https address. */
-  friendsReachable(address: string): Promise<boolean>;
   /** What this Mac has for the setup guides: gh and its login, Tailscale. */
   setupChecks(): Promise<SetupChecks>;
   tailnetStatus(): Promise<TailnetStatus>;
@@ -428,14 +416,6 @@ export const tauriApi: Api = {
   installClaudeLimits: () => call("install_claude_limits"),
   vpnSet: (exit) => call("vpn_set", { exit }),
   serverReachable: (target) => call("server_reachable", { target }),
-  friendsStatus: () => call("friends_status"),
-  friendsList: () => call("friends_list"),
-  friendAdd: (name, password) => call("friend_add", { name, password }),
-  friendPassword: (name, password) => call("friend_password", { name, password }),
-  friendRemove: (name) => call("friend_remove", { name }),
-  friendsOauth: (id, secret) => call("friends_oauth", { id, secret }),
-  friendsInstall: () => call("friends_install"),
-  friendsReachable: (address) => call("friends_reachable", { address }),
   setupChecks: () => call("setup_checks"),
   tailnetStatus: () => call("tailnet_status"),
   tailnetHistory: () => call("tailnet_history"),

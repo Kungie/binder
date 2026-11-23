@@ -1,4 +1,4 @@
-.PHONY: dev test build install release release-check preview clean sidecar sidecar-release vpn vpn-release
+.PHONY: dev test build install release release-check preview clean sidecar sidecar-release
 
 # ~/Desktop syncs with iCloud, which stamps Finder attributes on build output and breaks codesign.
 # Build outside it.
@@ -33,7 +33,6 @@ dev: sidecar
 test: sidecar
 	cargo test --workspace
 	@if [ -f app/package.json ]; then npm --prefix app test -- --run; fi
-	python3 -m unittest discover -s vpn/server
 
 build: sidecar-release
 	npm --prefix app run tauri build -- --bundles app
@@ -66,26 +65,6 @@ release: release-check build
 	@TAURI_SIGNING_PRIVATE_KEY="$$(security find-generic-password $(UPDATER_KEY) -w)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
 		npm --prefix app exec -- tauri signer sign "$(CURDIR)/build/Binder.app.tar.gz" >/dev/null
 	node app/scripts/latest-json.ts $(VERSION) build/notes.md build/Binder.app.tar.gz.sig > build/latest.json
-	$(MAKE) vpn-release
-
-# Binder VPN, the friends' menu bar app (vpn/): its own bundle, signed the same way, in a plain DMG, and its update:
-# a signed tarball and latest-vpn.json, which the app checks on the latest release.
-vpn:
-	cd vpn && ../app/node_modules/.bin/tauri build --bundles app
-
-vpn-release: vpn
-	rm -rf $(CARGO_TARGET_DIR)/vpn-dmg build/Binder-VPN.dmg
-	mkdir -p $(CARGO_TARGET_DIR)/vpn-dmg build
-	cp -R "$(CARGO_TARGET_DIR)/release/bundle/macos/Binder VPN.app" $(CARGO_TARGET_DIR)/vpn-dmg/
-	codesign --force --deep --sign "$(SIGN)" "$(CARGO_TARGET_DIR)/vpn-dmg/Binder VPN.app"
-	ln -s /Applications $(CARGO_TARGET_DIR)/vpn-dmg/Applications
-	hdiutil create -volname "Binder VPN" -srcfolder $(CARGO_TARGET_DIR)/vpn-dmg -ov -format UDZO build/Binder-VPN.dmg
-	rm -f build/Binder-VPN.app.tar.gz build/Binder-VPN.app.tar.gz.sig build/latest-vpn.json
-	COPYFILE_DISABLE=1 tar -czf build/Binder-VPN.app.tar.gz -C $(CARGO_TARGET_DIR)/vpn-dmg "Binder VPN.app"
-	@echo "Signing build/Binder-VPN.app.tar.gz"
-	@TAURI_SIGNING_PRIVATE_KEY="$$(security find-generic-password $(UPDATER_KEY) -w)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
-		npm --prefix app exec -- tauri signer sign "$(CURDIR)/build/Binder-VPN.app.tar.gz" >/dev/null
-	node app/scripts/latest-json.ts $(VERSION) build/notes.md build/Binder-VPN.app.tar.gz.sig Binder-VPN.app.tar.gz > build/latest-vpn.json
 
 preview:
 	npm --prefix app run dev

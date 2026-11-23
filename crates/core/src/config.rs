@@ -52,10 +52,6 @@ pub struct Config {
     pub onboarded: bool,
     /// Screens whose tip the owner closed.
     pub tips_hidden: Vec<String>,
-    /// Binder VPN's sign-in service: its compose folder on the server, under the home folder.
-    pub vpn_dir: String,
-    /// The service's public https address, which friends sign in at.
-    pub vpn_address: Option<String>,
 }
 
 /// A Claude Code session of the owner's: what it is called and the server folder it starts in.
@@ -96,7 +92,7 @@ pub struct PrinterConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into(), agents: vec![], agent_names: Default::default(), servers: vec![], server_names: Default::default(), vpn_regions: Default::default(), vpn_last: None, onboarded: false, tips_hidden: vec![], vpn_dir: "binder-vpn".into(), vpn_address: None }
+        Config { vault: PathBuf::from("/Volumes/vault"), server: None, printers: vec![], claude_hooks: false, cloud: PathBuf::from("/Volumes/cloud"), cloud_share: None, vault_share: None, cloud_remote: "/srv/cloud".into(), pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: Default::default(), overview: OverviewLayout::default(), ollama_model: crate::agents::DEFAULT_MODEL.into(), agents: vec![], agent_names: Default::default(), servers: vec![], server_names: Default::default(), vpn_regions: Default::default(), vpn_last: None, onboarded: false, tips_hidden: vec![] }
     }
 }
 

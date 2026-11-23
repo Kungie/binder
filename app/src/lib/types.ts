@@ -290,10 +290,6 @@ export interface Config {
   onboarded?: boolean;
   /** Screens whose tip was closed. */
   tips_hidden?: string[];
-  /** Binder VPN's service: its compose folder on the server, under the home folder. */
-  vpn_dir?: string;
-  /** The service's public https address, which friends sign in at. */
-  vpn_address?: string | null;
 }
 
 export interface OverviewLayout {
@@ -683,18 +679,6 @@ export interface SetupChecks {
   gh: boolean;
   gh_signed_in: boolean;
   tailscale: boolean;
-}
-
-export interface Friend {
-  name: string;
-  created: number;
-  last_login: number | null;
-}
-
-export interface FriendsService {
-  installed: boolean;
-  configured: boolean;
-  users: number;
 }
 
 export interface ClaudeLimits {
