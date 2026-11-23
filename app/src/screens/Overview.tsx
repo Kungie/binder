@@ -20,7 +20,7 @@ import { useVault } from "../lib/useVault";
 import { loadPercent } from "../lib/load";
 import type { CloudEntry, CloudStatus } from "../lib/types";
 import { Empty } from "../components/Mascot";
-import { ScreenTip } from "../components/ScreenTip";
+import { ScreenGuide } from "../components/Guide";
 
 const WEEK = 7 * 24 * 3600;
 
@@ -133,7 +133,7 @@ export function Overview() {
           </Button>
         </span>
       </header>
-      <ScreenTip id="overview" />
+      <ScreenGuide id="overview" />
       {/* The two columns fill the window and their long lists scroll inside; below a usable height the page scrolls. */}
       <div className="flex min-h-[620px] flex-1 flex-col gap-3 px-5 pb-5">
         <Brief />

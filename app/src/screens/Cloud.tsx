@@ -5,14 +5,15 @@ import { ContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { FileInfo } from "../components/FileInfo";
 import { FileRow, KindIcon, NameInput } from "../components/FileRow";
 import { FolderPicker } from "../components/FolderPicker";
-import { Button, Notice } from "../components/ui";
+import { Button } from "../components/ui";
 import { pickApp, pickFiles, pickFolder } from "../lib/pick";
 import { type Selection, all, click, empty, move as moveSel } from "../lib/selection";
 import { useStore } from "../lib/store";
 import { ago } from "../lib/time";
 import type { AppChoice, CloudEntry, CloudStatus, Conflict, Space, TrashEntry } from "../lib/types";
-import { Empty, Mascot } from "../components/Mascot";
-import { ScreenTip } from "../components/ScreenTip";
+import { Empty } from "../components/Mascot";
+import { ScreenGuide } from "../components/Guide";
+import { Cmd, Code, NeedsSetup } from "../components/NeedsSetup";
 
 type SortKey = "name" | "size" | "modified";
 const UNDO_MS = 6000;
@@ -31,22 +32,33 @@ function NotConnected({ status }: { status: CloudStatus | null }) {
   const { api, setScreen } = useStore();
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="relative m-5 flex max-w-[640px] flex-col items-start gap-3 overflow-hidden rounded-panel border border-line bg-panel pb-6 pl-[152px] pr-6 pt-6">
-      <Mascot size={128} className="absolute bottom-0 left-0" />
-      <h1 className="text-[15px] font-medium">Cloud not connected</h1>
-      <Notice>
-        Cloud is a folder on the home server, shared like the vault. Once the share is set up on the server, Connect opens it in Finder, which asks for the password the first time and mounts it at{" "}
-        <span className="font-mono text-[11px]">{status?.path ?? "/Volumes/cloud"}</span>.
-      </Notice>
-      <div className="flex gap-2">
-        <Button variant="primary" onClick={() => void api.cloudConnect().then(() => setError(null), (e) => setError(message(e)))}>
-          Connect
-        </Button>
-        <Button variant="ghost" onClick={() => setScreen("settings")}>
-          Settings
-        </Button>
-      </div>
-      {error && <p className="text-[12px] text-urgent">{error}</p>}
+    <div className="px-5">
+      <NeedsSetup
+        title="Cloud not connected"
+        lead="Cloud is a folder on your home server, shared over SMB like the vault: a file manager with a trash and big copies run on the server."
+        shot="cloud"
+        steps={[
+          <>
+            <span>
+              Share a folder on the server over SMB. Binder's repository has <Code>scripts/cloud-share.sh</Code> for it, which sets up <Code>/srv/cloud</Code>; copy it to the server and run:
+            </span>
+            <Cmd>{"sudo ./cloud-share.sh $USER"}</Cmd>
+          </>,
+          <>
+            Connect opens the share in Finder, which asks for the password the first time and mounts it at <Code>{status?.path ?? "/Volumes/cloud"}</Code>.
+          </>,
+        ]}
+      >
+        <div className="flex gap-2">
+          <Button variant="primary" className="h-8 px-3.5" onClick={() => void api.cloudConnect().then(() => setError(null), (e) => setError(message(e)))}>
+            Connect
+          </Button>
+          <Button variant="ghost" className="h-8" onClick={() => setScreen("settings")}>
+            Settings
+          </Button>
+        </div>
+        {error && <p className="text-[12px] text-urgent">{error}</p>}
+      </NeedsSetup>
     </div>
   );
 }
@@ -420,7 +432,7 @@ export function Cloud() {
         </nav>
         <DiskBars ssd={status?.space ?? space} sd={sd} row />
       </header>
-      <ScreenTip id="cloud" />
+      <ScreenGuide id="cloud" />
       <div className="flex h-10 shrink-0 items-center gap-2 px-5">
         <div className="flex h-7 items-center rounded-control border border-line bg-card p-0.5">
           {(["files", "trash"] as const).map((m) => (

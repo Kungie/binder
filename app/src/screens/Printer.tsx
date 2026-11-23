@@ -9,7 +9,8 @@ import type { PrintRecord, PrinterCommand, PrinterView } from "../lib/types";
 import { ago } from "../lib/time";
 import { STATE_LABEL, minutes, temp, usePrinters } from "../lib/usePrinters";
 import { Empty } from "../components/Mascot";
-import { ScreenTip } from "../components/ScreenTip";
+import { ScreenGuide } from "../components/Guide";
+import { NeedsSetup } from "../components/NeedsSetup";
 
 export function Printer() {
   const { printers, reload } = usePrinters();
@@ -22,16 +23,24 @@ export function Printer() {
           Add printer
         </Button>
       </header>
-      <ScreenTip id="printer" />
+      <ScreenGuide id="printer" />
       <div className="flex max-w-[960px] flex-col gap-3 px-5 pb-5">
         {printers.map((p) => (
           <PrinterPanel key={p.config.serial} view={p} onRemoved={() => void reload()} />
         ))}
         {printers.length > 0 && <History />}
         {printers.length === 0 && (
-          <div className="rounded-panel border border-line bg-panel">
-            <Empty>No printer yet. Add a Bambu printer in LAN mode with its address, serial number and access code.</Empty>
-          </div>
+          <NeedsSetup
+            title="Add your printer"
+            lead="A Bambu printer on your network, over its local connection: progress, temperatures, the camera and alerts, nothing through Bambu's cloud."
+            shot="printer"
+            steps={[
+              "On the printer, turn on LAN Only Mode (Settings, Network) and note the access code it shows.",
+              "Note its IP address on the same screen, and the serial number under Device.",
+              "Add printer and enter the three. The access code is kept in the Keychain.",
+            ]}
+            action={{ label: "Add printer", run: () => setAdding(true) }}
+          />
         )}
       </div>
       {adding && <NewPrinter onClose={() => setAdding(false)} onAdded={() => void reload()} />}

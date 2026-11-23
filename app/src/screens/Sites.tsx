@@ -3,7 +3,7 @@ import { whileVisible } from "../lib/usePoll";
 import { Button, Notice, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
 import type { Site, SiteCheck, Uptime } from "../lib/types";
-import { ScreenTip } from "../components/ScreenTip";
+import { ScreenGuide } from "../components/Guide";
 import { Code, NeedsSetup } from "../components/NeedsSetup";
 
 const EVERY = 30_000;
@@ -72,12 +72,14 @@ export function Sites() {
           Refresh
         </Button>
       </header>
-      <ScreenTip id="sites" />
+      <ScreenGuide id="sites" />
       <div className="px-5 pb-5">
         {error === "No server set." ? (
           <NeedsSetup
             title="Connect your home server"
-            steps={["Sites lists the websites on your server over SSH.", "Set the server's SSH target in Settings, or run the setup again from there."]}
+            lead="Sites lists the websites on your server over SSH, with a preview, uptime and what each one uses."
+            shot="sites"
+            steps={["Make sure ssh to the server works from Terminal without a password.", "Set the server's SSH target in Settings, or run the setup again from there."]}
             action={{ label: "Open Settings", run: () => setScreen("settings") }}
           />
         ) : (
@@ -86,6 +88,8 @@ export function Sites() {
         {sites && sites.length === 0 && (
           <NeedsSetup
             title="No sites yet"
+            lead="A site is a folder with a compose file, or any compose project with a Cloudflare tunnel. New ones show up by themselves."
+            shot="sites"
             steps={[
               <>
                 Put each site in its own folder under <Code>~/sites</Code> on the server, with a <Code>docker-compose.yml</Code>.
@@ -159,15 +163,22 @@ function Preview({ site, check, round }: { site: Site; check: SiteCheck | undefi
     const el = box.current;
     if (!el) return;
     if (typeof IntersectionObserver !== "undefined") {
-      const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { rootMargin: "200px" });
+      // Once near the screen, the card keeps its page.
+      const io = new IntersectionObserver(([e]) => (e.isIntersecting || inView(el)) && setVisible(true), { rootMargin: "200px" });
       io.observe(el);
+      if (inView(el)) setVisible(true);
       return () => io.disconnect();
     }
   }, []);
   useEffect(() => {
     const el = box.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setScale(e.contentRect.width / PAGE_W));
+    const ro = new ResizeObserver(([e]) => {
+      setScale(e.contentRect.width / PAGE_W);
+      // The intersection observer's first answer can come before the card has its size, and none follows
+      // when nothing moves; the card's own place settles it then.
+      if (inView(el)) setVisible(true);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -206,6 +217,12 @@ function Preview({ site, check, round }: { site: Site; check: SiteCheck | undefi
       )}
     </div>
   );
+}
+
+/** Whether a card is on screen or within 200 px of it, from its own place. */
+function inView(el: Element) {
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.bottom > -200 && r.top < window.innerHeight + 200;
 }
 
 /** The last week in 28 six-hour bars: green when every check answered, red when one didn't, grey with none. */

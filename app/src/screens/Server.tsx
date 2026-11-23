@@ -9,7 +9,8 @@ import { useStore } from "../lib/store";
 import { loadPercent } from "../lib/load";
 import type { ServerStatus, Service } from "../lib/types";
 import { clock, gb, percent, useServer } from "../lib/useServer";
-import { ScreenTip } from "../components/ScreenTip";
+import { ScreenGuide } from "../components/Guide";
+import { Cmd, NeedsSetup } from "../components/NeedsSetup";
 
 export function Server() {
   const { target, status, error, refresh } = useServer(30_000);
@@ -28,15 +29,26 @@ export function Server() {
           </Button>
         )}
       </header>
-      <ScreenTip id="server" />
+      <ScreenGuide id="server" />
       {target === null && (
         <div className="flex max-w-[960px] flex-col gap-3 px-5">
-          <Panel title="Connect the home server">
-            <div className="flex flex-col gap-3 border-t border-line p-3">
-              <ServerTargetForm onSaved={() => void refresh()} />
-              <Notice>Binder runs ssh with your keys and only reads: docker ps, systemctl and /proc.</Notice>
-            </div>
-          </Panel>
+          <NeedsSetup
+            title="Connect the home server"
+            lead="Binder runs ssh with your keys and only reads: docker ps, systemctl and /proc. Sites, Agents and Cloud's fast path use the same server."
+            shot="server"
+            steps={[
+              <>
+                <span>Check that ssh reaches the server from Terminal without asking for a password:</span>
+                <Cmd>ssh user@host true</Cmd>
+              </>,
+              <>
+                <span>Enter the same target here: user@host, or a Host from ~/.ssh/config.</span>
+                <div className="mt-2">
+                  <ServerTargetForm onSaved={() => void refresh()} />
+                </div>
+              </>,
+            ]}
+          />
         </div>
       )}
       {target && (

@@ -5,7 +5,7 @@ import { Button } from "../components/ui";
 import { useStore } from "../lib/store";
 import { matches, viewTasks } from "../lib/tasks";
 import type { TaskView } from "../lib/types";
-import { ScreenTip } from "../components/ScreenTip";
+import { ScreenGuide } from "../components/Guide";
 
 type Layout = "board" | "list";
 
@@ -97,7 +97,7 @@ export function Tasks() {
           </Button>
         </div>
       </header>
-      <ScreenTip id="tasks" />
+      <ScreenGuide id="tasks" />
       {layout === "board" ? (
         <Board tasks={found(viewTasks(tasks, view, true)).filter((t) => t.status !== "canceled")} />
       ) : (

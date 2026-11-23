@@ -453,4 +453,28 @@ export const tauriApi: Api = {
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-export const api: Api = inTauri ? tauriApi : memoryApi(demoSeed());
+/** Flags after `#screen=<name>` in the browser preview, for the guides' pictures and for checking them by eye:
+ *  `setup` (nothing set up), `welcome` (the first-run setup) and `guide` (the screen's guide), `step<N>` (the setup's step) and `still` (no animations). */
+export const previewFlags = new Set(typeof window === "undefined" ? [] : window.location.hash.slice(1).split("&").slice(1));
+
+/** The first-run setup's step the preview opens on, from `step<N>`, for pictures of each step. */
+export const previewStep = Number([...previewFlags].find((f) => /^step\d$/.test(f))?.slice(4) ?? 0);
+
+function previewApi(): Api {
+  const seed = demoSeed();
+  const bare = previewFlags.has("setup");
+  if (bare) {
+    seed.printers = [];
+    seed.github = null;
+  }
+  return memoryApi(seed, {
+    server: bare || previewFlags.has("welcome") ? null : undefined,
+    tailnet: bare ? null : undefined,
+    cloudMounted: !bare,
+    setupChecks: bare ? { gh: false, gh_signed_in: false, tailscale: false } : undefined,
+    onboarded: !previewFlags.has("welcome"),
+    tips: previewFlags.has("guide"),
+  });
+}
+
+export const api: Api = inTauri ? tauriApi : previewApi();

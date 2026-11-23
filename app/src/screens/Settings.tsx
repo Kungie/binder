@@ -300,11 +300,11 @@ function SetupPanel() {
           onClick={() =>
             void api.getConfig().then(async (c) => {
               await api.setConfig({ ...c, tips_hidden: [] });
-              setNote("Each screen shows its tip again.");
+              setNote("Each screen shows its guide again the next time it opens.");
             })
           }
         >
-          Show tips again
+          Show guides again
         </Button>
         {note && <span className="text-[12px] text-text-3">{note}</span>}
       </div>

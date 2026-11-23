@@ -6,8 +6,8 @@ import { REGIONS, type Region, regionOf } from "../lib/regions";
 import { useStore } from "../lib/store";
 import type { PingResult, TailnetPeer, TailnetStatus } from "../lib/types";
 import { usePoll } from "../lib/usePoll";
-import { ScreenTip } from "../components/ScreenTip";
-import { Code, NeedsSetup } from "../components/NeedsSetup";
+import { ScreenGuide } from "../components/Guide";
+import { Cmd, NeedsSetup } from "../components/NeedsSetup";
 
 const SINCE_KEY = "binder.vpn.since";
 const readSince = (): number | null => {
@@ -151,15 +151,18 @@ export function Vpn() {
         <h1 className="text-[13px] font-medium">VPN</h1>
         <span className="text-[12px] text-text-3">Through your own exit nodes on Tailscale</span>
       </header>
-      <ScreenTip id="vpn" />
+      <ScreenGuide id="vpn" />
       {error?.includes("isn't installed") ? (
         <div className="px-5 pb-3">
           <NeedsSetup
             title="Set up the VPN"
+            lead="Each Tailscale exit node you run becomes a region. One switch sends this Mac's traffic out through it."
+            shot="vpn"
             steps={[
               "Install Tailscale on this Mac from tailscale.com/download and sign in.",
               <>
-                Rent a small server where you want your traffic to come out, install Tailscale on it and run <Code>tailscale set --advertise-exit-node</Code>.
+                <span>Rent a small server where you want your traffic to come out, install Tailscale on it and offer it as an exit node:</span>
+                <Cmd>{"tailscale set --advertise-exit-node"}</Cmd>
               </>,
               "Allow it as an exit node in Tailscale's admin console, under the machine's route settings. Each one becomes a region here.",
             ]}

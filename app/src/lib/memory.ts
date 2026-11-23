@@ -5,7 +5,7 @@ import type { GhAction, PullRow, IssueRow, Site, BriefItem, AppInfo, Transfer, U
 import { type CloudSeed, memoryCloud } from "./memoryCloud";
 import { localDay, oneLine, viewTasks } from "./tasks";
 import { PALETTE, colorFor } from "./colors";
-import { ALL_TIPS } from "./tips";
+import { ALL_GUIDES } from "./guides";
 
 export interface Seed {
   projects: Project[];
@@ -29,7 +29,7 @@ export interface MemoryOptions {
   setupChecks?: SetupChecks;
   /** Whether the first-run setup was done; true unless a test says otherwise. */
   onboarded?: boolean;
-  /** Show the screens' tips; tests see them only when they ask. */
+  /** Show the screens' guides; tests see them only when they ask. */
   tips?: boolean;
   /** The tailnet; null when Tailscale isn't installed. A demo tailnet when unset. */
   tailnet?: TailnetStatus | null;
@@ -209,7 +209,7 @@ export function memoryApi(
     terms.set(agent, onData);
     onData(encoder.encode("Connected to demo-dev@10.0.7.2 (demo)\r\n"));
   }
-  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} }, ollama_model: "qwen3:4b", onboarded: options.onboarded ?? true, tips_hidden: options.tips ? [] : ALL_TIPS };
+  let config: Config = { vault: "/Volumes/vault", server: options.server === undefined ? "lab" : options.server, printers: [], claude_hooks: options.claudeHooks ?? false, cloud: "/Volumes/cloud", cloud_share: null, cloud_remote: "/srv/cloud", pick_up: true, watch: true, zoom: 100, print_notify: true, site_addresses: {}, overview: { left: ["numbers", "done_today"], right: ["server", "cloud", "printer", "open_tasks"], split: 50, heights: {} }, ollama_model: "qwen3:4b", onboarded: options.onboarded ?? true, tips_hidden: options.tips ? [] : ALL_GUIDES };
   let lastDone: number | null = seed.lastDone ?? null;
   let briefDismissed = false;
   let nextId = Math.max(0, ...tasks.map((t) => t.id), ...projects.map((p) => p.id), ...devices.map((d) => d.id)) + 1;
@@ -463,6 +463,7 @@ export function memoryApi(
     ghActions,
     ghNewIssues,
     async ghList(filter, projectId) {
+      if (options.setupChecks && !options.setupChecks.gh) throw new Error("Install gh and sign in with gh auth login.");
       const repos = ghRepos();
       const only = projectId === null ? null : project(projectId).github;
       const keep = (r: { repo: string }) => repos.has(r.repo) && (only === null || r.repo === only);
@@ -547,7 +548,7 @@ export function memoryApi(
     },
     async siteSnapshot(url) {
       if (!url.startsWith("https://")) throw new Error("Only https addresses are read.");
-      return `<base href="${url}/"><body style="margin:0;font:48px sans-serif;background:#f4f1ea;color:#222;display:grid;place-items:center;height:100vh">Shop</body>`;
+      return demoPage(url);
     },
     async setSiteAddress(name, url) {
       const kept = url.trim().startsWith("https://") ? url.trim() : `https://${url.trim().replace(/^http:\/\//, "")}`;
@@ -1123,4 +1124,18 @@ export function demoSeed(): Seed {
     cloud: demoCloud(t),
     repos: { 1: { branch: "main", changed: 3, ahead: 1, behind: 0, last_subject: "Fix the toolbar spacing", last_date: day } },
   };
+}
+
+/** A made-up page for a demo site's preview: a blog, or a small shop. */
+function demoPage(url: string): string {
+  const head = `<base href="${url}/"><body style="margin:0;font-family:-apple-system,Helvetica,sans-serif;height:100vh;overflow:hidden">`;
+  const nav = (bg: string, fg: string, name: string) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:28px 56px;background:${bg};color:${fg};font-size:22px"><b>${name}</b><span style="opacity:.6;font-size:18px">Writing &nbsp; Projects &nbsp; About</span></div>`;
+  if (url.includes("shop")) {
+    const card = (c: string, t: string, p: string) =>
+      `<div style="flex:1"><div style="height:300px;border-radius:14px;background:${c}"></div><div style="margin-top:14px;font-size:20px">${t}</div><div style="opacity:.55;font-size:18px">${p}</div></div>`;
+    return `${head}<div style="background:#f4f1ea;color:#1d1d1b;height:100%">${nav("#f4f1ea", "#1d1d1b", "Clay &amp; Co")}<div style="padding:24px 56px"><div style="font-size:54px;font-weight:600;letter-spacing:-1px;margin-bottom:32px">Small batch ceramics</div><div style="display:flex;gap:28px">${card("#d9c7b0", "Speckled mug", "$28")}${card("#b9c4b4", "Bud vase", "$34")}${card("#e2d4c4", "Serving bowl", "$52")}</div></div></div></body>`;
+  }
+  const post = (t: string, d: string) => `<div style="padding:26px 0;border-top:1px solid #e6e6e6"><div style="font-size:15px;color:#8a8a8a">${d}</div><div style="font-size:28px;font-weight:600;margin-top:6px">${t}</div></div>`;
+  return `${head}<div style="background:#fff;color:#111;height:100%">${nav("#fff", "#111", "demo-dev")}<div style="padding:36px 56px;max-width:1000px"><div style="font-size:60px;font-weight:700;letter-spacing:-1.5px;line-height:1.05">Notes on building small, durable software.</div><div style="margin-top:36px">${post("Moving a home server to compose", "November 12")}${post("A job queue on SQLite in 300 lines", "October 30")}${post("What I learned printing a case for a Pi", "October 8")}</div></div></div></body>`;
 }

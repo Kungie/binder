@@ -31,7 +31,7 @@
 | Devices, VPN | Your computers through Tailscale, Taildrop, and your exit nodes as VPN regions | Tailscale |
 | Printer | A Bambu printer in LAN mode: progress, camera, alerts | The printer's access code |
 
-The first launch walks you through the server, the vault and `gh`, and each screen says what it still needs. Everything stays on your machines.
+The first launch walks you through the server, the vault and `gh`. Each screen opens with a guide and a picture of what it shows, and says what it still needs, with the commands to get there. Everything stays on your machines.
 
 <p align="center">
   <img src="docs/screenshots/tasks.png" width="49%" alt="The task board">

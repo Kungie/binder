@@ -46,7 +46,13 @@ export function TaskTable({ tasks, projects, onOpen, onCreate, onStatus, onAssig
   const index = Math.max(0, tasks.findIndex((t) => t.id === focusId));
   const focused = tasks[index];
 
+  // Follows the focus when it moves from one row to another, not when the rows first arrive: that would scroll the
+  // screen around the table.
+  const shownId = useRef(focused?.id);
   useEffect(() => {
+    const from = shownId.current;
+    shownId.current = focused?.id;
+    if (from === undefined || from === focused?.id) return;
     gridRef.current?.querySelector(`[data-id="${focused?.id}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [focused?.id]);
 

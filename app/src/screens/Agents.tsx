@@ -8,8 +8,8 @@ import { useStore } from "../lib/store";
 import type { AgentSession, ClaudeLimits, ClaudeUsage, Config, LimitWindow, Pane, PaneState, Project, RecentRun, ServerStatus } from "../lib/types";
 import { whileVisible } from "../lib/usePoll";
 import { gb } from "../lib/useServer";
-import { ScreenTip } from "../components/ScreenTip";
-import { Code, NeedsSetup } from "../components/NeedsSetup";
+import { ScreenGuide } from "../components/Guide";
+import { Cmd, Code, NeedsSetup } from "../components/NeedsSetup";
 
 /** One row of the sidebar: a pane and what people call it. */
 interface Entry {
@@ -228,17 +228,24 @@ export function Agents({ shown }: { shown: boolean }) {
         {target && shown && <Load />}
         {target && shown && <Usage />}
       </header>
-      <ScreenTip id="agents" />
+      <ScreenGuide id="agents" />
       {target === null && (
         <div className="px-5">
           <NeedsSetup
             title="Set up Agents"
+            lead="Terminals into tmux sessions on your home server: Claude Code, Ollama and one per project. They keep running when Binder closes."
+            shot="agents"
             steps={[
               "Set your home server's SSH target in Settings.",
               <>
-                Install <Code>tmux</Code> on the server, and <Code>claude</Code> (Claude Code) for the agent. Ollama is optional, in a container named <Code>ollama</Code>.
+                <span>
+                  Install <Code>tmux</Code> on the server, and Claude Code for the agent:
+                </span>
+                <Cmd>{"sudo apt install tmux && npm install -g @anthropic-ai/claude-code"}</Cmd>
               </>,
-              "Open Agents again. Each session runs in tmux, so it keeps running when Binder closes.",
+              <>
+                Ollama is optional, in a container named <Code>ollama</Code>. Open Agents again and pick a session.
+              </>,
             ]}
             action={{ label: "Open Settings", run: () => setScreen("settings") }}
           />

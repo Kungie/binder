@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { previewStep } from "../lib/api";
 import { useStore } from "../lib/store";
 import type { SetupChecks } from "../lib/types";
-import { Mascot } from "./Mascot";
+import { createPortal } from "react-dom";
+import { GUIDES } from "../lib/guides";
+import { Shot } from "./Guide";
+import { Mascot, MascotMark } from "./Mascot";
 import { Button, fieldClass } from "./ui";
 
 /** Settings sends this to open the setup again. */
@@ -14,7 +18,7 @@ const STEPS = ["Welcome", "Home server", "Vault", "GitHub", "Done"] as const;
 export function Welcome() {
   const { api } = useStore();
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(previewStep);
   const [checks, setChecks] = useState<SetupChecks | null>(null);
 
   useEffect(() => {
@@ -51,59 +55,105 @@ export function Welcome() {
 
   if (!open) return null;
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-      <div role="dialog" aria-modal="true" aria-label="Set up Binder" className="flex w-[520px] max-w-full flex-col rounded-panel border border-line bg-panel shadow-2xl">
-        <ol aria-label="Steps" className="flex gap-1 border-b border-line px-4 py-3">
+  const back = () => setStep((s) => Math.max(s - 1, 0));
+  const shot = SHOTS[step];
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Set up Binder" className="guide-in fixed inset-0 z-50 flex bg-bg">
+      <div className="flex w-[440px] shrink-0 flex-col border-r border-line bg-panel">
+        <div className="flex items-center gap-2 px-8 pt-8 text-[13px] text-text">
+          <MascotMark size={18} />
+          <span className="font-medium">Binder</span>
+          <span className="text-text-3">Setup</span>
+        </div>
+        <ol aria-label="Steps" className="flex flex-col gap-0.5 px-6 pt-8">
           {STEPS.map((s, i) => (
-            <li key={s} aria-current={i === step ? "step" : undefined} className={`h-1 flex-1 rounded-full ${i <= step ? "bg-text" : "bg-raised"}`}>
-              <span className="sr-only">{s}</span>
+            <li
+              key={s}
+              aria-current={i === step ? "step" : undefined}
+              className={`flex items-center gap-3 rounded-control px-2 py-1.5 text-[13px] ${i === step ? "bg-raised text-text" : i < step ? "text-text-2" : "text-text-3"}`}
+            >
+              <span className={`flex size-5 items-center justify-center rounded-full border font-mono text-[10px] ${i < step ? "border-text-2 bg-text-2 text-bg" : i === step ? "border-text text-text" : "border-line-strong"}`}>
+                {i < step ? (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                    <path d="M2 5.2l2 2 4-4.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  i + 1
+                )}
+              </span>
+              {s}
             </li>
           ))}
         </ol>
-        <div className="flex min-h-[260px] flex-col gap-3 px-5 py-5 text-[13px] leading-5 text-text-2">
+        <div className="mx-8 mt-8 border-t border-line" />
+        <div key={step} className="screen-in flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-8 py-8 text-[13px] leading-5 text-text-2">
           {step === 0 && <Intro checks={checks} />}
           {step === 1 && <ServerStep onDone={next} />}
           {step === 2 && <VaultStep onDone={next} />}
           {step === 3 && <GithubStep checks={checks} onCheck={check} />}
           {step === 4 && (
             <>
-              <h2 className="text-[15px] font-medium text-text">You're set</h2>
-              <p>Each screen shows a short tip the first time it opens and says what it still needs. Settings has everything you skipped, and Run setup again.</p>
-              <p className="text-text-3">Tasks, Projects and the menu bar work without anything else.</p>
+              <h2 className="text-[22px] leading-7 font-medium tracking-[-0.01em] text-text">You're set</h2>
+              <p className="text-[14px] leading-6">Each screen opens with a short guide the first time; press ? on any screen to see it again. Where something is still missing, the screen shows the steps.</p>
+              <p className="text-text-3">Tasks, Projects and the menu bar work without anything else. Settings has everything you skipped, and Run setup again.</p>
             </>
           )}
         </div>
-        <div className="flex items-center gap-2 border-t border-line px-4 py-3">
-          <Button variant="ghost" onClick={() => void finish()}>
-            {step === STEPS.length - 1 ? "Close" : "Skip setup"}
-          </Button>
+        <div className="flex items-center gap-2 border-t border-line px-8 py-4">
+          {step < STEPS.length - 1 && (
+            <Button variant="ghost" onClick={() => void finish()}>
+              Skip setup
+            </Button>
+          )}
           <span className="flex-1" />
-          {step > 0 && step < STEPS.length - 1 && (
+          {step > 0 && (
+            <Button variant="ghost" onClick={back}>
+              Back
+            </Button>
+          )}
+          {step > 0 && step < 3 && (
             <Button variant="ghost" onClick={next}>
               Skip this step
             </Button>
           )}
           {step === 0 && (
-            <Button variant="primary" onClick={next}>
+            <Button variant="primary" className="h-8 px-3.5" onClick={next}>
               Start
             </Button>
           )}
           {step === 3 && (
-            <Button variant="primary" onClick={next}>
+            <Button variant="primary" className="h-8 px-3.5" onClick={next}>
               Next
             </Button>
           )}
           {step === STEPS.length - 1 && (
-            <Button variant="primary" onClick={() => void finish()}>
+            <Button variant="primary" className="h-8 px-3.5" onClick={() => void finish()}>
               Start using Binder
             </Button>
           )}
         </div>
       </div>
-    </div>
+      <div className="relative flex min-w-0 flex-1 flex-col justify-center gap-5 overflow-hidden px-14 py-12">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_60%_45%,rgba(255,255,255,0.05),transparent)]" />
+        <div className="relative flex flex-col gap-1">
+          <span className="text-[12px] text-text-3">{shot.eyebrow}</span>
+          <span className="text-[15px] text-text">{shot.caption}</span>
+        </div>
+        <Shot key={shot.src} src={shot.src} title={shot.title} className="screen-in relative" />
+      </div>
+    </div>,
+    document.body,
   );
 }
+
+/** What the picture beside each step shows. */
+const SHOTS: { src: string; title: string; eyebrow: string; caption: string }[] = [
+  { src: GUIDES.overview.shot, title: "Overview", eyebrow: "Overview", caption: "Your tasks, your server, Cloud and the printer in one window." },
+  { src: GUIDES.server.shot, title: "Servers", eyebrow: "With a home server", caption: "Containers, services, sites and agents, read over SSH." },
+  { src: GUIDES.projects.shot, title: "Projects", eyebrow: "With a vault", caption: "Each project keeps a note and daily lines in Obsidian." },
+  { src: GUIDES.github.shot, title: "GitHub", eyebrow: "With gh", caption: "Pull requests and issues of your projects, answered from Binder." },
+  { src: GUIDES.tasks.shot, title: "Tasks", eyebrow: "Ready", caption: "Start with a task: press N anywhere in Binder." },
+];
 
 function Row({ name, needs, ok }: { name: string; needs: string; ok?: boolean }) {
   return (
@@ -120,7 +170,7 @@ function Intro({ checks }: { checks: SetupChecks | null }) {
     <>
       <div className="flex items-center gap-3">
         <Mascot size={36} />
-        <h2 className="text-[15px] font-medium text-text">Welcome to Binder</h2>
+        <h2 className="text-[22px] leading-7 font-medium tracking-[-0.01em] text-text">Welcome to Binder</h2>
       </div>
       <p>One window for the things you keep checking: tasks, projects, your home server and what runs on it, your devices and your printer. Each part needs one thing, and every step can wait.</p>
       <ul className="flex flex-col">
@@ -151,7 +201,7 @@ function ServerStep({ onDone }: { onDone(): void }) {
   };
   return (
     <>
-      <h2 className="text-[15px] font-medium text-text">Your home server</h2>
+      <h2 className="text-[22px] leading-7 font-medium tracking-[-0.01em] text-text">Your home server</h2>
       <p>
         Binder reaches it with the system's <span className="font-mono text-text">ssh</span> and your keys, never a password. Use a Host from <span className="font-mono text-text">~/.ssh/config</span> or{" "}
         <span className="font-mono text-text">user@address</span>. It should already connect from Terminal without a prompt.
@@ -189,7 +239,7 @@ function VaultStep({ onDone }: { onDone(): void }) {
   };
   return (
     <>
-      <h2 className="text-[15px] font-medium text-text">Your Obsidian vault</h2>
+      <h2 className="text-[22px] leading-7 font-medium tracking-[-0.01em] text-text">Your Obsidian vault</h2>
       <p>Each project gets a note and daily lines in it, under Projects/. Any folder works: a vault on this Mac, or one on a share you mount.</p>
       <div className="flex gap-2">
         <input aria-label="Vault folder" className={`${fieldClass} font-mono`} value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void save()} />
@@ -205,7 +255,7 @@ function VaultStep({ onDone }: { onDone(): void }) {
 function GithubStep({ checks, onCheck }: { checks: SetupChecks | null; onCheck(): void }) {
   return (
     <>
-      <h2 className="text-[15px] font-medium text-text">GitHub</h2>
+      <h2 className="text-[22px] leading-7 font-medium tracking-[-0.01em] text-text">GitHub</h2>
       <p>Projects and the GitHub screen use GitHub's own command line with its login. Binder never sees a token.</p>
       <pre className="rounded-control border border-line bg-card p-2 font-mono text-[12px] text-text">{"brew install gh\ngh auth login"}</pre>
       <div className="flex items-center gap-3">

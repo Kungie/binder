@@ -59,12 +59,40 @@ describe("First-run setup", () => {
   });
 });
 
-describe("Screen tips", () => {
-  it("shows a screen's tip until Got it, and again after Show tips again", async () => {
+describe("Screen guides", () => {
+  it("covers the window the first time a screen opens, and Got it remembers", async () => {
     const { api, user } = setup({ tips: true }, "server");
-    const tip = await screen.findByRole("complementary", { name: "About Servers" });
-    await user.click(within(tip).getByRole("button", { name: "Got it" }));
-    await waitFor(() => expect(screen.queryByRole("complementary", { name: "About Servers" })).not.toBeInTheDocument());
+    const guide = await screen.findByRole("dialog", { name: "About Servers" });
+    expect(within(guide).getByRole("img", { name: "The Servers screen" })).toBeInTheDocument();
+    expect(within(guide).getByText("A home server you reach with SSH")).toBeInTheDocument();
+    expect(await within(guide).findByText("Ready")).toBeInTheDocument();
+    await user.click(within(guide).getByRole("button", { name: "Got it" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "About Servers" })).not.toBeInTheDocument());
     expect((await api.getConfig()).tips_hidden).toContain("server");
+  });
+
+  it("offers Set it up when something is missing, then shows the screen's steps", async () => {
+    const { user } = setup({ tips: true, server: null }, "server");
+    const guide = await screen.findByRole("dialog", { name: "About Servers" });
+    expect(await within(guide).findByText("Not yet")).toBeInTheDocument();
+    await user.click(within(guide).getByRole("button", { name: "Set it up" }));
+    expect(await screen.findByRole("region", { name: "Connect the home server" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy ssh user@host true" })).toBeInTheDocument();
+  });
+
+  it("opens again with ?", async () => {
+    const { user } = setup({}, "server");
+    await screen.findByRole("heading", { name: "Servers" });
+    expect(screen.queryByRole("dialog", { name: "About Servers" })).not.toBeInTheDocument();
+    await user.keyboard("?");
+    const guide = await screen.findByRole("dialog", { name: "About Servers" });
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(guide).not.toBeInTheDocument());
+  });
+
+  it("Show guides again brings every guide back", async () => {
+    const { api, user } = setup({}, "settings");
+    await user.click(await screen.findByRole("button", { name: "Show guides again" }));
+    await waitFor(async () => expect((await api.getConfig()).tips_hidden).toEqual([]));
   });
 });

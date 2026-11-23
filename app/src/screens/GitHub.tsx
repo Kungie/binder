@@ -6,8 +6,8 @@ import { Button, Notice, fieldClass } from "../components/ui";
 import { useStore } from "../lib/store";
 import { ago } from "../lib/time";
 import type { AgentReady, GhAction, GhDetail, GhFilter, GhLists, IssueRow, Project, PullRow, Review } from "../lib/types";
-import { ScreenTip } from "../components/ScreenTip";
-import { Code, NeedsSetup } from "../components/NeedsSetup";
+import { ScreenGuide } from "../components/Guide";
+import { Cmd, NeedsSetup } from "../components/NeedsSetup";
 
 const EVERY = 120_000;
 /** The field look, sized to its content. */
@@ -102,18 +102,22 @@ export function GitHub() {
           <Button onClick={() => setCreating(true)}>New issue</Button>
         </span>
       </header>
-      <ScreenTip id="github" />
+      <ScreenGuide id="github" />
       {error && (
         <div className="px-5 pb-3">
           {error.startsWith("Install gh") ? (
             <NeedsSetup
               title="Connect GitHub"
+              lead="Pull requests and issues of your projects, through GitHub's own command line on this Mac."
+              shot="github"
               steps={[
                 <>
-                  Install GitHub's command line: <Code>brew install gh</Code>.
+                  <span>Install GitHub's command line:</span>
+                  <Cmd>brew install gh</Cmd>
                 </>,
                 <>
-                  Sign in with <Code>gh auth login</Code>. Binder uses that login and never sees a token.
+                  <span>Sign in. Binder uses that login and never sees a token.</span>
+                  <Cmd>gh auth login</Cmd>
                 </>,
                 "Add your repos on Projects with Sync. The GitHub screen shows pull requests and issues of those projects.",
               ]}
